@@ -1,3 +1,5 @@
+<img src="docs/images/00-project-banner.png" alt="Margins project banner - a reader discovering ideas through a book" width="100%" />
+
 # Margins
 
 > 생각의 변화를 기록하는 AI 보조 독서 토론 플랫폼
