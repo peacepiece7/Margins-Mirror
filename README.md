@@ -6,13 +6,6 @@ Margins는 책을 발견하고 기록한 뒤, AI 질문과 여러 관점의 페�
 
 **Live Demo:** [https://margins.cloud](https://margins.cloud)
 
-| Demo account | Value |
-| --- | --- |
-| Username | `testreader` |
-| Password | `testreader` |
-
-> 위 계정은 공개 시연 전용입니다. 개인 정보나 실제 credential을 입력하지 마세요.
-
 ## Product walkthrough
 
 ### 01. 인증과 개인 독서 공간
