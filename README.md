@@ -117,24 +117,6 @@ flowchart TD
 | Database | versioned reflection, discussion state, audit event, migration | MySQL, versioned SQL migration |
 | Runtime | TLS entry point, reverse proxy, service lifecycle, backup·smoke check | Ubuntu, Raspberry Pi, Nginx, systemd, Docker |
 
-## Engineering highlights
-
-### AI 문맥 오염과 환각 완화
-
-현재 Reflection만 모델에 전달하지 않고, 선택된 source revision과 Interview·인용문·Book Knowledge를 bounded context로 구성합니다. 생성 결과에는 사용한 prompt와 source version을 연결합니다.
-
-### 사고 변화의 비파괴적 보존
-
-Reflection, Interview Answer, Discussion Guide와 Revision을 덮어쓰기보다 version으로 보존합니다. 진행 중인 discussion은 새 guide가 생성되어도 시작할 때 선택한 guide version을 유지합니다.
-
-### 공개 가입의 보안과 개인정보 경계
-
-Turnstile bot challenge, 이메일 인증 code hash, HMAC 기반 rate limit key, registration intent, JWT와 HttpOnly cookie, consent enforcement를 계층별로 분리했습니다.
-
-### Self-hosted 운영
-
-React 정적 파일과 Spring Boot API를 Nginx 뒤에서 서비스하며 MySQL은 Docker로 실행합니다. systemd lifecycle, log rotation, DB backup과 배포 후 health/smoke check를 운영 경계로 사용합니다.
-
 ## AI Native development
 
 제품의 AI 기능뿐 아니라 개발 workflow도 역할이 분리된 AI Agent 환경으로 구성했습니다.
@@ -157,32 +139,6 @@ Slack은 대화형 gateway, Kanban과 GitHub Issue/PR은 durable work state로 �
 - `.github/workflows/ci.yml`: 공개 mirror용 최소 CI
 
 이 저장소는 포트폴리오 검토를 위해 정리한 공개 스냅샷입니다. 비공개 원본의 Git 이력, 운영 credential·host 설정, 내부 작업 기록과 배포 runbook은 포함하지 않습니다.
-
-## Local development
-
-필수 도구는 Node.js 22+, Java 21 JDK, Docker와 Docker Compose v2입니다.
-
-```bash
-cp .env.example .env
-npm run local:doctor
-npm run local:install
-npm run local:db:up
-npm run local:dev
-```
-
-계층별 검증 명령은 다음과 같습니다.
-
-```bash
-npm run test:back
-npm run test:front
-npm run test:back:integration
-npm run test:e2e
-npm run quality
-```
-
-## Security notice
-
-`.env.example`, `infra/docker/mysql-compose.yml`과 테스트 fixture의 계정·비밀번호는 격리된 로컬 개발 및 자동화 테스트를 위한 deterministic 기본값입니다. 인터넷에 노출된 환경이나 운영 환경에서 사용하면 안 됩니다. 실제 credential은 커밋하지 말고 ignored `.env` 또는 별도 secret manager에 보관하세요.
 
 ## Rights
 
