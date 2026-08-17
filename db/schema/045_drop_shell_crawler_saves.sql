@@ -1,0 +1,17 @@
+-- Migration 045: retire the removed ShellCrawler cloud-save persistence.
+--
+-- Production application is protected by scripts/deploy.mjs. Before this migration is
+-- eligible, the runner requires MARGINS_SHELLCRAWLER_APPROVED_ROW_COUNT,
+-- MARGINS_SHELLCRAWLER_DISPOSITION (preserve|export|delete),
+-- MARGINS_SHELLCRAWLER_DISPOSITION_APPROVAL_REF, and MARGINS_SHELLCRAWLER_BACKUP_REF.
+-- It compares the approved count with this read-only query and records the passing result
+-- in the deploy log/GitHub step summary. Missing evidence or a count mismatch fails closed.
+-- The runner records the migration checksum and protected evidence in its deploy-owned
+-- schema_migration_preflights receipt before DROP. A retry after DROP succeeds but the
+-- separate schema_migrations history insert fails only reconciles an absent table when
+-- that receipt exactly matches the current checksum and evidence.
+-- The production workflow deploys and smoke-tests the reference-free application first,
+-- then applies this migration in a separate protected step.
+-- Recovery: restore the pre-migration database backup and previous application release;
+-- there is no inverse application migration for this retired table.
+DROP TABLE IF EXISTS shell_crawler_saves;

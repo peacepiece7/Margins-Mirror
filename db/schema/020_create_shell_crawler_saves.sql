@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS shell_crawler_saves (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  user_id BIGINT NOT NULL,
+  slot_key VARCHAR(40) NOT NULL,
+  schema_version INT NOT NULL,
+  app_version VARCHAR(80) NOT NULL,
+  client_save_id VARCHAR(120) NOT NULL,
+  client_saved_at TIMESTAMP NOT NULL,
+  summary_json JSON NOT NULL,
+  state_json JSON NOT NULL,
+  payload_sha256 CHAR(64) NOT NULL,
+  revision INT NOT NULL DEFAULT 1,
+  is_test_data BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_shell_crawler_saves_user_slot (user_id, slot_key),
+  KEY idx_shell_crawler_saves_user_updated (user_id, deleted_at, updated_at),
+  KEY idx_shell_crawler_saves_test_data (is_test_data),
+  CONSTRAINT fk_shell_crawler_saves_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

@@ -1,0 +1,52 @@
+# Generated frontend API models
+front/src/types/__generated__/
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+.next/
+out/
+target/
+back/bin/
+.tools/
+.gradle/
+*.tsbuildinfo
+test-results/
+playwright-report/
+infra/artifacts/
+harness/artifacts/
+
+# Local environment and secrets
+.env
+.env.*
+env
+local-secrets/
+!.env.example
+
+# Logs
+*.log
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+back/.zed/
+
+
+# AI agent tooling (local/personal, unrelated to app code)
+.claude/
+
+# Local design source images; optimized app icons live under front/public/
+/favicon*.png
+.omx/
+.omx-config.json
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**

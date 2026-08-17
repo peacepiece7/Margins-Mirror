@@ -1,0 +1,96 @@
+spring:
+  application:
+    name: margins-back
+  datasource:
+    url: ${MARGINS_DB_URL:jdbc:mysql://localhost:${MARGINS_MYSQL_PORT:3306}/${MARGINS_MYSQL_DATABASE:margins}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
+    username: ${MARGINS_MYSQL_USER:margins}
+    password: ${MARGINS_MYSQL_PASSWORD:margins-pass}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+server:
+  port: ${MARGINS_BACKEND_PORT:8080}
+
+margins:
+  auth:
+    max-failed-logins: 5
+    lockout-minutes: 15
+    cookie:
+      refresh-name: margins_refresh
+      oauth-state-name: margins_oauth_state
+      secure: ${MARGINS_AUTH_COOKIE_SECURE:false}
+      refresh-same-site: Strict
+      oauth-state-same-site: Lax
+      path: /api/auth
+    jwt:
+      issuer: ${MARGINS_AUTH_JWT_ISSUER:margins}
+      secret: ${MARGINS_AUTH_JWT_SECRET:margins-local-dev-secret-change-before-production}
+      access-ttl-seconds: ${MARGINS_AUTH_ACCESS_TTL_SECONDS:900}
+      refresh-ttl-seconds: ${MARGINS_AUTH_REFRESH_TTL_SECONDS:604800}
+    challenge-secret: ${MARGINS_AUTH_CHALLENGE_SECRET:margins-local-challenge-secret-change-before-production}
+    email-verification-abuse:
+      enabled: ${MARGINS_EMAIL_VERIFICATION_ABUSE_PROTECTION_ENABLED:false}
+      rate-limit-secret: ${MARGINS_EMAIL_VERIFICATION_RATE_LIMIT_SECRET:}
+      resend-after-seconds: ${MARGINS_EMAIL_VERIFICATION_RESEND_AFTER_SECONDS:60}
+      turnstile:
+        secret-key: ${MARGINS_TURNSTILE_SECRET_KEY:}
+        site-verify-url: ${MARGINS_TURNSTILE_SITEVERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
+        expected-action: ${MARGINS_TURNSTILE_EXPECTED_ACTION:email_verification}
+        allowed-hostnames: ${MARGINS_TURNSTILE_ALLOWED_HOSTNAMES:}
+        timeout-seconds: ${MARGINS_TURNSTILE_TIMEOUT_SECONDS:5}
+    google:
+      enabled: ${MARGINS_GOOGLE_OAUTH_ENABLED:false}
+      client-id: ${MARGINS_GOOGLE_CLIENT_ID:}
+      client-secret: ${MARGINS_GOOGLE_CLIENT_SECRET:}
+      frontend-callback-url: ${MARGINS_GOOGLE_OAUTH_FRONTEND_CALLBACK_URL:http://localhost:5173/auth/callback}
+  mail:
+    verification:
+      enabled: ${MARGINS_MAIL_VERIFICATION_ENABLED:false}
+      from: ${MARGINS_MAIL_FROM:}
+      ttl-seconds: ${MARGINS_MAIL_VERIFICATION_TTL_SECONDS:300}
+      expose-code: ${MARGINS_MAIL_VERIFICATION_EXPOSE_CODE:false}
+    resend:
+      api-key: ${RESEND_API_KEY:}
+      base-url: ${RESEND_API_BASE_URL:https://api.resend.com}
+      timeout-seconds: ${RESEND_TIMEOUT_SECONDS:10}
+  ai:
+    provider: ${MARGINS_AI_PROVIDER:openai}
+    streaming-ready: true
+    openai:
+      api-key: ${OPENAI_API_KEY:}
+      base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}
+      model: ${OPENAI_MODEL:gpt-5.6-luna}
+      timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:30}
+      max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:800}
+      discussion-guide-max-output-tokens: ${OPENAI_DISCUSSION_GUIDE_MAX_OUTPUT_TOKENS:2000}
+    moderator:
+      enabled: ${MARGINS_AI_MODERATOR_ENABLED:false}
+      policy-version: ${MARGINS_AI_MODERATOR_POLICY_VERSION:moderator-policy-v1}
+      prompt-version: ${MARGINS_AI_MODERATOR_PROMPT_VERSION:moderator-prompt-v1}
+      schema-version: ${MARGINS_AI_MODERATOR_SCHEMA_VERSION:moderator-schema-v1}
+  book-search:
+    enabled: ${MARGINS_BOOK_SEARCH_ENABLED:true}
+    # Legacy compatibility only; candidate search never calls generative AI.
+    ai-fallback-enabled: ${MARGINS_BOOK_SEARCH_AI_FALLBACK_ENABLED:false}
+    provider: ${MARGINS_BOOK_SEARCH_PROVIDER:google}
+    base-url: ${MARGINS_BOOK_SEARCH_BASE_URL:https://openlibrary.org}
+    google-base-url: ${GOOGLE_BOOKS_BASE_URL:https://www.googleapis.com}
+    google-api-key: ${GOOGLE_BOOKS_API_KEY:}
+    timeout-seconds: ${MARGINS_BOOK_SEARCH_TIMEOUT_SECONDS:5}
+    limit: ${MARGINS_BOOK_SEARCH_LIMIT:5}
+  book-knowledge:
+    fresh-days: ${MARGINS_BOOK_KNOWLEDGE_FRESH_DAYS:30}
+    fallback-days: ${MARGINS_BOOK_KNOWLEDGE_FALLBACK_DAYS:365}
+    claim-ttl-seconds: ${MARGINS_BOOK_KNOWLEDGE_CLAIM_TTL_SECONDS:120}
+    require-provider: ${MARGINS_BOOK_KNOWLEDGE_REQUIRE_PROVIDER:false}
+  privacy:
+    enforcement-enabled: ${MARGINS_PRIVACY_ENFORCEMENT_ENABLED:false}
+  reflection-loop:
+    enabled: ${MARGINS_REFLECTION_LOOP_ENABLED:false}
+    interview-prompt-version: ${MARGINS_REFLECTION_INTERVIEW_PROMPT_VERSION:reflection-interview-v1}
+    guide-prompt-version: ${MARGINS_DISCUSSION_GUIDE_PROMPT_VERSION:discussion-guide-v1}
+    director-version: ${MARGINS_DISCUSSION_DIRECTOR_VERSION:discussion-director-v1}
+    refinement-prompt-version: ${MARGINS_REFLECTION_REFINEMENT_PROMPT_VERSION:reflection-refinement-v1}
+    perspective-claim-ttl-seconds: ${MARGINS_DISCUSSION_PERSPECTIVE_CLAIM_TTL_SECONDS:120}

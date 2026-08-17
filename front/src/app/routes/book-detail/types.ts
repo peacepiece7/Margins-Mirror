@@ -1,0 +1,43 @@
+import type { FormEvent } from 'react';
+import type { BookReadingStatus } from '@/features/books/types';
+import type { BookKnowledge, SaveBookResponse } from '@/types/api/book';
+import type { Persona } from '@/types/api/persona';
+import type { Question } from '@/types/api/session';
+
+export interface BookDetailPageProps {
+  answeredQuestionIds: Set<number>;
+  book?: SaveBookResponse;
+  bookKnowledge?: BookKnowledge;
+  bookKnowledgeError: string;
+  bookKnowledgePending: boolean;
+  debateTopic: string;
+  draftPersonaIds: number[];
+  editAuthor: string;
+  editTitle: string;
+  loading: boolean;
+  personas: Persona[];
+  questions: Question[];
+  recommendedPersonaIds: number[];
+  selectedPersonaIds: number[];
+  speakerDialogOpen: boolean;
+  questionLoading: boolean;
+  onApplyDiscussionPoint: (id: string) => void;
+  onApplyPersonas: () => void;
+  onCloseSpeakerDialog: () => void;
+  onDebateTopicChange: (topic: string) => void;
+  onDeleteBook: () => void;
+  onDeleteQuestion: (questionId: number) => void;
+  onEditAuthorChange: (author: string) => void;
+  onEditTitleChange: (title: string) => void;
+  onEnterDebate: () => void;
+  onGenerateQuestions: () => void;
+  onOpenQuestionAnswer: (questionId: number) => void;
+  onOpenQuestionDebate: (questionId: number) => void;
+  onOpenSpeakerDialog: () => void;
+  onRatingChange: (rating?: number) => void;
+  onSpeakerDialogOpenChange: (open: boolean) => void;
+  onStartReview: () => void;
+  onStatusChange: (status: BookReadingStatus) => void;
+  onSubmitBook: (event: FormEvent) => void;
+  onToggleDraftPersona: (personaId: number) => void;
+}

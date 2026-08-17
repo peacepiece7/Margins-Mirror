@@ -1,0 +1,2 @@
+ALTER TABLE memory_cards
+  ADD COLUMN memorized BOOLEAN NOT NULL DEFAULT FALSE AFTER memo;

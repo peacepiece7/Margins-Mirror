@@ -1,0 +1,36 @@
+export interface LoginResponse {
+  userId: number;
+  username: string;
+  displayName: string;
+  authMode: string;
+  accessToken: string;
+  accessTokenExpiresInSeconds: number;
+  consentRequired?: boolean;
+  membershipTier?: 'FREE' | 'PREMIUM';
+}
+
+export interface RegisterRequest {
+  username: string;
+  password: string;
+  confirmPassword: string;
+  displayName: string;
+  email: string;
+  emailVerificationCode: string;
+}
+
+export interface EmailAvailabilityResponse {
+  email: string;
+  available: boolean;
+}
+
+export interface EmailVerificationResponse {
+  email: string;
+  expiresInSeconds: number;
+  resendAfterSeconds: number;
+  devVerificationCode?: string;
+}
+
+export interface EmailVerificationConfirmResponse {
+  email: string;
+  verified: boolean;
+}

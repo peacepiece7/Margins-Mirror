@@ -1,0 +1,23 @@
+CREATE TABLE IF NOT EXISTS session_insights (
+  id BIGINT NOT NULL AUTO_INCREMENT,
+  session_id BIGINT NOT NULL,
+  user_id BIGINT NOT NULL,
+  insight_type VARCHAR(60) NOT NULL DEFAULT 'takeaway',
+  title VARCHAR(160) NULL,
+  content TEXT NOT NULL,
+  evidence TEXT NULL,
+  author_name VARCHAR(80) NULL,
+  visibility VARCHAR(16) NOT NULL DEFAULT 'PRIVATE',
+  reviewed_on DATE NULL,
+  insight_order INT NOT NULL,
+  is_test_data BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  deleted_at TIMESTAMP NULL,
+  PRIMARY KEY (id),
+  KEY idx_session_insights_session_order (session_id, insight_order, id),
+  KEY idx_session_insights_user_type (user_id, insight_type),
+  KEY idx_session_insights_test_data (is_test_data),
+  CONSTRAINT fk_session_insights_session FOREIGN KEY (session_id) REFERENCES reading_sessions (id),
+  CONSTRAINT fk_session_insights_user FOREIGN KEY (user_id) REFERENCES users (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

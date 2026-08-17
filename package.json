@@ -1,0 +1,19 @@
+{
+  "name": "margins-portfolio",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "local:doctor": "node scripts/local.mjs doctor",
+    "local:install": "node scripts/local.mjs install",
+    "local:db:up": "node scripts/local.mjs db-up --apply-schema",
+    "local:db:down": "node scripts/local.mjs db-down",
+    "local:dev": "node scripts/local.mjs dev",
+    "quality": "node scripts/local.mjs quality",
+    "test:back": "node scripts/local.mjs back-test",
+    "test:front": "npm --prefix front run test:unit",
+    "test:back:integration": "node scripts/local.mjs back-test-integration",
+    "test:e2e": "node scripts/e2e.mjs",
+    "test": "npm run test:back && npm run test:front"
+  }
+}

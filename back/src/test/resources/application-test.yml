@@ -1,0 +1,36 @@
+# Deterministic Spring profile for Gradle/JUnit tests.
+# Activated via build.gradle `spring.profiles.active=test`.
+# Third-party credentials stay empty; HTTP provider tests use local mock servers.
+spring:
+  datasource:
+    url: jdbc:mysql://localhost:3306/margins?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+    username: margins
+    password: margins-pass
+
+margins:
+  privacy:
+    enforcement-enabled: true
+  mail:
+    verification:
+      enabled: false
+      expose-code: true
+  auth:
+    cookie:
+      secure: false
+    jwt:
+      issuer: margins-test
+      secret: margins-test-jwt-secret-not-for-production
+      access-ttl-seconds: 900
+      refresh-ttl-seconds: 604800
+    google:
+      enabled: false
+      client-id: test-google-client-id
+      client-secret: test-google-client-secret
+      frontend-callback-url: http://localhost:5173/auth/callback
+  ai:
+    openai:
+      api-key: ''
+  book-search:
+    enabled: true
+    ai-fallback-enabled: true
+    google-api-key: ''
