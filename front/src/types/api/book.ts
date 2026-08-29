@@ -72,6 +72,7 @@ export interface BookKnowledge {
   famousQuotes: string[];
   keywords: string[];
   version: string;
+  generationLocale: 'ko' | 'en';
   status: string;
   generatedAt?: string;
   stale?: boolean;

@@ -96,6 +96,7 @@ public class AuthBusiness {
             .displayName(request.getDisplayName().trim())
             .email(email)
             .emailVerified(true)
+            .preferredLocale(request.getPreferredLocale() == null ? "en" : request.getPreferredLocale())
             .passwordHash(passwordEncoder.encode(request.getPassword()))
             .authProvider("local")
             .testData(isTestRuntime())
@@ -195,6 +196,7 @@ public class AuthBusiness {
                 ? username : pending.displayName().trim())
             .email(normalizedEmail)
             .emailVerified(pending.emailVerified())
+            .preferredLocale(normalizeLocale(consent.getPreferredLocale()))
             .passwordHash(null)
             .authProvider("google")
             .testData(isTestRuntime())
@@ -264,6 +266,7 @@ public class AuthBusiness {
             .userId(user.getId())
             .username(user.getUsername())
             .displayName(user.getDisplayName())
+            .preferredLocale(normalizeLocale(user.getPreferredLocale()))
             .authMode(resolveAuthMode(user.getAuthProvider()))
             .accessToken(jwtTokenService.createAccessToken(user))
             .accessTokenExpiresInSeconds(authJwtProperties.getAccessTtlSeconds())
@@ -308,6 +311,10 @@ public class AuthBusiness {
             throw new ApiException(ApiErrorCode.AUTH_EMAIL_REQUIRED);
         }
         return email.trim().toLowerCase(Locale.ROOT);
+    }
+
+    private String normalizeLocale(String preferredLocale) {
+        return "ko".equals(preferredLocale) ? "ko" : "en";
     }
 
     /** local/test profile에서 생성한 계정은 reset API가 정리할 수 있게 표시한다. */

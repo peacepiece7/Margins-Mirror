@@ -5,7 +5,12 @@ import { publicReviewKeys, sessionKeys } from '@/lib/query-keys';
 import { reflectionsApi, type SessionInsightInput } from './api';
 
 export const reflectionSessionQueryOptions = {
-  sessions: () => queryOptions({ queryKey: sessionKeys.list(), queryFn: reflectionsApi.sessions }),
+  book: (bookId: number) =>
+    queryOptions({
+      queryKey: sessionKeys.book(bookId),
+      queryFn: () => reflectionsApi.readingSession(bookId),
+      enabled: Number.isSafeInteger(bookId) && bookId > 0,
+    }),
   timeline: (sessionId: number) =>
     queryOptions({
       queryKey: sessionKeys.timeline(sessionId),
@@ -15,19 +20,18 @@ export const reflectionSessionQueryOptions = {
 };
 
 export function useReflectionTimelineForBook(bookId: number) {
-  const sessions = useQuery(reflectionSessionQueryOptions.sessions());
-  const sessionId = sessions.data?.sessions.find((session) => session.bookId === bookId)?.sessionId;
+  const session = useQuery(reflectionSessionQueryOptions.book(bookId));
+  const sessionId = session.data?.sessionId;
   const timeline = useQuery({
     ...reflectionSessionQueryOptions.timeline(sessionId ?? 0),
     enabled: Boolean(sessionId),
   });
-  return { sessionId, sessions, timeline };
+  return { sessionId, sessions: session, timeline };
 }
 
 export function useReflectionSessionForBook(bookId: number) {
-  const sessions = useQuery(reflectionSessionQueryOptions.sessions());
-  const sessionId = sessions.data?.sessions.find((session) => session.bookId === bookId)?.sessionId;
-  return { sessionId, sessions };
+  const session = useQuery(reflectionSessionQueryOptions.book(bookId));
+  return { sessionId: session.data?.sessionId, sessions: session };
 }
 
 export function useGenerateQuestionsForBookMutation(bookId: number) {
@@ -37,9 +41,7 @@ export function useGenerateQuestionsForBookMutation(bookId: number) {
       let sessionId = existingSessionId;
       let windowId: number | undefined;
       if (!sessionId) {
-        sessionId = (await reflectionsApi.sessions()).sessions.find(
-          (session) => session.bookId === bookId,
-        )?.sessionId;
+        sessionId = (await reflectionsApi.readingSession(bookId))?.sessionId;
         if (!sessionId) throw new Error('Reading session is not available yet');
         const window = await reflectionsApi.createQuestionWindow(sessionId);
         windowId = window.windowId;
@@ -55,10 +57,8 @@ export function useGenerateQuestionsForBookMutation(bookId: number) {
       await reflectionsApi.generateQuestions(windowId, 3);
       return sessionId;
     },
-    onSuccess: async (sessionId) => {
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
-    },
+    onSuccess: (sessionId) =>
+      queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
   });
 }
 
@@ -76,9 +76,7 @@ export function useDeleteQuestionMutation(sessionId?: number) {
 
 async function ensureReflectionSession(bookId: number, existingSessionId?: number) {
   if (existingSessionId) return existingSessionId;
-  const sessionId = (await reflectionsApi.sessions()).sessions.find(
-    (session) => session.bookId === bookId,
-  )?.sessionId;
+  const sessionId = (await reflectionsApi.readingSession(bookId))?.sessionId;
   if (!sessionId) throw new Error('Reading session is not available yet');
   return sessionId;
 }
@@ -87,10 +85,8 @@ export function useEnsureReflectionSessionMutation(bookId: number) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (existingSessionId?: number) => ensureReflectionSession(bookId, existingSessionId),
-    onSuccess: async (sessionId) => {
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
-    },
+    onSuccess: (sessionId) =>
+      queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
   });
 }
 
@@ -111,7 +107,6 @@ export function useSaveReflectionMutation(
       return sessionId;
     },
     onSuccess: async (sessionId, insight) => {
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
       await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
       if (insight.visibility === 'PUBLIC') {
         await queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() });
@@ -139,7 +134,6 @@ function useInvalidateTimeline() {
   const queryClient = useQueryClient();
   return async (sessionId: number, publicReview = false) => {
     await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
-    await queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
     if (publicReview) {
       await queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() });
     }

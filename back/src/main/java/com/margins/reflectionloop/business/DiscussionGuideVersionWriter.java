@@ -103,6 +103,8 @@ public class DiscussionGuideVersionWriter {
             .model(content.model())
             .tokenUsageJson(content.tokenUsageJson())
             .generationMetadataJson(content.generationMetadataJson())
+            .generationLocale(content.generationLocale())
+            .languageValidationOutcome(content.languageValidationOutcome())
             .guideVersion(version)
             .sourceGuideId(source == null ? null : source.getId())
             .origin(origin)
@@ -129,6 +131,8 @@ public class DiscussionGuideVersionWriter {
                 .sensitivity(itemDraft.sensitivity())
                 .status("guide")
                 .aiModel(content.model())
+                .generationLocale(content.generationLocale())
+                .languageValidationOutcome(content.languageValidationOutcome())
                 .testData(interview.isTestData())
                 .build();
             requireChanged(questionMapper.insert(question), "Guide question could not be saved");

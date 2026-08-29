@@ -12,7 +12,7 @@ const version = '2026-07-27';
 
 export function ConsentPage() {
   const navigate = useNavigate();
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const [searchParams] = useSearchParams();
   const googleRegistration = searchParams.get('registration') === 'google';
   const [privacy, setPrivacy] = useState(false);
@@ -41,6 +41,7 @@ export function ConsentPage() {
         ageOver14Confirmed: age,
         privacyPolicyVersion: version,
         aiTransferVersion: version,
+        preferredLocale: locale,
       };
       if (googleRegistration) {
         writeAuthSession(await privacyApi.completeGoogleRegistration(request));

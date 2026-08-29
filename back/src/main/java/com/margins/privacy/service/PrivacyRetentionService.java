@@ -56,6 +56,7 @@ public class PrivacyRetentionService {
             .googleRegistrations(mapper.deleteGoogleRegistrationsDue(oneDayCutoff))
             .emailVerifications(mapper.deleteEmailVerificationsDue(oneDayCutoff))
             .emailVerificationRateLimits(mapper.deleteEmailVerificationRateLimitsDue(now))
+            .contactInquiries(mapper.deleteContactInquiriesDue(now))
             .refreshTokens(mapper.deleteRefreshTokensDue(sevenDayCutoff))
             .releasedLoginLocks(mapper.clearReleasedLoginLocksDue(sevenDayCutoff))
             .lifecycleEvents(mapper.deleteLifecycleEventsDue(oneYearCutoff))
@@ -70,6 +71,7 @@ public class PrivacyRetentionService {
         int googleRegistrations,
         int emailVerifications,
         int emailVerificationRateLimits,
+        int contactInquiries,
         int refreshTokens,
         int releasedLoginLocks,
         int lifecycleEvents,

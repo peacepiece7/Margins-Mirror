@@ -4,8 +4,10 @@ import { useForm } from 'react-hook-form';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
 import { useAuthenticatedSessionGuard } from '@/lib/authenticated-session-guard';
-import { useI18n, type TranslationKey } from '@/lib/i18n';
+import { updateAuthSessionPreferredLocale } from '@/lib/auth-session';
+import { useI18n, type Locale, type TranslationKey } from '@/lib/i18n';
 import type { Account } from '@/types/api/account';
 import { testAttr } from '@/utils/testAttrs';
 
@@ -20,23 +22,31 @@ const AUTH_PROVIDER_LABELS: Record<string, TranslationKey> = {
 };
 
 export function ProfileForm({ account, onSaved }: { account: Account; onSaved: () => void }) {
-  const { t } = useI18n();
+  const { t, setLocale } = useI18n();
   const mutation = useUpdateProfileMutation();
   const isCurrentSession = useAuthenticatedSessionGuard();
-  const form = useForm<{ displayName: string }>({
-    defaultValues: { displayName: account.displayName },
+  const form = useForm<{ displayName: string; preferredLocale: Locale }>({
+    defaultValues: { displayName: account.displayName, preferredLocale: account.preferredLocale },
   });
 
   useEffect(() => {
-    form.reset({ displayName: account.displayName });
-  }, [account.displayName, form]);
+    form.reset({ displayName: account.displayName, preferredLocale: account.preferredLocale });
+  }, [account.displayName, account.preferredLocale, form]);
 
   const submit = form.handleSubmit(async (values) => {
     form.clearErrors('root');
     try {
-      const result = await mutation.mutateAsync({ displayName: values.displayName.trim() });
+      const result = await mutation.mutateAsync({
+        displayName: values.displayName.trim(),
+        preferredLocale: values.preferredLocale,
+      });
       if (!isCurrentSession()) return;
-      form.reset({ displayName: result.account.displayName });
+      form.reset({
+        displayName: result.account.displayName,
+        preferredLocale: result.account.preferredLocale,
+      });
+      updateAuthSessionPreferredLocale(result.account.preferredLocale);
+      setLocale(result.account.preferredLocale);
       onSaved();
     } catch {
       if (!isCurrentSession()) return;
@@ -94,6 +104,18 @@ export function ProfileForm({ account, onSaved }: { account: Account; onSaved: (
                 'accountAuthProviderUnknown',
             )}
           />
+        </AccountFormField>
+      </div>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <AccountFormField htmlFor="account-locale" label={t('language')}>
+          <NativeSelect
+            id="account-locale"
+            className="h-11 rounded border border-stone-300 bg-white px-3 text-sm"
+            {...form.register('preferredLocale')}
+          >
+            <option value="ko">한국어</option>
+            <option value="en">English</option>
+          </NativeSelect>
         </AccountFormField>
       </div>
       <p className="-mt-2 text-xs leading-5 text-stone-500">{t('accountEmailReadOnly')}</p>

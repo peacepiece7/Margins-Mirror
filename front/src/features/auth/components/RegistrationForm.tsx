@@ -2,13 +2,14 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { NativeSelect } from '@/components/ui/native-select';
+import { isTurnstileConfigured, TurnstileWidget } from '@/components/ui/turnstile-widget';
 import { useI18n } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 
 import { AuthFormField } from './AuthFormField';
 import { emailPattern, type AuthFormValues } from './auth-form';
 import { ConsentCheckbox } from './ConsentCheckbox';
-import { isTurnstileConfigured, TurnstileWidget } from './TurnstileWidget';
 
 type RegistrationFormProps = {
   botChallengeResetSignal: number;
@@ -88,8 +89,11 @@ export function RegistrationForm({
   });
 
   return (
-    <>
+    <div className="grid gap-x-5 gap-y-1 md:grid-cols-2" {...testAttr('register-fields-grid')}>
       <AuthFormField name="username" errorTestId="register-username-error">
+        <label className="mb-1 block text-sm font-medium" htmlFor="register-username">
+          {t('username')}
+        </label>
         <Input
           aria-describedby={errors.username ? 'register-username-error' : undefined}
           aria-invalid={Boolean(errors.username)}
@@ -104,7 +108,24 @@ export function RegistrationForm({
           {...testAttr('register-username-input')}
         />
       </AuthFormField>
+      <AuthFormField name="preferredLocale" errorTestId="register-locale-error">
+        <label className="grid gap-1 text-sm font-medium" htmlFor="register-locale">
+          {t('language')}
+          <NativeSelect
+            id="register-locale"
+            className="h-11 rounded border border-stone-300 bg-white px-3 text-base md:h-8 md:text-sm"
+            {...register('preferredLocale')}
+            {...testAttr('register-locale-select')}
+          >
+            <option value="ko">한국어</option>
+            <option value="en">English</option>
+          </NativeSelect>
+        </label>
+      </AuthFormField>
       <AuthFormField name="displayName" errorTestId="register-display-name-error">
+        <label className="mb-1 block text-sm font-medium" htmlFor="register-display-name">
+          {t('displayName')}
+        </label>
         <Input
           aria-describedby={errors.displayName ? 'register-display-name-error' : undefined}
           aria-invalid={Boolean(errors.displayName)}
@@ -119,6 +140,9 @@ export function RegistrationForm({
         />
       </AuthFormField>
       <div {...testAttr('register-email-field')}>
+        <label className="mb-1 block text-sm font-medium" htmlFor="register-email">
+          {t('email')}
+        </label>
         <div className="grid grid-cols-[1fr_auto] gap-2">
           <Input
             aria-describedby={errors.email ? 'register-email-error' : undefined}
@@ -159,14 +183,17 @@ export function RegistrationForm({
           </div>
         )}
       </div>
-      <div {...testAttr('register-email-code-field')}>
-        {!emailVerificationConfirmed && (
+      <div className="md:col-span-2" {...testAttr('register-email-code-field')}>
+        {emailAvailabilityConfirmed && !emailVerificationConfirmed && (
           <TurnstileWidget
             locale={locale}
             onTokenChange={onBotChallengeTokenChange}
             resetSignal={botChallengeResetSignal}
           />
         )}
+        <label className="mb-1 block text-sm font-medium" htmlFor="register-email-code">
+          {t('emailVerificationCode')}
+        </label>
         <div className="grid gap-2 sm:grid-cols-[1fr_auto_auto]">
           <Input
             aria-describedby={
@@ -240,7 +267,7 @@ export function RegistrationForm({
         )}
       </div>
       {emailVerificationConfirmed && (
-        <fieldset className="grid gap-3 rounded border border-stone-300 bg-white p-4">
+        <fieldset className="grid gap-3 rounded border border-stone-300 bg-white p-4 md:col-span-2">
           <legend className="px-1 text-sm font-semibold">{t('consentTitle')}</legend>
           <ConsentCheckbox
             disabled={registrationIntentLoading || registrationIntentCreated}
@@ -280,6 +307,9 @@ export function RegistrationForm({
         </fieldset>
       )}
       <AuthFormField name="password" errorTestId="login-password-error">
+        <label className="mb-1 block text-sm font-medium" htmlFor="register-password">
+          {t('password')}
+        </label>
         <Input
           aria-describedby={errors.password ? 'login-password-error' : undefined}
           aria-invalid={Boolean(errors.password)}
@@ -301,6 +331,9 @@ export function RegistrationForm({
         />
       </AuthFormField>
       <AuthFormField name="confirmPassword" errorTestId="register-password-confirm-error">
+        <label className="mb-1 block text-sm font-medium" htmlFor="register-password-confirm">
+          {t('passwordConfirm')}
+        </label>
         <Input
           aria-describedby={errors.confirmPassword ? 'register-password-confirm-error' : undefined}
           aria-invalid={Boolean(errors.confirmPassword)}
@@ -318,7 +351,7 @@ export function RegistrationForm({
       </AuthFormField>
       {emailVerificationConfirmed && !registrationIntentCreated && (
         <Button
-          className="rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 md:col-span-2"
           disabled={registrationIntentLoading || !registrationConsentsAccepted}
           onClick={onContinueAfterConsent}
           type="button"
@@ -329,7 +362,7 @@ export function RegistrationForm({
       )}
       {registrationIntentCreated && (
         <Button
-          className="rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 md:col-span-2"
           disabled={
             isSubmitting ||
             !username.trim() ||
@@ -348,6 +381,6 @@ export function RegistrationForm({
           {t('createAccount')}
         </Button>
       )}
-    </>
+    </div>
   );
 }

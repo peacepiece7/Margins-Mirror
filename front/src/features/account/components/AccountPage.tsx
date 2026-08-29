@@ -1,6 +1,6 @@
 import type { PropsWithChildren } from 'react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 
 import { BlueprintWorkspace } from '@/components/layouts/blueprint-workspace';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -93,9 +93,9 @@ export function AccountPage() {
                 <p>{t('accountDangerRetention')}</p>
                 <p>
                   {t('accountContactPrefix')}{' '}
-                  <a className="font-medium underline" href="mailto:contact@example.com">
-                    contact@example.com
-                  </a>
+                  <Link className="font-medium underline" to="/contact">
+                    {t('contactLink')}
+                  </Link>
                 </p>
               </div>
               <ResignationForm />

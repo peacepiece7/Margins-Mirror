@@ -20,7 +20,13 @@ failure_rows AS (
     e.model,
     e.prompt_version,
     e.schema_version,
-    COALESCE(e.failure_category, 'UNCLASSIFIED') AS failure_category,
+    e.outcome,
+    COALESCE(e.generation_locale, 'UNSCOPED') AS generation_locale,
+    COALESCE(e.language_validation_outcome, 'NOT_RECORDED') AS language_validation_outcome,
+    CASE
+      WHEN e.outcome = 'FAILURE' THEN COALESCE(e.failure_category, 'UNCLASSIFIED')
+      ELSE e.failure_category
+    END AS failure_category,
     COUNT(*) AS failure_count,
     SUM(e.input_tokens) AS input_tokens,
     SUM(e.cached_input_tokens) AS cached_input_tokens,
@@ -33,7 +39,10 @@ failure_rows AS (
     ON e.created_at >= w.start_at
    AND e.created_at < w.end_at
   WHERE e.is_test_data = FALSE
-    AND e.outcome = 'FAILURE'
+    AND (
+      e.outcome = 'FAILURE'
+      OR e.language_validation_outcome = 'KNOWN_MISMATCH'
+    )
   GROUP BY
     w.window_label,
     e.task_type,
@@ -42,7 +51,13 @@ failure_rows AS (
     e.model,
     e.prompt_version,
     e.schema_version,
-    COALESCE(e.failure_category, 'UNCLASSIFIED')
+    e.outcome,
+    COALESCE(e.generation_locale, 'UNSCOPED'),
+    COALESCE(e.language_validation_outcome, 'NOT_RECORDED'),
+    CASE
+      WHEN e.outcome = 'FAILURE' THEN COALESCE(e.failure_category, 'UNCLASSIFIED')
+      ELSE e.failure_category
+    END
 )
 SELECT JSON_OBJECT(
   'snapshotSchemaVersion', 'ai-generation-failure-snapshot-v1',
@@ -53,6 +68,9 @@ SELECT JSON_OBJECT(
   'model', model,
   'promptVersion', prompt_version,
   'schemaVersion', schema_version,
+  'outcome', outcome,
+  'generationLocale', generation_locale,
+  'languageValidationOutcome', language_validation_outcome,
   'failureCategory', failure_category,
   'failureCount', failure_count,
   'inputTokens', input_tokens,

@@ -101,9 +101,15 @@ class TestResetBusinessTest {
 
         InOrder order = inOrder(statement);
         order.verify(statement).execute("SET FOREIGN_KEY_CHECKS = 0");
+        order.verify(statement).executeUpdate(
+            "DELETE FROM discussion_run_refinements WHERE run_id IN (SELECT id FROM discussion_runs WHERE is_test_data = TRUE)");
+        order.verify(statement).executeUpdate(
+            "DELETE FROM reflection_summaries WHERE reflection_insight_id IN (SELECT id FROM session_insights WHERE is_test_data = TRUE)");
+        order.verify(statement).executeUpdate("DELETE FROM discussion_runs WHERE is_test_data = TRUE");
         order.verify(statement).executeUpdate("DELETE FROM messages WHERE is_test_data = TRUE");
         order.verify(statement).executeUpdate(
             "DELETE FROM session_window_personas WHERE window_id IN (SELECT id FROM session_windows WHERE is_test_data = TRUE)");
+        order.verify(statement).executeUpdate("DELETE FROM session_insights WHERE is_test_data = TRUE");
         order.verify(statement).executeUpdate("DELETE FROM personas WHERE is_test_data = TRUE");
         order.verify(statement).executeUpdate("DELETE FROM session_windows WHERE is_test_data = TRUE");
         order.verify(statement).execute("SET FOREIGN_KEY_CHECKS = 1");

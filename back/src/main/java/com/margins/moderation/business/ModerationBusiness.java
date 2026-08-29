@@ -4,6 +4,11 @@ import com.margins.auth.support.AuthContext;
 import com.margins.ai.AiGenerationObserver;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.AiOutputLanguageValidator;
+import com.margins.ai.GenerationLocale;
+import com.margins.ai.GenerationLocaleResolver;
+import com.margins.ai.observability.AiTraceContext;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
 import com.margins.moderation.DiscussionModerationRequest;
@@ -28,11 +33,22 @@ public class ModerationBusiness {
     private final ModerationProperties properties;
     private final DiscussionModerator discussionModerator;
     private final ModerationEventMapper moderationEventMapper;
+    private GenerationLocaleResolver generationLocaleResolver;
+    private AiOutputLanguageValidator languageValidator = new AiOutputLanguageValidator();
     private AiGenerationObserver generationObserver = AiGenerationObserver.NO_OP;
 
     @Autowired
     void configureGenerationObserver(AiGenerationObserver generationObserver) {
         this.generationObserver = generationObserver;
+    }
+
+    @Autowired
+    public void configureGenerationLocale(
+        GenerationLocaleResolver generationLocaleResolver,
+        AiOutputLanguageValidator languageValidator
+    ) {
+        this.generationLocaleResolver = generationLocaleResolver;
+        this.languageValidator = languageValidator;
     }
 
     public boolean isEnabled() {
@@ -48,11 +64,29 @@ public class ModerationBusiness {
         String content,
         String depth
     ) {
+        if (generationLocaleResolver == null) {
+            throw new IllegalStateException("GenerationLocaleResolver is required");
+        }
+        return evaluate(
+            context,
+            content,
+            depth,
+            generationLocaleResolver.resolve(context.getUserId())
+        );
+    }
+
+    public ModerationEventRecord evaluate(
+        SessionWindowContext context,
+        String content,
+        String depth,
+        GenerationLocale locale
+    ) {
         String requestId = UUID.randomUUID().toString();
         AiGenerationTask task = new AiGenerationTask(
             "MODERATOR",
             properties.getPromptVersion(),
-            properties.getSchemaVersion()
+            properties.getSchemaVersion(),
+            locale
         );
         AiGenerationResult<DiscussionModerationResult> generation;
         long startedAt = System.nanoTime();
@@ -69,7 +103,6 @@ public class ModerationBusiness {
                 elapsedMillis(startedAt)
             );
         }
-        generationObserver.observe(generation, depth, context.isTestData());
         DiscussionModerationResult result = generation == null ? null : generation.value();
         if (result == null) {
             throw new ApiException(
@@ -77,6 +110,29 @@ public class ModerationBusiness {
                 "Moderation result could not be generated"
             );
         }
+        AiLanguageValidationOutcome validation = generation.fallbackUsed()
+            && generation.languageValidationOutcome() == null
+                ? null
+                : result.getDecision() == ModerationDecision.REDIRECT
+                    ? languageValidator.validate(locale, result.getSuggestedQuestion())
+                    : AiLanguageValidationOutcome.UNKNOWN;
+        if (validation == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+            result = result.toBuilder()
+                .suggestedQuestion(locale == GenerationLocale.KO
+                    ? "책의 주제로 돌아가 어떤 장면이 가장 기억에 남았는지 이야기해 볼까요?"
+                    : "Returning to the book, which scene stayed with you most?")
+                .fallbackUsed(true)
+                .build();
+            generation = generation.withValue(result, "FALLBACK", true, validation);
+        } else {
+            generation = generation.withLanguageValidation(validation);
+        }
+        generationObserver.observe(
+            generation,
+            depth,
+            context.isTestData(),
+            new AiTraceContext(context.getUserId(), context.getSessionId())
+        );
         String decision = result.getDecision().name();
         ModerationEventRecord event = ModerationEventRecord.builder()
             .requestId(requestId)
@@ -100,6 +156,8 @@ public class ModerationBusiness {
             .routingOutcome(initialRoutingOutcome(result.getDecision()))
             .personaCalled(false)
             .providerErrorCode(result.getProviderErrorCode())
+            .generationLocale(locale.value())
+            .languageValidationOutcome(validation == null ? null : validation.name())
             .testData(context.isTestData())
             .build();
         requireChanged(moderationEventMapper.insert(event), "Moderation event could not be saved");

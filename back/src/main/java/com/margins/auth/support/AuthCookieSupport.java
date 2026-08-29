@@ -86,10 +86,14 @@ public class AuthCookieSupport {
     }
 
     private ResponseCookie.ResponseCookieBuilder baseCookie(String name, Duration maxAge, String sameSite) {
-        return ResponseCookie.from(name, "")
+        ResponseCookie.ResponseCookieBuilder builder = ResponseCookie.from(name, "")
             .path(properties.getPath())
             .secure(properties.isSecure())
             .sameSite(sameSite)
             .maxAge(maxAge);
+        if (properties.getDomain() != null && !properties.getDomain().isBlank()) {
+            builder.domain(properties.getDomain());
+        }
+        return builder;
     }
 }

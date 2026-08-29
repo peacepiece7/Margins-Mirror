@@ -15,6 +15,45 @@ export const translationCatalog = {
     accountBack: 'Back to library',
     accountCodeLabel: '6-digit code',
     accountContactPrefix: 'Deletion support:',
+    contactBackHome: 'Back to Margins',
+    contactTitle: 'Contact Margins',
+    contactDescription:
+      'Send a service, account, privacy, bug, or feature inquiry to the Margins operator.',
+    contactEmail: 'Reply email',
+    contactEmailRequired: 'Enter an email address for the reply.',
+    contactEmailInvalid: 'Enter a valid email address of 254 characters or fewer.',
+    contactCategory: 'Category',
+    contactCategoryRequired: 'Choose an inquiry category.',
+    contactCategoryPlaceholder: 'Choose a category',
+    contactCategoryServiceUsage: 'Service usage',
+    contactCategoryAccountLogin: 'Account or login',
+    contactCategoryPrivacy: 'Privacy',
+    contactCategoryBugReport: 'Bug report',
+    contactCategoryFeatureRequest: 'Feature request',
+    contactCategoryOther: 'Other',
+    contactSubject: 'Subject',
+    contactSubjectRequired: 'Enter a subject.',
+    contactSubjectTooLong: 'Keep the subject to 160 characters or fewer.',
+    contactMessage: 'Message',
+    contactMessageRequired: 'Enter your inquiry.',
+    contactMessageTooLong: 'Keep the message to 5,000 characters or fewer.',
+    contactInvalidCharacters: 'Remove unsupported control characters.',
+    contactSensitiveWarning:
+      'Do not include passwords, verification codes, access tokens, or unnecessary sensitive information.',
+    contactPrivacyNotice: 'Inquiry data is used only to respond and is deleted within one year.',
+    contactBotChallengePrompt: 'Complete the bot check before sending your inquiry.',
+    contactBotChallengeRequired: 'Complete the bot check and try again.',
+    contactBotChallengeInvalid: 'The bot check expired or is invalid. Complete a new check.',
+    contactBotChallengeUnavailable:
+      'Bot verification is temporarily unavailable. Please try again later.',
+    contactUnavailable: 'Contact is temporarily unavailable. Please try again later.',
+    contactDeliveryFailed:
+      'Your inquiry was saved, but the notification could not be sent. Please try again later.',
+    contactSubmitFailed: 'The inquiry could not be sent. Your entries have been kept.',
+    contactSuccess: 'Your inquiry was sent. Reference',
+    contactSubmit: 'Send inquiry',
+    contactSubmitting: 'Sending…',
+    contactLink: 'Contact',
     accountCurrentPassword: 'Current password',
     accountDangerDescription:
       'You can recover your account for 30 days. Reading activity remains under a resigned-member label unless you request complete activity erasure during recovery.',
@@ -80,19 +119,19 @@ export const translationCatalog = {
     privacyPolicyTitle: 'Privacy Policy',
     privacySectionContactTitle: '1. Operator and contact',
     privacySectionContactBody:
-      'Margins processes personal information needed to provide the service. Requests for access, correction, deletion, suspension, or other privacy inquiries may be sent to privacy@example.com. Inquiry records are deleted within one year after completion.',
+      'Margins processes personal information needed to provide the service. Requests for access, correction, deletion, suspension, or other privacy inquiries may be sent to privacy@margins.cloud. The public contact form is available for service, account, privacy, bug, feature, and other inquiries.',
     privacySectionCollectionTitle: '2. Information, purposes, and retention',
     privacySectionCollectionBody:
-      'Local registration collects a username, display name, email address, encrypted password, and email verification records. Google sign-in uses the Google subject, email address, and display name for account identification. Reading records, questions, answers, and debate messages are retained while the account remains active. Debate moderation records decisions and operating metadata; only redirected or rejected input is retained for false-positive review, while allowed input is stored only as the ordinary debate message. Birth dates and phone numbers are not collected.',
+      'Local registration collects a username, display name, email address, encrypted password, and email verification records. Google sign-in uses the Google subject, email address, and display name for account identification. The contact form collects the reply email, category, subject, and message to receive and respond to the selected inquiry; it does not attach account, reading, authentication, or AI records. Reading records, questions, answers, and debate messages are retained while the account remains active. Debate moderation records decisions and operating metadata; only redirected or rejected input is retained for false-positive review, while allowed input is stored only as the ordinary debate message. Birth dates and phone numbers are not collected.',
     privacySectionTransferTitle: '3. Processing and overseas transfer',
     privacySectionTransferBody:
-      'Email delivery may be processed in the United States by Plus Five Five, Inc. (Resend). Cloudflare Turnstile processes IP address, browser or device signals, and challenge results to prevent automated signup-email abuse; Margins stores only keyed HMAC identifiers rather than raw IP addresses for rate limiting. AI book analysis, questions, answers or summaries, and persona debates send the book and reading context and messages supplied by the user to OpenAI and its current subprocessors in their processing countries when the user requests each AI feature. OpenAI requests use store:false, and API inputs and outputs are not used for model training by default; abuse-monitoring logs may be retained for up to 30 days when the organization is not approved for ZDR or MAM.',
+      'Email delivery may be processed in the United States by Plus Five Five, Inc. (Resend). For a contact inquiry, Resend processes the reply email, category, subject, and message to deliver the operator notification. Cloudflare Turnstile processes IP address, browser or device signals, and challenge results to prevent automated contact and signup-email abuse; Margins does not store the contact challenge token or raw IP address and stores only keyed HMAC identifiers rather than raw IP addresses for signup-email rate limiting. AI book analysis, questions, answers or summaries, and persona debates send the book and reading context and messages supplied by the user to OpenAI and its current subprocessors in their processing countries when the user requests each AI feature. OpenAI requests use store:false, and API inputs and outputs are not used for model training by default; abuse-monitoring logs may be retained for up to 30 days when the organization is not approved for ZDR or MAM.',
     privacySectionStorageTitle: '4. Cookies and browser storage',
     privacySectionStorageBody:
       'HttpOnly cookies are used for refresh tokens, OAuth state, and pending registration. Browser storage holds UI state such as the access session hint, language, and selected reading session. Authentication state is removed on logout.',
     privacySectionRetentionTitle: '5. Resignation, deletion, and retention',
     privacySectionRetentionBody:
-      'Withdrawal of required consent is handled through membership resignation. Choosing erase all activity deletes debate moderation input and all event-level links after the resignation grace period; only raw-free, identifier-free daily counts may remain. Email verification and Google pending data are deleted within one day after completion or expiry. Keyed email/IP rate-limit identifiers are deleted within two days after their final active window. Refresh tokens are deleted within seven days after expiry or revocation, released lock information within seven days, lifecycle events and raw exit surveys within one year, monthly aggregates within three years, and each database backup within 30 days.',
+      'Withdrawal of required consent is handled through membership resignation. Choosing erase all activity deletes debate moderation input and all event-level links after the resignation grace period; only raw-free, identifier-free daily counts may remain. Contact database records and operator-mailbox content are deleted within one year of receipt regardless of processing status. Email verification and Google pending data are deleted within one day after completion or expiry. Keyed email/IP rate-limit identifiers are deleted within two days after their final active window. Refresh tokens are deleted within seven days after expiry or revocation, released lock information within seven days, lifecycle events and raw exit surveys within one year, monthly aggregates within three years, and each database backup within 30 days.',
     privacySectionSecurityTitle: '6. Safeguards and rights',
     privacySectionSecurityBody:
       'Margins uses encrypted transport, one-way password hashing, least privilege, rotating access and error logs, and prohibits logging credentials or AI prompts. Data subjects may exercise their rights through the account page or privacy contact.',
@@ -230,7 +269,7 @@ export const translationCatalog = {
     mainPromotionFeatureDebate: 'Multi-perspective persona debate',
     mainPromotionFeatureDebateDetail:
       'Discuss the book with topic-specific AI personas who bring different points of view.',
-    mainPromotionFeatureDiscover: 'Discover books and build your library',
+    mainPromotionFeatureDiscover: 'My library',
     mainPromotionFeatureDiscoverDetail:
       'Search for a book or add it directly, then track reading status and ratings.',
     mainPromotionFeaturePrompts: 'Read deeper with AI questions',
@@ -239,9 +278,40 @@ export const translationCatalog = {
     mainPromotionFeatureRecords: 'Keep reflections and reviews',
     mainPromotionFeatureRecordsDetail:
       'Return to saved reflections, messages, question answers, and book reviews.',
-    mainPromotionSubtitle:
-      'Discover a book, answer AI questions, preserve your reflections, and discuss it from different perspectives.',
-    mainPromotionTitle: 'Turn reading into a record of thought',
+    mainPromotionSubtitle: 'Record your thinking, follow the questions, and explore deeper.',
+    mainPromotionTitle: 'Record your thinking',
+    landingNavJourney: 'Reading loop',
+    landingNavPrinciple: 'Why it stays yours',
+    landingScrollCue: 'Follow the thought',
+    landingWorkflowLabel: 'The Margins reading loop',
+    landingJourneyEyebrow: 'Inside Margins',
+    landingJourneyTitle: 'One book. Six records.',
+    landingJourneyIntro:
+      'Margins keeps discovery, reflection, questions, discussion, and revision in one readable trail.',
+    landingStageDiscoverDetail:
+      'Find a book, add it to your shelf, and manage reading status and ratings in one place.',
+    landingStageReflectDetail:
+      "Before hearing anyone else's take — AI included — write down whatever comes to mind. Anything goes.",
+    landingStageInterviewDetail:
+      'Answer private follow-up questions to sharpen your first impression.',
+    landingStageGuideDetail:
+      'Your private answers stay private — the guide is built from your own reflection.',
+    landingStageDiscussDetail:
+      'Stay on one topic while the Director — and any perspective you invite — help the conversation move forward.',
+    landingStageRefineDetail:
+      'Look back at your first note and the conversation, then choose what goes into the next version.',
+    landingStatusReady: 'READY',
+    landingStatusPreserved: 'PRESERVED',
+    landingStatusPrivate: 'PRIVATE',
+    landingStatusGuided: 'GUIDED',
+    landingStatusLive: 'IN DISCUSSION',
+    landingStatusReaderChoice: 'READER CHOICE',
+    landingPreserveTitle: 'AI can open a margin. It cannot replace your voice.',
+    landingPreserveBody: 'Grow your own point of view. Cognitive debt always comes due.',
+    landingPreserveCycleLabel: 'Show the next record',
+    landingFinalTitle: 'Start with one book, right now.',
+    landingFinalBody: 'Start a private archive, or return to the shelves you already built.',
+    landingFinalExisting: 'I already have an account',
     continueWithGoogle: 'Continue with Google',
     registerFailed: 'Registration failed',
     requiredField: 'This field is required.',
@@ -691,6 +761,46 @@ export const translationCatalog = {
     accountBack: '서재로 돌아가기',
     accountCodeLabel: '6자리 인증 코드',
     accountContactPrefix: '개인정보 삭제 문의:',
+    contactBackHome: 'Margins로 돌아가기',
+    contactTitle: '문의하기',
+    contactDescription:
+      '서비스 이용, 계정, 개인정보, 오류 또는 기능 제안 문의를 Margins 운영자에게 보내세요.',
+    contactEmail: '답변받을 이메일',
+    contactEmailRequired: '답변받을 이메일을 입력해 주세요.',
+    contactEmailInvalid: '254자 이하의 올바른 이메일 주소를 입력해 주세요.',
+    contactCategory: '문의 유형',
+    contactCategoryRequired: '문의 유형을 선택해 주세요.',
+    contactCategoryPlaceholder: '문의 유형 선택',
+    contactCategoryServiceUsage: '서비스 이용',
+    contactCategoryAccountLogin: '계정 또는 로그인',
+    contactCategoryPrivacy: '개인정보',
+    contactCategoryBugReport: '오류 제보',
+    contactCategoryFeatureRequest: '기능 제안',
+    contactCategoryOther: '기타',
+    contactSubject: '제목',
+    contactSubjectRequired: '제목을 입력해 주세요.',
+    contactSubjectTooLong: '제목은 160자 이하로 입력해 주세요.',
+    contactMessage: '문의 내용',
+    contactMessageRequired: '문의 내용을 입력해 주세요.',
+    contactMessageTooLong: '문의 내용은 5,000자 이하로 입력해 주세요.',
+    contactInvalidCharacters: '지원하지 않는 제어 문자를 제거해 주세요.',
+    contactSensitiveWarning:
+      '비밀번호, 인증번호, 접근 토큰 또는 불필요한 민감정보를 입력하지 마세요.',
+    contactPrivacyNotice: '문의 정보는 답변 목적으로만 사용하며 접수 후 1년 이내 삭제합니다.',
+    contactBotChallengePrompt: '문의를 보내기 전에 봇 방지 확인을 완료하세요.',
+    contactBotChallengeRequired: '봇 방지 확인을 완료한 뒤 다시 시도해 주세요.',
+    contactBotChallengeInvalid:
+      '봇 방지 확인이 만료되었거나 올바르지 않습니다. 다시 완료해 주세요.',
+    contactBotChallengeUnavailable:
+      '봇 확인을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+    contactUnavailable: '문의 기능을 일시적으로 사용할 수 없습니다. 잠시 후 다시 시도해 주세요.',
+    contactDeliveryFailed:
+      '문의는 저장했지만 운영자 알림을 보내지 못했습니다. 잠시 후 다시 시도해 주세요.',
+    contactSubmitFailed: '문의를 보내지 못했습니다. 입력한 내용은 유지했습니다.',
+    contactSuccess: '문의가 전송되었습니다. 접수 번호',
+    contactSubmit: '문의 보내기',
+    contactSubmitting: '전송 중…',
+    contactLink: '문의하기',
     accountCurrentPassword: '현재 비밀번호',
     accountDangerDescription:
       '탈퇴 후 30일 동안 계정을 복구할 수 있습니다. 전체 활동 삭제를 별도로 예약하지 않으면 기존 독서 활동은 탈퇴 회원 이름으로 유지됩니다.',
@@ -756,19 +866,19 @@ export const translationCatalog = {
     privacyPolicyTitle: '개인정보처리방침',
     privacySectionContactTitle: '1. 운영자와 문의',
     privacySectionContactBody:
-      'Margins 운영자는 서비스 제공에 필요한 개인정보를 처리합니다. 개인정보 열람·정정·삭제·처리정지 및 문의는 privacy@example.com로 접수합니다. 문의 기록은 처리 완료 후 1년 이내 삭제합니다.',
+      'Margins 운영자는 서비스 제공에 필요한 개인정보를 처리합니다. 개인정보 열람·정정·삭제·처리정지 및 문의는 privacy@margins.cloud로 접수합니다. 공개 문의 form에서는 서비스 이용, 계정·로그인, 개인정보, 오류 신고, 기능 제안 및 기타 문의를 접수합니다.',
     privacySectionCollectionTitle: '2. 수집 항목·목적·보유기간',
     privacySectionCollectionBody:
-      '로컬 가입 시 사용자명, 표시 이름, 이메일, 암호화된 비밀번호와 이메일 인증 기록을 수집합니다. Google 로그인 시 Google subject, 이메일, 표시 이름을 계정 식별에 사용합니다. 독서 기록, 질문, 답변, 토론 메시지는 계정 유지 기간 보관합니다. 토론 관련성 판정은 판정 결과와 운영 정보를 기록하며, 허용된 입력은 일반 토론 메시지로만 저장하고 전환·거부된 입력 원문만 오탐 검토를 위해 보관합니다. 생년월일과 전화번호는 수집하지 않습니다.',
+      '로컬 가입 시 사용자명, 표시 이름, 이메일, 암호화된 비밀번호와 이메일 인증 기록을 수집합니다. Google 로그인 시 Google subject, 이메일, 표시 이름을 계정 식별에 사용합니다. 문의 form은 선택한 문의의 접수와 답변을 위해 답변받을 이메일, 문의 유형, 제목, 본문을 수집하며 계정·독서·인증·AI 기록을 자동 첨부하지 않습니다. 독서 기록, 질문, 답변, 토론 메시지는 계정 유지 기간 보관합니다. 토론 관련성 판정은 판정 결과와 운영 정보를 기록하며, 허용된 입력은 일반 토론 메시지로만 저장하고 전환·거부된 입력 원문만 오탐 검토를 위해 보관합니다. 생년월일과 전화번호는 수집하지 않습니다.',
     privacySectionTransferTitle: '3. 처리 위탁과 국외 이전',
     privacySectionTransferBody:
-      '이메일 발송은 미국의 Plus Five Five, Inc.(Resend)가 처리할 수 있습니다. 자동 가입 메일 남용을 막기 위해 Cloudflare Turnstile이 IP 주소, 브라우저·기기 신호와 challenge 결과를 처리하며 Margins는 발송 제한용 raw IP 대신 keyed HMAC 식별자만 저장합니다. AI 도서 분석, 질문, 답변·요약, 페르소나 토론에는 사용자가 입력한 도서·독서 맥락과 메시지가 OpenAI 및 현행 sub-processor가 처리하는 국가로 전송됩니다. 전송 시점은 각 AI 기능 요청 시이며 목적은 해당 결과 생성입니다. OpenAI 요청에는 store:false를 적용하고 API 입력·출력은 기본적으로 모델 학습에 사용되지 않지만, ZDR/MAM이 승인되지 않은 조직의 abuse monitoring log에는 최대 30일 보관될 수 있습니다.',
+      '이메일 발송은 미국의 Plus Five Five, Inc.(Resend)가 처리할 수 있습니다. 문의 알림을 운영자에게 전달할 때 Resend가 답변받을 이메일, 문의 유형, 제목과 본문을 처리합니다. 문의와 가입 이메일의 자동화 남용을 막기 위해 Cloudflare Turnstile이 IP 주소, 브라우저·기기 신호와 challenge 결과를 처리합니다. Margins는 문의 challenge token과 raw IP를 저장하지 않고, 가입 이메일 발송 제한에는 raw IP 대신 keyed HMAC 식별자만 저장합니다. AI 도서 분석, 질문, 답변·요약, 페르소나 토론에는 사용자가 입력한 도서·독서 맥락과 메시지가 OpenAI 및 현행 sub-processor가 처리하는 국가로 전송됩니다. 전송 시점은 각 AI 기능 요청 시이며 목적은 해당 결과 생성입니다. OpenAI 요청에는 store:false를 적용하고 API 입력·출력은 기본적으로 모델 학습에 사용되지 않지만, ZDR/MAM이 승인되지 않은 조직의 abuse monitoring log에는 최대 30일 보관될 수 있습니다.',
     privacySectionStorageTitle: '4. 쿠키와 브라우저 저장소',
     privacySectionStorageBody:
       'HttpOnly cookie는 refresh token, OAuth state, 가입 pending 상태에 사용합니다. 브라우저 저장소는 access session 힌트, 언어, 선택한 독서 세션 등 UI 상태에 사용되며 로그아웃 시 인증 상태를 제거합니다.',
     privacySectionRetentionTitle: '5. 탈퇴·파기와 보유 기준',
     privacySectionRetentionBody:
-      '필수 동의 철회는 회원 탈퇴로 처리합니다. 전체 활동 삭제를 선택하면 탈퇴 유예 종료 후 토론 판정 입력 원문과 event 단위 연결 정보를 삭제하고, 원문과 식별자가 없는 일별 집계만 남길 수 있습니다. 이메일 인증과 Google pending은 완료·만료 후 1일, keyed 이메일/IP 발송 제한 식별자는 마지막 유효 window 종료 후 2일, refresh token은 만료·폐기 후 7일, 해제된 잠금 정보는 7일, lifecycle event와 탈퇴 설문 원문은 1년, 월별 집계는 3년, DB backup은 사본별 30일 이내 파기합니다.',
+      '필수 동의 철회는 회원 탈퇴로 처리합니다. 전체 활동 삭제를 선택하면 탈퇴 유예 종료 후 토론 판정 입력 원문과 event 단위 연결 정보를 삭제하고, 원문과 식별자가 없는 일별 집계만 남길 수 있습니다. 문의 DB 기록과 운영 mailbox 원문은 처리 상태와 관계없이 수신 시각부터 1년 이내 삭제합니다. 이메일 인증과 Google pending은 완료·만료 후 1일, keyed 이메일/IP 발송 제한 식별자는 마지막 유효 window 종료 후 2일, refresh token은 만료·폐기 후 7일, 해제된 잠금 정보는 7일, lifecycle event와 탈퇴 설문 원문은 1년, 월별 집계는 3년, DB backup은 사본별 30일 이내 파기합니다.',
     privacySectionSecurityTitle: '6. 안전조치와 권리',
     privacySectionSecurityBody:
       '전송 구간 암호화, 비밀번호 단방향 암호화, 최소 권한, 접근·오류 로그 순환, 인증정보와 AI prompt 로그 금지를 적용합니다. 정보주체는 계정 화면과 문의처를 통해 권리를 행사할 수 있습니다.',
@@ -903,7 +1013,7 @@ export const translationCatalog = {
     mainPromotionFeatureDebate: '여러 관점의 페르소나 토론',
     mainPromotionFeatureDebateDetail:
       '서로 다른 시선을 가진 AI 페르소나와 주제별로 책을 토론합니다.',
-    mainPromotionFeatureDiscover: '책 발견과 나만의 서재',
+    mainPromotionFeatureDiscover: '나만의 서재',
     mainPromotionFeatureDiscoverDetail:
       '책을 검색하거나 직접 등록하고 독서 상태와 별점을 함께 관리합니다.',
     mainPromotionFeaturePrompts: 'AI 질문으로 깊게 읽기',
@@ -912,9 +1022,38 @@ export const translationCatalog = {
     mainPromotionFeatureRecords: '감상과 독후감 보관',
     mainPromotionFeatureRecordsDetail:
       '감상, 메시지, 질문 답변과 독후감을 저장하고 언제든 다시 꺼내 봅니다.',
-    mainPromotionSubtitle:
-      '책을 발견하고 AI 질문에 답하며 감상을 보관하고, 서로 다른 관점으로 토론하는 독서 기록 서비스입니다.',
-    mainPromotionTitle: '읽은 책을 생각의 기록으로',
+    mainPromotionSubtitle: '생각을 기록하고 질문을 따라가며, 더 깊이 탐색하세요.',
+    mainPromotionTitle: '생각을 기록하다',
+    landingNavJourney: '독서 흐름',
+    landingNavPrinciple: '기록 원칙',
+    landingScrollCue: '생각의 흐름 따라가기',
+    landingWorkflowLabel: 'Margins 독서 흐름',
+    landingJourneyEyebrow: 'Margins 안에서',
+    landingJourneyTitle: '한 권의 책, 여섯 번의 기록.',
+    landingJourneyIntro:
+      '책 발견부터 감상, 질문, 토론, 다듬기까지 하나의 읽을 수 있는 기록으로 이어집니다.',
+    landingStageDiscoverDetail:
+      '책을 찾아 서재에 담고, 독서 상태와 별점을 한곳에서 이어서 관리해요.',
+    landingStageReflectDetail:
+      'AI를 포함해 다른 해석을 듣기 전에, 떠오르는 대로 적어보세요. 무엇이든 좋아요.',
+    landingStageInterviewDetail: '비공개 질문에 답하며 감상을 더 구체적으로 만들어가요.',
+    landingStageGuideDetail: '비공개 답변은 그대로 두고, 내 감상에서 출발한 발제안을 만들어요.',
+    landingStageDiscussDetail:
+      '한 주제에 머물러 Director, 그리고 선택한 관점과 함께 생각을 다듬어가요.',
+    landingStageRefineDetail:
+      '처음 기록과 대화를 돌아보고, 다음 버전에 남길 내용을 직접 골라보세요.',
+    landingStatusReady: '준비 완료',
+    landingStatusPreserved: '원문 보존',
+    landingStatusPrivate: '비공개',
+    landingStatusGuided: '발제 준비',
+    landingStatusLive: '토론 중',
+    landingStatusReaderChoice: '독자 선택',
+    landingPreserveTitle: 'AI는 여백을 채워줄 수 있지만, 당신만의 시선을 대신할 수는 없습니다.',
+    landingPreserveBody: '당신만의 시선을 기르세요. 인지 부채는 언젠가 반드시 갚아야 합니다.',
+    landingPreserveCycleLabel: '다음 기록 보기',
+    landingFinalTitle: '한 권의 책으로 시작해보세요.',
+    landingFinalBody: '나만의 독서 기록을 시작하거나 이미 만든 서재로 돌아가세요.',
+    landingFinalExisting: '이미 계정이 있어요',
     continueWithGoogle: 'Google로 계속하기',
     registerFailed: '회원가입에 실패했습니다.',
     requiredField: '필수 입력 항목입니다.',

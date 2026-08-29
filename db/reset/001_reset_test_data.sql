@@ -1,6 +1,7 @@
 -- 목적: production-owned record는 건드리지 않고 deterministic test-owned row를 제거한 뒤 local/E2E data를 다시 seed한다.
 SET FOREIGN_KEY_CHECKS = 0;
 
+DELETE FROM contact_inquiries WHERE is_test_data = TRUE;
 DELETE FROM pending_google_registrations WHERE is_test_data = TRUE;
 DELETE FROM pending_registration_intents WHERE is_test_data = TRUE;
 DELETE FROM auth_email_verification_rate_limits WHERE is_test_data = TRUE;
@@ -21,6 +22,8 @@ DELETE FROM metrics WHERE is_test_data = TRUE;
 DELETE FROM book_knowledge WHERE is_test_data = TRUE;
 DELETE FROM memory_cards WHERE is_test_data = TRUE;
 DELETE FROM memory_card_groups WHERE is_test_data = TRUE;
+DELETE FROM discussion_run_refinements WHERE is_test_data = TRUE;
+DELETE FROM reflection_summaries WHERE is_test_data = TRUE;
 DELETE FROM discussion_runs WHERE is_test_data = TRUE;
 DELETE FROM discussion_guide_items WHERE is_test_data = TRUE;
 DELETE FROM discussion_guides WHERE is_test_data = TRUE;

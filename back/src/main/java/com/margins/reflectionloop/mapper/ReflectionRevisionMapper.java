@@ -106,12 +106,6 @@ public interface ReflectionRevisionMapper {
             author_name = #{authorName},
             visibility = #{visibility},
             reviewed_on = #{reviewedOn},
-            summary = NULL,
-            summary_source_hash = NULL,
-            summary_model = NULL,
-            summary_token_usage = NULL,
-            summarized_at = NULL,
-            summary_status = 'pending',
             updated_at = CURRENT_TIMESTAMP
         WHERE id = #{reflectionId}
           AND session_id = #{sessionId}

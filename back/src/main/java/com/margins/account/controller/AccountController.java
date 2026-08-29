@@ -30,7 +30,7 @@ public class AccountController {
     @PatchMapping("/profile")
     public ApiResponse<ProfileResult> profile(@Valid @RequestBody ProfileRequest request) {
         return ApiResponse.ok(accountBusiness.updateProfile(
-            AuthContext.requireUserId(), request.displayName()));
+            AuthContext.requireUserId(), request.displayName(), request.preferredLocale()));
     }
 
     @PatchMapping("/password")
@@ -85,7 +85,8 @@ public class AccountController {
         return ApiResponse.ok(null);
     }
 
-    public record ProfileRequest(@NotBlank @Size(max=120) String displayName) {}
+    public record ProfileRequest(@NotBlank @Size(max=120) String displayName,
+        @Pattern(regexp="ko|en") String preferredLocale) {}
     public record PasswordRequest(@NotBlank String currentPassword,
         @NotBlank @Size(min=10,max=128) String newPassword, @NotBlank String confirmPassword) {}
     public record VerifyRequest(@Pattern(regexp="^[0-9]{6}$") String code) {}

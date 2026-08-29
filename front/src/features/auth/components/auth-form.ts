@@ -3,6 +3,7 @@ export type AuthFormValues = {
   displayName: string;
   email: string;
   emailVerificationCode: string;
+  preferredLocale: 'ko' | 'en';
   password: string;
   confirmPassword: string;
   privacyPolicyAccepted: boolean;

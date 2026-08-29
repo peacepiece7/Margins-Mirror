@@ -9,8 +9,6 @@ import com.margins.session.dto.CreateSessionHighlightRequest;
 import com.margins.session.dto.CreateSessionInsightRequest;
 import com.margins.session.dto.CreateSessionTagRequest;
 import com.margins.session.dto.PublicReviewListResponse;
-import com.margins.session.dto.ReadingLibraryStatsResponse;
-import com.margins.session.dto.ReadingSessionListResponse;
 import com.margins.session.dto.ReadingSessionTimelineResponse;
 import com.margins.session.dto.ReviewCommentListResponse;
 import com.margins.session.dto.SessionSearchResponse;
@@ -47,18 +45,6 @@ public class ReadingSessionController {
     @PostMapping
     public ApiResponse<CreateReadingSessionResponse> create(@Valid @RequestBody CreateReadingSessionRequest request) {
         return ApiResponse.ok(readingSessionService.create(request));
-    }
-
-    /** 사이드바와 library 세션 요약을 제공하는 GET 엔드포인트다. */
-    @GetMapping
-    public ApiResponse<ReadingSessionListResponse> list() {
-        return ApiResponse.ok(readingSessionService.findSummaries());
-    }
-
-    /** 독서 library 집계 카운터를 제공하는 GET 엔드포인트다. */
-    @GetMapping("/stats")
-    public ApiResponse<ReadingLibraryStatsResponse> stats() {
-        return ApiResponse.ok(readingSessionService.findLibraryStats());
     }
 
     /** 독서 기억 검색용 GET 엔드포인트다. */
@@ -122,8 +108,9 @@ public class ReadingSessionController {
 
     /** 독서 세션을 보관 처리하는 DELETE 엔드포인트다. */
     @DeleteMapping("/{id}")
-    public ApiResponse<ReadingSessionListResponse> archive(@PathVariable("id") Long sessionId) {
-        return ApiResponse.ok(readingSessionService.archive(sessionId));
+    public ApiResponse<Void> archive(@PathVariable("id") Long sessionId) {
+        readingSessionService.archive(sessionId);
+        return ApiResponse.ok(null);
     }
 
     /** 독서 세션 이름을 바꾸는 PATCH 엔드포인트다. */

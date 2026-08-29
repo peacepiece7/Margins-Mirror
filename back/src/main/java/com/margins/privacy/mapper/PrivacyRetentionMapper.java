@@ -36,6 +36,9 @@ public interface PrivacyRetentionMapper {
         """)
     int deleteEmailVerificationRateLimitsDue(Instant now);
 
+    @Delete("DELETE FROM contact_inquiries WHERE delete_after <= #{now}")
+    int deleteContactInquiriesDue(Instant now);
+
     @Delete("""
         DELETE FROM refresh_tokens
         WHERE COALESCE(revoked_at, expires_at) <= #{cutoff}

@@ -5,7 +5,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.ai.AiGenerationObserver;
 import com.margins.ai.AiGenerationResult;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.AiOutputLanguageValidator;
 import com.margins.ai.AiProvider;
+import com.margins.ai.GenerationLocale;
+import com.margins.ai.GenerationLocaleResolver;
 import com.margins.auth.support.AuthContext;
 import com.margins.book.BookKnowledgeProperties;
 import com.margins.book.dto.BookKnowledgeAnalyzeRequest;
@@ -47,6 +51,8 @@ public class BookKnowledgeBusiness {
     private final BookMapper bookMapper;
     private final AiProvider aiProvider;
     private final BookKnowledgeProperties properties;
+    private final GenerationLocaleResolver generationLocaleResolver;
+    private final AiOutputLanguageValidator languageValidator;
     private AiGenerationObserver generationObserver = AiGenerationObserver.NO_OP;
 
     @Autowired
@@ -60,11 +66,13 @@ public class BookKnowledgeBusiness {
 
     public void ensureForBook(Long bookId, Long userId) {
         BookRecord book = findOwnedBook(bookId, userId);
-        ensureKnowledge(book);
+        ensureKnowledge(book, generationLocaleResolver.resolve(userId));
     }
 
     public BookKnowledgeDto findForBook(Long bookId) {
-        ResolvedKnowledge resolved = findReusableForBook(findOwnedBook(bookId));
+        BookRecord book = findOwnedBook(bookId);
+        GenerationLocale locale = generationLocaleResolver.resolve(book.getUserId());
+        ResolvedKnowledge resolved = findReusableForBook(book, locale);
         if (resolved == null) {
             throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book Knowledge was not found");
         }
@@ -72,28 +80,30 @@ public class BookKnowledgeBusiness {
     }
 
     public BookKnowledgeDto regenerate(Long bookId) {
-        return toDto(refresh(findOwnedBook(bookId)));
+        BookRecord book = findOwnedBook(bookId);
+        return toDto(refresh(book, generationLocaleResolver.resolve(book.getUserId())));
     }
 
-    public ResolvedKnowledge ensureKnowledge(BookRecord book) {
-        ResolvedKnowledge existing = findReusableForBook(book);
+    public ResolvedKnowledge ensureKnowledge(BookRecord book, GenerationLocale locale) {
+        ResolvedKnowledge existing = findReusableForBook(book, locale);
         if (isFreshProviderResult(existing)) {
             return existing;
         }
-        return refresh(book);
+        return refresh(book, locale);
     }
 
     /**
      * Read-only resolution for Reflection evidence and other prompt builders.
      */
-    public ResolvedKnowledge findReusableForBook(BookRecord book) {
+    public ResolvedKnowledge findReusableForBook(BookRecord book, GenerationLocale locale) {
         Identity identity = identity(book);
         BookKnowledgeRecord current = bookKnowledgeMapper.findByIdentityAndPromptVersion(
             identity.type(),
             identity.key(),
-            PROMPT_VERSION
+            PROMPT_VERSION,
+            locale.value()
         );
-        boolean refreshPending = hasActiveClaim(current);
+        boolean refreshPending = hasActiveClaim(current, locale);
         if (current != null
             && BookKnowledgeStatus.READY.equals(current.getStatus())
             && validFallback(current) != null) {
@@ -106,7 +116,9 @@ public class BookKnowledgeBusiness {
         }
 
         BookKnowledgeRecord fallback = validFallback(
-            bookKnowledgeMapper.findLatestReadyByIdentity(identity.type(), identity.key())
+            bookKnowledgeMapper.findLatestReadyByIdentity(
+                identity.type(), identity.key(), locale.value()
+            )
         );
         if (fallback != null) {
             return new ResolvedKnowledge(fallback, true, true, refreshPending);
@@ -122,16 +134,16 @@ public class BookKnowledgeBusiness {
         );
     }
 
-    private ResolvedKnowledge refresh(BookRecord book) {
+    private ResolvedKnowledge refresh(BookRecord book, GenerationLocale locale) {
         Identity identity = identity(book);
         String claimToken = UUID.randomUUID().toString();
         log.info(
             "Book Knowledge refresh started. identityType={}, outcome=STARTED",
             identity.type()
         );
-        BookKnowledgeRecord claimed = claim(book, identity, claimToken);
+        BookKnowledgeRecord claimed = claim(book, identity, claimToken, locale);
         if (claimed == null) {
-            ResolvedKnowledge concurrent = findReusableForBook(book);
+            ResolvedKnowledge concurrent = findReusableForBook(book, locale);
             log.info(
                 "Book Knowledge claim not acquired. outcome=ALREADY_IN_PROGRESS, resolved={}, identityType={}",
                 concurrent != null,
@@ -148,7 +160,7 @@ public class BookKnowledgeBusiness {
 
         AiGenerationResult<BookKnowledgeDto> generation;
         try {
-            generation = aiProvider.analyzeBookKnowledgeWithMetadata(analyzeRequest(book));
+            generation = aiProvider.analyzeBookKnowledgeWithMetadata(analyzeRequest(book, locale));
         } catch (RuntimeException exception) {
             generation = null;
             log.warn(
@@ -163,18 +175,18 @@ public class BookKnowledgeBusiness {
             generation != null,
             generation != null && generation.fallbackUsed()
         );
-        if (generation != null) {
-            generationObserver.observe(generation, null, book.isTestData());
-        }
-
         if (properties.isRequireProvider()
             && (generation == null
                 || generation.value() == null
                 || "FAILURE".equalsIgnoreCase(generation.outcome()))) {
+            if (generation != null) {
+                generationObserver.observe(generation, null, book.isTestData());
+            }
             return failAndResolve(
                 book,
                 claimed,
                 claimToken,
+                locale,
                 new ApiException(
                     ApiErrorCode.COMMON_UPSTREAM_ERROR,
                     "Book Knowledge provider is unavailable"
@@ -183,20 +195,67 @@ public class BookKnowledgeBusiness {
         }
 
         BookKnowledgeDto analyzed = generation == null ? null : generation.value();
+        AiLanguageValidationOutcome languageOutcome = generation == null
+            ? null
+            : generation.languageValidationOutcome();
         try {
             validate(analyzed);
+            if (!generation.fallbackUsed()) {
+                languageOutcome = languageValidator.validateUnits(locale, displayUnits(analyzed));
+                if (languageOutcome == AiLanguageValidationOutcome.KNOWN_MISMATCH
+                    && properties.isRequireProvider()) {
+                    generation = schemaFailure(generation, languageOutcome);
+                    analyzed = null;
+                } else if (languageOutcome == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+                    generation = generation.withValue(
+                        aiProvider.fallbackBookKnowledge(analyzeRequest(book, locale)),
+                        "FALLBACK",
+                        true,
+                        languageOutcome
+                    );
+                    analyzed = generation.value();
+                    validate(analyzed);
+                } else {
+                    generation = generation.withLanguageValidation(languageOutcome);
+                }
+            }
         } catch (RuntimeException exception) {
-            return failAndResolve(book, claimed, claimToken, exception);
+            if (generation != null) {
+                generationObserver.observe(
+                    schemaFailure(generation, languageOutcome),
+                    null,
+                    book.isTestData()
+                );
+            }
+            return failAndResolve(book, claimed, claimToken, locale, exception);
         }
+        if (properties.isRequireProvider()
+            && languageOutcome == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+            generationObserver.observe(generation, null, book.isTestData());
+            return failAndResolve(
+                book,
+                claimed,
+                claimToken,
+                locale,
+                new ApiException(
+                    ApiErrorCode.COMMON_UPSTREAM_ERROR,
+                    "Book Knowledge provider returned the wrong language"
+                )
+            );
+        }
+        generationObserver.observe(generation, null, book.isTestData());
 
         BookKnowledgeRecord previous = validFallback(
-            bookKnowledgeMapper.findLatestReadyByIdentity(identity.type(), identity.key())
+            bookKnowledgeMapper.findLatestReadyByIdentity(
+                identity.type(), identity.key(), locale.value()
+            )
         );
         if (properties.isRequireProvider() && generation.fallbackUsed()) {
             return failAndResolve(
                 book,
                 claimed,
                 claimToken,
+                locale,
                 new ApiException(
                     ApiErrorCode.COMMON_UPSTREAM_ERROR,
                     "Book Knowledge provider is unavailable"
@@ -211,6 +270,7 @@ public class BookKnowledgeBusiness {
                 book,
                 claimed,
                 claimToken,
+                locale,
                 new IllegalStateException("Analyzer fallback kept previous ready knowledge")
             );
         }
@@ -222,6 +282,7 @@ public class BookKnowledgeBusiness {
                 book,
                 claimed,
                 claimToken,
+                locale,
                 new IllegalStateException("Analyzer fallback kept current ready knowledge")
             );
         }
@@ -232,12 +293,14 @@ public class BookKnowledgeBusiness {
             BookKnowledgeStatus.READY,
             null,
             generation.fallbackUsed(),
-            claimToken
+            claimToken,
+            locale,
+            generation.languageValidationOutcome()
         );
         completed.setId(claimed.getId());
         if (bookKnowledgeMapper.completeGeneration(completed) <= 0) {
             log.warn("Book Knowledge completion rejected. outcome=CLAIM_CHANGED");
-            ResolvedKnowledge concurrent = findReusableForBook(book);
+            ResolvedKnowledge concurrent = findReusableForBook(book, locale);
             if (concurrent != null) {
                 return concurrent;
             }
@@ -256,17 +319,20 @@ public class BookKnowledgeBusiness {
     private BookKnowledgeRecord claim(
         BookRecord book,
         Identity identity,
-        String claimToken
+        String claimToken,
+        GenerationLocale locale
     ) {
         BookKnowledgeRecord current = bookKnowledgeMapper.findByIdentityAndPromptVersion(
             identity.type(),
             identity.key(),
-            PROMPT_VERSION
+            PROMPT_VERSION,
+            locale.value()
         );
         if (current != null) {
             boolean acquired = bookKnowledgeMapper.claimGeneration(
                 current.getId(),
                 claimToken,
+                locale.value(),
                 validClaimTtlSeconds()
             ) > 0;
             log.info(
@@ -283,7 +349,9 @@ public class BookKnowledgeBusiness {
             BookKnowledgeStatus.PENDING,
             null,
             false,
-            claimToken
+            claimToken,
+            locale,
+            null
         );
         try {
             bookKnowledgeMapper.insert(pending);
@@ -293,11 +361,13 @@ public class BookKnowledgeBusiness {
             BookKnowledgeRecord raced = bookKnowledgeMapper.findByIdentityAndPromptVersion(
                 identity.type(),
                 identity.key(),
-                PROMPT_VERSION
+                PROMPT_VERSION,
+                locale.value()
             );
             boolean acquired = raced != null && bookKnowledgeMapper.claimGeneration(
                 raced.getId(),
                 claimToken,
+                locale.value(),
                 validClaimTtlSeconds()
             ) > 0;
             log.info(
@@ -312,6 +382,7 @@ public class BookKnowledgeBusiness {
         BookRecord book,
         BookKnowledgeRecord claimed,
         String claimToken,
+        GenerationLocale locale,
         RuntimeException exception
     ) {
         log.warn(
@@ -321,9 +392,10 @@ public class BookKnowledgeBusiness {
         bookKnowledgeMapper.failGeneration(
             claimed.getId(),
             claimToken,
+            locale.value(),
             summarize(exception)
         );
-        ResolvedKnowledge fallback = findReusableForBook(book);
+        ResolvedKnowledge fallback = findReusableForBook(book, locale);
         if (fallback != null) {
             return fallback.withFallback(true);
         }
@@ -336,7 +408,10 @@ public class BookKnowledgeBusiness {
         );
     }
 
-    private BookKnowledgeAnalyzeRequest analyzeRequest(BookRecord book) {
+    private BookKnowledgeAnalyzeRequest analyzeRequest(
+        BookRecord book,
+        GenerationLocale locale
+    ) {
         return BookKnowledgeAnalyzeRequest.builder()
             .title(book.getTitle())
             .author(book.getAuthor())
@@ -345,6 +420,7 @@ public class BookKnowledgeBusiness {
             .description(book.getDescription())
             .language(book.getLanguageCode())
             .promptVersion(PROMPT_VERSION)
+            .generationLocale(locale)
             .build();
     }
 
@@ -370,13 +446,14 @@ public class BookKnowledgeBusiness {
         return record;
     }
 
-    private boolean hasActiveClaim(BookKnowledgeRecord record) {
+    private boolean hasActiveClaim(BookKnowledgeRecord record, GenerationLocale locale) {
         return record != null
             && record.getId() != null
             && record.getGenerationClaimToken() != null
             && !record.getGenerationClaimToken().isBlank()
             && bookKnowledgeMapper.hasActiveGenerationClaim(
                 record.getId(),
+                locale.value(),
                 validClaimTtlSeconds()
             );
     }
@@ -408,7 +485,9 @@ public class BookKnowledgeBusiness {
         String status,
         String failureReason,
         boolean fallbackUsed,
-        String claimToken
+        String claimToken,
+        GenerationLocale locale,
+        AiLanguageValidationOutcome languageValidationOutcome
     ) {
         Identity identity = identity(book);
         return BookKnowledgeRecord.builder()
@@ -426,6 +505,10 @@ public class BookKnowledgeBusiness {
             .famousQuotesJson(writeJson(dto == null ? List.of() : dto.getFamousQuotes()))
             .keywordsJson(writeJson(dto == null ? List.of() : dto.getKeywords()))
             .promptVersion(PROMPT_VERSION)
+            .generationLocale(locale.value())
+            .languageValidationOutcome(
+                languageValidationOutcome == null ? null : languageValidationOutcome.name()
+            )
             .status(status)
             .fallbackUsed(fallbackUsed)
             .testData(book.isTestData())
@@ -451,9 +534,44 @@ public class BookKnowledgeBusiness {
         if (dto == null
             || blank(dto.getSummary())
             || dto.getDiscussionPoints() == null
-            || dto.getDiscussionPoints().isEmpty()) {
+            || dto.getDiscussionPoints().isEmpty()
+            || dto.getDiscussionPoints().stream().anyMatch(point -> point == null
+                || blank(point.getId())
+                || blank(point.getQuestion())
+                || blank(point.getRationale())
+                || point.getRecommendedPersonaKeys() == null
+                || point.getRecommendedPersonaKeys().size() != 2
+                || point.getRecommendedPersonaKeys().stream().anyMatch(this::blank))) {
             throw new IllegalArgumentException("Book Analyzer result is invalid");
         }
+    }
+
+    private AiGenerationResult<BookKnowledgeDto> schemaFailure(
+        AiGenerationResult<BookKnowledgeDto> generation,
+        AiLanguageValidationOutcome languageOutcome
+    ) {
+        return generation.<BookKnowledgeDto>withValue(
+            null,
+            "FAILURE",
+            false,
+            languageOutcome
+        ).withFailureCategory("SCHEMA_VALIDATION");
+    }
+
+    private List<String> displayUnits(BookKnowledgeDto dto) {
+        java.util.ArrayList<String> units = new java.util.ArrayList<>();
+        units.add(dto.getSummary());
+        units.add(String.join(" ", dto.getThemes() == null ? List.of() : dto.getThemes()));
+        if (dto.getDiscussionPoints() != null) {
+            dto.getDiscussionPoints().forEach(point -> units.add(
+                String.join(" ", List.of(
+                    point.getQuestion() == null ? "" : point.getQuestion(),
+                    point.getRationale() == null ? "" : point.getRationale()
+                ))
+            ));
+        }
+        units.add(String.join(" ", dto.getKeywords() == null ? List.of() : dto.getKeywords()));
+        return List.copyOf(units);
     }
 
     private BookKnowledgeDto toDto(ResolvedKnowledge resolved) {
@@ -474,6 +592,7 @@ public class BookKnowledgeBusiness {
             .famousQuotes(readJson(record.getFamousQuotesJson(), STRING_LIST, List.of()))
             .keywords(readJson(record.getKeywordsJson(), STRING_LIST, List.of()))
             .version(record.getPromptVersion())
+            .generationLocale(record.getGenerationLocale())
             .status(record.getStatus())
             .generatedAt(
                 record.getGeneratedAt() == null

@@ -15,10 +15,7 @@ public interface DiscussionRunMapper {
 
     @Select("""
         SELECT id, guide_id, window_id, session_id, user_id, current_item_id, status,
-               refinement_outcome, refined_revision_id, refinement_input_hash,
-               refinement_transcript_hash, refinement_prompt_version,
-               refinement_suggestion_status, refinement_suggestion_content,
-               refinement_generation_metadata_json, refinement_generated_at,
+               refinement_outcome, refined_revision_id,
                director_version, last_director_action,
                pending_perspective_item_id, pending_perspective_ids_json,
                pending_perspective_claim_token, pending_perspective_claimed_at,
@@ -35,10 +32,7 @@ public interface DiscussionRunMapper {
     @Select("""
         SELECT dr.id, dr.guide_id, dr.window_id, dr.session_id, dr.user_id,
                dr.current_item_id, dr.status, dr.refinement_outcome, dr.refined_revision_id,
-               dr.refinement_input_hash, dr.refinement_transcript_hash,
-               dr.refinement_prompt_version, dr.refinement_suggestion_status,
-               dr.refinement_suggestion_content, dr.refinement_generation_metadata_json,
-               dr.refinement_generated_at, dr.director_version, dr.last_director_action,
+               dr.director_version, dr.last_director_action,
                dr.pending_perspective_item_id, dr.pending_perspective_ids_json,
                dr.pending_perspective_claim_token, dr.pending_perspective_claimed_at,
                dr.is_test_data, dr.started_at, dr.completed_at, dr.created_at, dr.updated_at
@@ -63,10 +57,7 @@ public interface DiscussionRunMapper {
 
     @Select("""
         SELECT id, guide_id, window_id, session_id, user_id, current_item_id, status,
-               refinement_outcome, refined_revision_id, refinement_input_hash,
-               refinement_transcript_hash, refinement_prompt_version,
-               refinement_suggestion_status, refinement_suggestion_content,
-               refinement_generation_metadata_json, refinement_generated_at,
+               refinement_outcome, refined_revision_id,
                director_version, last_director_action,
                pending_perspective_item_id, pending_perspective_ids_json,
                pending_perspective_claim_token, pending_perspective_claimed_at,
@@ -245,34 +236,6 @@ public interface DiscussionRunMapper {
         """)
     int updateRunRefinement(DiscussionRunRecord record);
 
-    @Update("""
-        UPDATE discussion_runs
-        SET refinement_input_hash = #{refinementInputHash},
-            refinement_transcript_hash = #{refinementTranscriptHash},
-            refinement_prompt_version = #{refinementPromptVersion},
-            refinement_suggestion_status = 'PENDING',
-            refinement_suggestion_content = NULL,
-            refinement_generation_metadata_json = NULL,
-            refinement_generated_at = NULL
-        WHERE id = #{id}
-          AND user_id = #{userId}
-        """)
-    int claimRunRefinementSuggestion(DiscussionRunRecord record);
-
-    @Update("""
-        UPDATE discussion_runs
-        SET refinement_suggestion_status = #{refinementSuggestionStatus},
-            refinement_suggestion_content = #{refinementSuggestionContent},
-            refinement_generation_metadata_json =
-              CAST(#{refinementGenerationMetadataJson} AS JSON),
-            refinement_generated_at = CURRENT_TIMESTAMP(6)
-        WHERE id = #{id}
-          AND user_id = #{userId}
-          AND refinement_input_hash = #{refinementInputHash}
-          AND refinement_suggestion_status = 'PENDING'
-        """)
-    int finalizeRunRefinementSuggestion(DiscussionRunRecord record);
-
     @Select("""
         SELECT COALESCE(
           GROUP_CONCAT(m.content ORDER BY m.message_order SEPARATOR '\n\n'),
@@ -292,7 +255,8 @@ public interface DiscussionRunMapper {
     @Select("""
         SELECT m.id, m.session_id, m.window_id, m.user_id, m.parent_message_id,
                m.role, m.content, m.message_order, m.ai_model, m.persona_id,
-               m.question_id, m.streaming_status, m.is_test_data, m.created_at
+               m.question_id, m.streaming_status, m.generation_locale,
+               m.language_validation_outcome, m.is_test_data, m.created_at
         FROM messages m
         WHERE m.window_id = #{windowId}
           AND m.user_id = #{userId}
@@ -327,7 +291,8 @@ public interface DiscussionRunMapper {
     @Select("""
         SELECT m.id, m.session_id, m.window_id, m.user_id, m.parent_message_id,
                m.role, m.content, m.message_order, m.ai_model, m.persona_id,
-               m.question_id, m.streaming_status, m.is_test_data, m.created_at
+               m.question_id, m.streaming_status, m.generation_locale,
+               m.language_validation_outcome, m.is_test_data, m.created_at
         FROM messages m
         INNER JOIN discussion_runs dr
           ON dr.window_id = m.window_id

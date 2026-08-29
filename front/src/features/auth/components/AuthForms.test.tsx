@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { FormProvider, useForm, useFormContext, useWatch } from 'react-hook-form';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,6 +13,7 @@ const defaultValues: AuthFormValues = {
   displayName: '',
   email: '',
   emailVerificationCode: '',
+  preferredLocale: 'en',
   password: '',
   confirmPassword: '',
   privacyPolicyAccepted: false,
@@ -136,14 +137,24 @@ describe('authentication form boundaries', () => {
   it('uses the parent RHF context for login values and field validation', async () => {
     render(<LoginHarness />);
 
+    expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact');
+    expect(screen.getByTestId('login-fields-grid')).toHaveClass('gap-1');
+    expect(document.querySelector('label[for="login-username"]')).toHaveTextContent('Username');
+    expect(document.querySelector('label[for="login-password"]')).toHaveTextContent('Password');
+    expect(screen.getByTestId('login-password-error')).toHaveClass('min-h-5');
+    expect(screen.getByTestId('login-password-error')).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByTestId('login-password-error')).toBeEmptyDOMElement();
+
     const username = screen.getByTestId('login-username-input');
     fireEvent.change(username, { target: { value: 'reader' } });
     expect(screen.getByTestId('username-probe')).toHaveTextContent('reader');
 
     fireEvent.blur(screen.getByTestId('login-password-input'));
-    expect(await screen.findByTestId('login-password-error')).toHaveTextContent(
-      'Password is required.',
+    await waitFor(() =>
+      expect(screen.getByTestId('login-password-error')).toHaveTextContent('Password is required.'),
     );
+    expect(screen.getByTestId('login-password-error')).not.toHaveAttribute('aria-hidden');
+    expect(screen.getByTestId('login-password-error')).toHaveAttribute('aria-live', 'polite');
     expect(screen.getByTestId('login-password-input')).toHaveAttribute(
       'aria-describedby',
       'login-password-error',
@@ -160,13 +171,28 @@ describe('authentication form boundaries', () => {
     expect(screen.getByTestId('register-email-input')).toBeDisabled();
     expect(screen.getByTestId('register-email-code-input')).toBeDisabled();
     expect(screen.getByTestId('register-password-confirm-input')).toBeVisible();
+    expect(screen.getByTestId('register-fields-grid')).toHaveClass('gap-x-5', 'gap-y-1');
+    for (const errorTestId of [
+      'register-username-error',
+      'register-locale-error',
+      'register-display-name-error',
+      'register-email-error',
+      'register-email-code-error',
+      'login-password-error',
+      'register-password-confirm-error',
+    ]) {
+      expect(screen.getByTestId(errorTestId)).toHaveClass('min-h-5');
+      expect(screen.getByTestId(errorTestId)).toHaveAttribute('aria-hidden', 'true');
+    }
 
     fireEvent.click(screen.getByTestId('register-privacy-consent'));
     expect(screen.getByTestId('consent-probe')).toHaveTextContent('true');
 
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
-    expect(await screen.findByTestId('register-username-error')).toHaveTextContent(
-      'Username is required.',
+    await waitFor(() =>
+      expect(screen.getByTestId('register-username-error')).toHaveTextContent(
+        'Username is required.',
+      ),
     );
     expect(screen.getByTestId('register-display-name-error')).toHaveTextContent(
       'Display name is required.',

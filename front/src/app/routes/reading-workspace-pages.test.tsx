@@ -274,6 +274,69 @@ describe('reading workspace page boundaries', () => {
     view.unmount();
   });
 
+  it('book detail keeps selected persona controls on the primary Button variant', () => {
+    const view = render(
+      <I18nProvider>
+        <BookDetailPage
+          answeredQuestionIds={new Set()}
+          book={{ author: 'Author', bookId: 1, title: 'Margins' }}
+          bookKnowledgeError=""
+          bookKnowledgePending={false}
+          debateTopic=""
+          draftPersonaIds={[1]}
+          editAuthor="Author"
+          editTitle="Margins"
+          loading={false}
+          onApplyDiscussionPoint={vi.fn()}
+          onApplyPersonas={vi.fn()}
+          onCloseSpeakerDialog={vi.fn()}
+          onDebateTopicChange={vi.fn()}
+          onDeleteBook={vi.fn()}
+          onDeleteQuestion={vi.fn()}
+          onEditAuthorChange={vi.fn()}
+          onEditTitleChange={vi.fn()}
+          onEnterDebate={vi.fn()}
+          onGenerateQuestions={vi.fn()}
+          onOpenQuestionAnswer={vi.fn()}
+          onOpenQuestionDebate={vi.fn()}
+          onOpenSpeakerDialog={vi.fn()}
+          onRatingChange={vi.fn()}
+          onSpeakerDialogOpenChange={vi.fn()}
+          onStartReview={vi.fn()}
+          onStatusChange={vi.fn()}
+          onSubmitBook={vi.fn()}
+          onToggleDraftPersona={vi.fn()}
+          personas={[
+            {
+              description: 'Challenges assumptions.',
+              displayName: 'Skeptic',
+              name: 'skeptic',
+              personaId: 1,
+            },
+            {
+              description: 'Looks for context.',
+              displayName: 'Historian',
+              name: 'historian',
+              personaId: 2,
+            },
+          ]}
+          questionLoading={false}
+          questions={[]}
+          recommendedPersonaIds={[]}
+          selectedPersonaIds={[]}
+          speakerDialogOpen
+        />
+      </I18nProvider>,
+    );
+
+    const buttons = view.getAllByTestId('debate-participant-toggle');
+    expect(buttons[0]).toHaveAttribute('data-variant', 'default');
+    expect(buttons[1]).toHaveAttribute('data-variant', 'outline');
+    expect(buttons[0]).toHaveAttribute('aria-pressed', 'true');
+    expect(buttons[1]).toHaveAttribute('aria-pressed', 'false');
+    view.unmount();
+  });
+
   it('saved notes renders its empty state and forwards write', () => {
     const onWrite = vi.fn();
     const view = render(

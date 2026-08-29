@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { deleteJson, getJson, patchJson, postJson } from '@/lib/api-client';
+import { deleteJson, getJson } from '@/lib/api-client';
 
 import { readingSessionsApi } from './api';
 
@@ -20,21 +20,6 @@ describe('readingSessionsApi', () => {
     await readingSessionsApi.search('Dune & ritual');
 
     expect(getJson).toHaveBeenCalledWith('/api/reading-sessions/search?query=Dune%20%26%20ritual');
-  });
-
-  it('creates a session from an explicit transport payload', async () => {
-    vi.mocked(postJson).mockResolvedValue({
-      sessionId: 11,
-      bookId: 7,
-      title: 'Dune reflection',
-    });
-
-    await readingSessionsApi.create(7, 'Dune reflection');
-
-    expect(postJson).toHaveBeenCalledWith('/api/reading-sessions', {
-      bookId: 7,
-      title: 'Dune reflection',
-    });
   });
 
   it('deletes a session-owned highlight through its scoped endpoint', async () => {

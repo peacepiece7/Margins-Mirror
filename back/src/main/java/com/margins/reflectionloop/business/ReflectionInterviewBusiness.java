@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.auth.support.AuthContext;
+import com.margins.ai.GenerationLocaleResolver;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
 import com.margins.question.mapper.QuestionMapper;
@@ -34,6 +35,7 @@ import java.util.List;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
@@ -64,6 +66,12 @@ public class ReflectionInterviewBusiness {
     private final ReflectionEvidenceCatalog evidenceCatalog;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private GenerationLocaleResolver generationLocaleResolver;
+
+    @Autowired
+    void configureGenerationLocale(GenerationLocaleResolver resolver) {
+        this.generationLocaleResolver = resolver;
+    }
 
     public ReflectionInterviewResponse start(Long reflectionId) {
         StartResult started = transactionTemplate.execute(status -> startInTransaction(reflectionId));
@@ -330,7 +338,8 @@ public class ReflectionInterviewBusiness {
             preparation.primarySource().alias(),
             properties.getInterviewPromptVersion(),
             depthForQuestion(preparation.expectedGeneratedCount() + 1),
-            preparation.testData()
+            preparation.testData(),
+            preparation.generationLocale()
         );
         transactionTemplate.executeWithoutResult(
             status -> persistQuestion(preparation, draft)
@@ -361,10 +370,14 @@ public class ReflectionInterviewBusiness {
             interview.getId(),
             currentUserId()
         );
+        com.margins.ai.GenerationLocale generationLocale = generationLocaleResolver.resolve(
+            interview.getUserId()
+        );
         ReflectionEvidenceCatalog.EvidenceCatalog catalog = evidenceCatalog.load(
             interview,
             revision,
-            true
+            true,
+            generationLocale
         );
         Source primarySource = catalog.primaryFor(coverageArea, bookOnly);
         return new QuestionPreparation(
@@ -381,7 +394,8 @@ public class ReflectionInterviewBusiness {
             catalog.all(),
             primarySource,
             interview.getGeneratedCount(),
-            interview.isTestData()
+            interview.isTestData(),
+            generationLocale
         );
     }
 
@@ -411,6 +425,8 @@ public class ReflectionInterviewBusiness {
             .sensitivity("PERSONAL_RESPONSE".equals(preparation.coverageArea()) ? "MEDIUM" : "LOW")
             .status("active")
             .aiModel(draft.model())
+            .generationLocale(draft.generationLocale())
+            .languageValidationOutcome(draft.languageValidationOutcome())
             .testData(preparation.testData())
             .build();
         requireChanged(questionMapper.insert(question), "Interview question could not be saved");
@@ -850,7 +866,8 @@ public class ReflectionInterviewBusiness {
         List<Source> evidence,
         Source primarySource,
         int expectedGeneratedCount,
-        boolean testData
+        boolean testData,
+        com.margins.ai.GenerationLocale generationLocale
     ) {
     }
 }

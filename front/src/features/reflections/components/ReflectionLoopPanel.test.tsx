@@ -188,14 +188,15 @@ describe('ReflectionLoopPanel draft state', () => {
     expect(screen.getByTestId('location-probe')).toHaveTextContent('/book/1/reflection/refine/41');
   });
 
-  it('shows the server empty-state message and keeps an empty editor for a missing Reflection', async () => {
+  it('shows a safe empty-state message and keeps an empty editor for a missing Reflection', async () => {
+    const privateMessage = 'private server detail that must not be rendered';
     const error = new ApiRequestError(
       'COMMON_NOT_FOUND',
       404,
       [],
       'request-123',
       undefined,
-      '아직 작성된 Reflection이 없어. 지금의 생각을 먼저 적어 저장해줘.',
+      privateMessage,
     );
     reflectionQuery = {
       data: undefined,
@@ -208,7 +209,8 @@ describe('ReflectionLoopPanel draft state', () => {
     renderPanel();
 
     expect(await screen.findByText('Reflection을 아직 작성하지 않았어')).toBeInTheDocument();
-    expect(screen.getByText(error.message)).toBeInTheDocument();
+    expect(screen.getByText('지금의 생각을 먼저 적어 저장해줘.')).toBeInTheDocument();
+    expect(screen.queryByText(privateMessage)).not.toBeInTheDocument();
     expect(screen.getByTestId('primary-reflection-content')).toHaveValue('');
     expect(screen.getByTestId('primary-reflection-save')).toBeDisabled();
   });

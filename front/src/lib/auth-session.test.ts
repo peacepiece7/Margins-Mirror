@@ -7,6 +7,7 @@ import {
   readAuthSession,
   readAuthSessionLifetime,
   readRefreshSessionHint,
+  updateAuthSessionPreferredLocale,
   writeAuthSession,
 } from './auth-session';
 
@@ -61,6 +62,27 @@ describe('auth session', () => {
 
     expect(markAuthSessionConsentSatisfied()?.consentRequired).toBe(false);
     expect(readAuthSession()?.consentRequired).toBe(false);
+  });
+
+  it('updates the cached account locale without creating a new session lifetime', () => {
+    const sessionStorage = storageMock();
+    const localStorage = storageMock();
+    vi.stubGlobal('window', { sessionStorage, localStorage });
+    writeAuthSession({
+      userId: 1,
+      username: 'reader',
+      displayName: 'Reader',
+      authMode: 'local-jwt',
+      accessToken: 'token',
+      accessTokenExpiresInSeconds: 900,
+      preferredLocale: 'en',
+    });
+    const lifetime = readAuthSessionLifetime();
+
+    updateAuthSessionPreferredLocale('ko');
+
+    expect(readAuthSession()?.preferredLocale).toBe('ko');
+    expect(readAuthSessionLifetime()).toBe(lifetime);
   });
 
   it('preserves lifetime for token rotation and advances it at session boundaries', () => {

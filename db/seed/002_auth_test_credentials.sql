@@ -2,9 +2,9 @@
 INSERT INTO users (id, username, display_name, email, email_verified, password_hash, auth_provider, is_test_data)
 VALUES (
   1,
-  'demo_reader',
-  'demo_reader',
-  'demo_reader@test.margins.local',
+  'peacepiece',
+  'peacepiece',
+  'peacepiece@test.margins.local',
   TRUE,
   '$2b$12$x0GhNoH36hSY1OcS4EdDd.Nc8sm8B3mvPfBPr6aOFspYF2nqYtAhy',
   'local',
@@ -56,7 +56,7 @@ CROSS JOIN (
   UNION ALL SELECT 'OPENAI_OVERSEAS_TRANSFER'
   UNION ALL SELECT 'AGE_OVER_14'
 ) required
-WHERE u.username IN ('demo_reader', 'account_tester')
+WHERE u.username IN ('peacepiece', 'account_tester')
   AND u.is_test_data = TRUE
   AND NOT EXISTS (
     SELECT 1

@@ -19,6 +19,14 @@ vi.mock('@/lib/sse-client', () => ({
 describe('debatesApi', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('loads the book-scoped reading-session locator', async () => {
+    vi.mocked(getJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
+
+    await debatesApi.readingSession(7);
+
+    expect(getJson).toHaveBeenCalledWith('/api/books/7/reading-session');
+  });
+
   it('loads encoded persona recommendations', async () => {
     vi.mocked(getJson).mockResolvedValue({ personas: [] });
     await debatesApi.recommendations(17);

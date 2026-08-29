@@ -53,7 +53,8 @@ class DiscussionGuideQualityEvaluationTest {
             var draft = generator.generate(
                 900L,
                 fixture.result().promptVersion(),
-                EVALUATOR.sources(fixture)
+                EVALUATOR.sources(fixture),
+                com.margins.ai.GenerationLocale.KO
             );
 
             assertThat(draft.items())

@@ -49,12 +49,17 @@ public class JdbcTestDataResetExecutor implements TestDataResetExecutor {
         try (Statement statement = connection.createStatement()) {
             statement.execute("SET FOREIGN_KEY_CHECKS = 0");
             try {
+                statement.executeUpdate("DELETE FROM contact_inquiries WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM ai_generation_events WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM moderation_events WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM moderation_daily_aggregates WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM metrics WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM memory_cards WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM memory_card_groups WHERE is_test_data = TRUE");
+                statement.executeUpdate(
+                    "DELETE FROM discussion_run_refinements WHERE run_id IN (SELECT id FROM discussion_runs WHERE is_test_data = TRUE)");
+                statement.executeUpdate(
+                    "DELETE FROM reflection_summaries WHERE reflection_insight_id IN (SELECT id FROM session_insights WHERE is_test_data = TRUE)");
                 statement.executeUpdate("DELETE FROM discussion_runs WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM discussion_guide_items WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM discussion_guides WHERE is_test_data = TRUE");

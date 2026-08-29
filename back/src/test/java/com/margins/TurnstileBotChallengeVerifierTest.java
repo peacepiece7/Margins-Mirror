@@ -28,7 +28,7 @@ class TurnstileBotChallengeVerifierTest {
     void acceptsExpectedActionAndHostnameAndSendsRemoteIp() throws Exception {
         AtomicReference<String> requestBody = new AtomicReference<>();
         String endpoint = start(200,
-            "{\"success\":true,\"action\":\"email_verification\",\"hostname\":\"portfolio.example.com\"}",
+            "{\"success\":true,\"action\":\"email_verification\",\"hostname\":\"margins.cloud\"}",
             requestBody);
 
         verifier(endpoint).verify("one-time-token", "203.0.113.4");
@@ -43,7 +43,7 @@ class TurnstileBotChallengeVerifierTest {
     void rejectsFailureWrongActionAndWrongHostnameAsInvalid() throws Exception {
         for (String body : List.of(
             "{\"success\":false,\"error-codes\":[\"timeout-or-duplicate\"]}",
-            "{\"success\":true,\"action\":\"other\",\"hostname\":\"portfolio.example.com\"}",
+            "{\"success\":true,\"action\":\"other\",\"hostname\":\"margins.cloud\"}",
             "{\"success\":true,\"action\":\"email_verification\",\"hostname\":\"evil.example\"}"
         )) {
             assertThatThrownBy(() -> verifier(start(200, body, new AtomicReference<>()))
@@ -88,7 +88,7 @@ class TurnstileBotChallengeVerifierTest {
         properties.setRateLimitSecret("rate-secret");
         properties.getTurnstile().setSecretKey("test-secret");
         properties.getTurnstile().setSiteVerifyUrl(endpoint);
-        properties.getTurnstile().setAllowedHostnames(List.of("portfolio.example.com"));
+        properties.getTurnstile().setAllowedHostnames(List.of("margins.cloud"));
         return properties;
     }
 

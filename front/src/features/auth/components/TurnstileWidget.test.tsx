@@ -31,7 +31,7 @@ it('renders explicitly and handles ready, expiry, error, and parent reset', asyn
     remove,
   };
   const [{ TurnstileWidget }, { I18nProvider }] = await Promise.all([
-    import('./TurnstileWidget'),
+    import('@/components/ui/turnstile-widget'),
     import('@/lib/i18n'),
   ]);
   const onTokenChange = vi.fn();
@@ -40,6 +40,7 @@ it('renders explicitly and handles ready, expiry, error, and parent reset', asyn
       I18nProvider,
       null,
       createElement(TurnstileWidget, {
+        action: 'email_verification',
         locale: 'en',
         onTokenChange,
         resetSignal: 0,
@@ -71,6 +72,7 @@ it('renders explicitly and handles ready, expiry, error, and parent reset', asyn
       I18nProvider,
       null,
       createElement(TurnstileWidget, {
+        action: 'email_verification',
         locale: 'en',
         onTokenChange,
         resetSignal: 1,
@@ -78,4 +80,38 @@ it('renders explicitly and handles ready, expiry, error, and parent reset', asyn
     ),
   );
   expect(reset).toHaveBeenCalledWith('widget-1');
+});
+
+it('binds a contact challenge to the contact inquiry action', async () => {
+  vi.stubEnv('VITE_MARGINS_TURNSTILE_SITE_KEY', '1x00000000000000000000AA');
+  let action: string | undefined;
+  window.turnstile = {
+    render: vi.fn((_container, options) => {
+      action = options.action;
+      return 'widget-contact';
+    }),
+    reset: vi.fn(),
+    remove: vi.fn(),
+  };
+  const [{ TurnstileWidget }, { I18nProvider }] = await Promise.all([
+    import('@/components/ui/turnstile-widget'),
+    import('@/lib/i18n'),
+  ]);
+
+  render(
+    createElement(
+      I18nProvider,
+      null,
+      createElement(TurnstileWidget, {
+        action: 'contact_inquiry',
+        locale: 'en',
+        onTokenChange: vi.fn(),
+        resetSignal: 0,
+        testId: 'contact-bot-challenge',
+      }),
+    ),
+  );
+
+  expect(action).toBe('contact_inquiry');
+  expect(screen.getByTestId('contact-bot-challenge')).toBeVisible();
 });

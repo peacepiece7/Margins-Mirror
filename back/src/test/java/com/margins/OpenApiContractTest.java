@@ -58,7 +58,7 @@ class OpenApiContractTest {
 
     @BeforeEach
     void stubAuthPersistence() {
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         when(userMapper.findByUsername(TestAuthSupport.TEST_USERNAME)).thenReturn(Optional.of(user));
         when(userMapper.findByUsername(anyString())).thenAnswer(invocation -> {
             if (TestAuthSupport.TEST_USERNAME.equals(invocation.getArgument(0))) {
@@ -87,6 +87,9 @@ class OpenApiContractTest {
         assertThat(root.path("info").path("title").asText()).isEqualTo("Margins API");
         assertThat(paths.has("/api/auth/login")).isTrue();
         assertThat(paths.has("/api/reading-sessions")).isTrue();
+        assertThat(paths.path("/api/reading-sessions").has("get")).isFalse();
+        assertThat(paths.has("/api/reading-sessions/stats")).isFalse();
+        assertThat(paths.path("/api/books/{bookId}/reading-session").has("get")).isTrue();
         assertThat(paths.has("/api/reading-sessions/public-reviews")).isTrue();
         assertThat(paths.has("/api/reading-sessions/public-reviews/{insightId}/comments")).isTrue();
         assertThat(paths.has("/api/reading-sessions/public-reviews/{insightId}/comments/{commentId}")).isTrue();
@@ -104,6 +107,9 @@ class OpenApiContractTest {
             .contains("DebateAllMessageRequest")
             .doesNotContain("DebateMessageRequest");
         JsonNode schemas = root.path("components").path("schemas");
+        assertThat(schemas.has("BookReadingSessionResponse")).isTrue();
+        assertThat(schemas.has("ReadingSessionListResponse")).isFalse();
+        assertThat(schemas.has("ReadingLibraryStatsResponse")).isFalse();
         assertThat(schemas.path("SendMessageRequest").toString())
             .doesNotContain("contextMessageId");
         assertThat(schemas.path("DebateMessageRequest").toString())
@@ -151,7 +157,7 @@ class OpenApiContractTest {
     void loginIssuedTokenPassesFullContextAuthFilter() throws Exception {
         String loginBody = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"username\":\"demo_reader\",\"password\":\"reader\"}"))
+                .content("{\"username\":\"peacepiece\",\"password\":\"reader\"}"))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()
@@ -177,7 +183,7 @@ class OpenApiContractTest {
 
         mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-            .content("{\"username\":\"demo_reader\",\"password\":\"wrong-password\"}"))
+            .content("{\"username\":\"peacepiece\",\"password\":\"wrong-password\"}"))
             .andExpect(status().isUnauthorized())
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.error.code").value("AUTH_INVALID_CREDENTIALS"))

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 test.setTimeout(90000);
 
 const backendUrl = process.env.MARGINS_BACKEND_URL || 'http://localhost:8080';
-const e2eUsername = process.env.MARGINS_E2E_USERNAME || 'demo_reader';
+const e2eUsername = process.env.MARGINS_E2E_USERNAME || 'peacepiece';
 const e2ePassword = process.env.MARGINS_E2E_PASSWORD || 'reader';
 
 async function login(page: Page) {
@@ -49,7 +49,7 @@ test.beforeEach(async ({ request }) => {
 test('follows the owner replan page flow from book registration to reflection and debate', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/login');
   await login(page);
   await expect(page.getByTestId('logout-submit')).toBeVisible();
   await expect(page.getByTestId('reading-portal')).toBeVisible();
@@ -142,9 +142,21 @@ test('follows the owner replan page flow from book registration to reflection an
   await page.getByTestId('book-start-review').click();
   await expect(page.getByTestId('reflection-loop-page')).toBeVisible();
   await expect(page).toHaveURL(/\/book\/\d+\/reflection$/);
-  await expect(page.getByTestId('language-toggle')).toHaveText('EN');
-  await page.getByTestId('language-toggle').click();
-  await expect(page.getByTestId('language-toggle')).toHaveText('KO');
+  const activeReflectionUrl = page.url();
+  await page.getByTestId('nav-account').click();
+  await expect(page.getByTestId('account-page')).toBeVisible();
+  await page.locator('#account-locale').selectOption('ko');
+  await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        response.url().endsWith('/api/account/profile') &&
+        response.request().method() === 'PATCH' &&
+        response.status() === 200,
+    ),
+    page.getByTestId('account-profile-save').click(),
+  ]);
+  await page.goto(activeReflectionUrl);
+  await expect(page.getByTestId('reflection-loop-page')).toBeVisible();
   await page.setViewportSize({ height: 844, width: 390 });
   await expectMobileReflectionWorkflow(page, 'reflection-loop-page');
   await page
@@ -434,6 +446,11 @@ test('follows the owner replan page flow from book registration to reflection an
 
   await page.getByTestId('portal-subnav-book-detail').click();
   await page.getByTestId('debate-topic-input').fill('How does ritual shape political authority?');
+  const selectedPersonaNames = await page
+    .getByTestId('debate-entry-selected-personas')
+    .locator('span')
+    .allTextContents();
+  expect(selectedPersonaNames).toHaveLength(2);
   const createRoomResponsePromise = page.waitForResponse(
     (response) =>
       response.url().endsWith('/api/session-windows') &&
@@ -461,7 +478,7 @@ test('follows the owner replan page flow from book registration to reflection an
   await expect(page.getByTestId('debate-message-list')).toContainText(
     'How does ritual shape political authority?',
   );
-  await expect(page.getByTestId('debate-message-list')).toContainText('대학교수', {
+  await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[0], {
     timeout: 20000,
   });
   const allRepliesResponsePromise = page.waitForResponse(
@@ -474,10 +491,10 @@ test('follows the owner replan page flow from book registration to reflection an
   await page.getByTestId('debate-all-submit').click();
   const allRepliesResponse = await allRepliesResponsePromise;
   expect(allRepliesResponse.request().postDataJSON().personaIds).toEqual(selectedPersonaIds);
-  await expect(page.getByTestId('debate-message-list')).toContainText('대학교수', {
+  await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[0], {
     timeout: 20000,
   });
-  await expect(page.getByTestId('debate-message-list')).toContainText('작가', {
+  await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[1], {
     timeout: 20000,
   });
 
@@ -501,14 +518,14 @@ test('follows the owner replan page flow from book registration to reflection an
   await expect(page.getByTestId('debate-message-list')).toContainText(
     'How does ritual shape political authority?',
   );
-  await expect(page.getByTestId('debate-message-list')).toContainText('대학교수');
-  await expect(page.getByTestId('debate-message-list')).toContainText('작가');
+  await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[0]);
+  await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[1]);
 });
 
 test('supports manual registration and saved-book deletion from the page shell', async ({
   page,
 }) => {
-  await page.goto('/');
+  await page.goto('/login');
   await login(page);
   await expect(page.getByTestId('logout-submit')).toBeVisible();
 
@@ -533,9 +550,8 @@ test('supports manual registration and saved-book deletion from the page shell',
   await page.getByTestId('book-start-review').click();
   await expect(page.getByTestId('reflection-loop-page')).toBeVisible();
   await expect(page).toHaveURL(/\/book\/\d+\/reflection$/);
-  await expect(page.getByTestId('current-book-summary')).toContainText(
-    'Manual Margins Book reflection',
-  );
+  await expect(page.getByTestId('current-book-title')).toHaveText('Manual Margins Book');
+  await expect(page.getByTestId('current-book-summary')).toContainText('reflection');
 
   await page.getByTestId('portal-nav-book-search').click();
   await page.getByTestId('manual-book-title-input').fill('Second Manual Margins Book');
@@ -549,12 +565,8 @@ test('supports manual registration and saved-book deletion from the page shell',
     ),
     page.getByTestId('manual-book-submit').click(),
   ]);
-  await expect(page.getByTestId('current-book-summary')).toContainText(
-    'Second Manual Margins Book',
-  );
-  await expect(page.getByTestId('current-book-summary')).not.toContainText(
-    'Manual Margins Book reflection',
-  );
+  await expect(page.getByTestId('current-book-title')).toHaveText('Second Manual Margins Book');
+  await expect(page.getByTestId('current-book-summary')).not.toContainText('reflection');
 
   await page
     .getByTestId('saved-book-row')

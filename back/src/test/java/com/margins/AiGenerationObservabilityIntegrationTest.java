@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
 import com.margins.ai.AiTokenUsage;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.GenerationLocale;
 import com.margins.ai.PersistentAiGenerationObserver;
 import com.margins.common.support.RequestCorrelationContext;
 import com.margins.testsupport.AbstractMySqlIntegrationTest;
@@ -230,6 +232,147 @@ class AiGenerationObservabilityIntegrationTest extends AbstractMySqlIntegrationT
             .isInstanceOf(org.springframework.dao.DataAccessException.class);
     }
 
+    @Test
+    void mismatchFallbackIsVisibleWithoutClassifyingOrdinaryFallbackAsFailure() throws Exception {
+        AiGenerationTask task = new AiGenerationTask(
+            "WINDOW_MESSAGE", "window-v1", "text-v1", GenerationLocale.KO
+        );
+        observer.observe(
+            AiGenerationResult.completed(
+                "localized fallback", task, "openai", "gpt-test", AiTokenUsage.NONE,
+                5, "FALLBACK", true
+            ).withLanguageValidation(AiLanguageValidationOutcome.KNOWN_MISMATCH),
+            null,
+            false
+        );
+        observer.observe(
+            AiGenerationResult.completed(
+                "provider disabled", task, "placeholder", "placeholder", AiTokenUsage.NONE,
+                5, "FALLBACK", true
+            ),
+            null,
+            false
+        );
+
+        String sql = Files.readString(Path.of("../db/queries/016_ai_generation_failures.sql"));
+        List<JsonNode> rows = jdbc.query(
+            sql,
+            (resultSet, rowNumber) -> readJson(resultSet.getString("failure_snapshot_json"))
+        );
+        assertThat(rows).filteredOn(row -> row.path("windowLabel").asText().equals("CURRENT_7D"))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.path("outcome").asText()).isEqualTo("FALLBACK");
+                assertThat(row.path("generationLocale").asText()).isEqualTo("ko");
+                assertThat(row.path("languageValidationOutcome").asText())
+                    .isEqualTo("KNOWN_MISMATCH");
+                assertThat(row.path("failureCategory").isNull()).isTrue();
+            });
+    }
+
+    @Test
+    void scopedRefinementEventPersistsLocaleAndAppearsInV2Snapshot() throws Exception {
+        observer.observe(
+            AiGenerationResult.completed(
+                "legacy value",
+                new AiGenerationTask("REFLECTION_REFINEMENT", "refine-v1", "refine-v1", com.margins.ai.GenerationLocale.EN),
+                "placeholder",
+                "placeholder",
+                AiTokenUsage.NONE,
+                1,
+                "FALLBACK",
+                true
+            ),
+            null,
+            false
+        );
+
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM ai_generation_events WHERE task_type='REFLECTION_REFINEMENT' AND generation_locale='en'",
+            Integer.class
+        )).isEqualTo(1);
+        String sql = Files.readString(Path.of("../db/queries/015_ai_generation_events.sql"));
+        List<JsonNode> rows = jdbc.query(
+            sql,
+            (resultSet, rowNumber) -> readJson(resultSet.getString("snapshot_json"))
+        );
+        assertThat(rows)
+            .filteredOn(row -> row.path("scope").asText().equals("TASK_VERSION")
+                && row.path("windowLabel").asText().equals("CURRENT_7D"))
+            .singleElement()
+            .satisfies(row -> {
+                assertThat(row.path("taskType").asText()).isEqualTo("REFLECTION_REFINEMENT");
+                assertThat(row.path("generationLocale").asText()).isEqualTo("en");
+                assertThat(row.path("languageValidationOutcome").asText())
+                    .isEqualTo("NOT_RECORDED");
+            });
+    }
+
+    @Test
+    void localeColumnsAreBinaryConstrainedAndLegacyRowsRemainNull() {
+        jdbc.update("""
+            INSERT INTO ai_generation_events (
+              request_id, task_type, provider, model, prompt_version, schema_version,
+              input_tokens, cached_input_tokens, output_tokens, latency_ms,
+              outcome, fallback_used, is_test_data
+            ) VALUES (UUID(), 'LEGACY', 'none', 'none', 'v1', 'v1', 0, 0, 0, 0,
+              'SUCCESS', FALSE, TRUE)
+            """);
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM ai_generation_events WHERE task_type='LEGACY' AND generation_locale IS NULL AND language_validation_outcome IS NULL",
+            Integer.class
+        )).isEqualTo(1);
+        assertThatThrownBy(() -> jdbc.update("UPDATE ai_generation_events SET generation_locale='KO' WHERE task_type='LEGACY'"))
+            .isInstanceOf(org.springframework.dao.DataAccessException.class);
+        assertThatThrownBy(() -> jdbc.update("UPDATE ai_generation_events SET generation_locale=' e' WHERE task_type='LEGACY'"))
+            .isInstanceOf(org.springframework.dao.DataAccessException.class);
+    }
+
+    @Test
+    void migration052UpgradesExistingRowsWithoutBackfill() throws Exception {
+        List<String> tables = List.of(
+            "ai_generation_events",
+            "messages",
+            "questions",
+            "discussion_guides",
+            "moderation_events"
+        );
+        try {
+            for (String table : tables) {
+                jdbc.execute("DROP TABLE IF EXISTS upgrade_052_" + table);
+                jdbc.execute("CREATE TABLE upgrade_052_" + table + " (id BIGINT NOT NULL PRIMARY KEY)");
+                jdbc.update("INSERT INTO upgrade_052_" + table + " (id) VALUES (1)");
+            }
+
+            String migration = Files.readString(
+                Path.of("../db/schema/052_add_ai_generation_locale_foundation.sql")
+            );
+            for (String table : tables) {
+                migration = migration.replace(table, "upgrade_052_" + table);
+            }
+            jdbc.execute(migration);
+
+            for (String table : tables) {
+                String upgradedTable = "upgrade_052_" + table;
+                assertThat(jdbc.queryForObject(
+                    "SELECT COUNT(*) FROM " + upgradedTable
+                        + " WHERE generation_locale IS NULL AND language_validation_outcome IS NULL",
+                    Integer.class
+                )).isEqualTo(1);
+                assertThatThrownBy(() -> jdbc.update(
+                    "UPDATE " + upgradedTable + " SET generation_locale='KO' WHERE id=1"
+                )).isInstanceOf(org.springframework.dao.DataAccessException.class);
+                assertThatThrownBy(() -> jdbc.update(
+                    "UPDATE " + upgradedTable + " SET generation_locale=' e' WHERE id=1"
+                )).isInstanceOf(org.springframework.dao.DataAccessException.class);
+            }
+        } finally {
+            for (String table : tables) {
+                jdbc.execute("DROP TABLE IF EXISTS upgrade_052_" + table);
+            }
+        }
+    }
+
     private JsonNode total(List<JsonNode> rows, String windowLabel) {
         return rows.stream()
             .filter(row ->
@@ -260,7 +403,8 @@ class AiGenerationObservabilityIntegrationTest extends AbstractMySqlIntegrationT
             new AiGenerationTask(
                 "DISCUSSION_GUIDE",
                 "discussion-guide-v1",
-                "discussion-guide-schema-v1"
+                "discussion-guide-schema-v1",
+                GenerationLocale.KO
             ),
             "openai",
             "gpt-test",
@@ -281,7 +425,8 @@ class AiGenerationObservabilityIntegrationTest extends AbstractMySqlIntegrationT
             new AiGenerationTask(
                 "DISCUSSION_GUIDE",
                 "discussion-guide-v1",
-                "discussion-guide-schema-v1"
+                "discussion-guide-schema-v1",
+                GenerationLocale.KO
             ),
             "openai",
             "gpt-test",

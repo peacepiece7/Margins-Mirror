@@ -15,6 +15,14 @@ vi.mock('@/lib/api-client', () => ({
 describe('reflectionsApi', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('loads the book-scoped reading-session locator', async () => {
+    vi.mocked(getJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
+
+    await reflectionsApi.readingSession(7);
+
+    expect(getJson).toHaveBeenCalledWith('/api/books/7/reading-session');
+  });
+
   it('generates questions with explicit transport inputs', async () => {
     vi.mocked(postJson).mockResolvedValue({ questions: [] });
     await reflectionsApi.generateQuestions(3, 2, 'Dune');

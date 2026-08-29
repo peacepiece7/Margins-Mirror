@@ -465,7 +465,7 @@ export function BookDetailPage(props: BookDetailPageProps) {
                   <Button
                     aria-disabled={selectionLimitReached}
                     aria-pressed={selected}
-                    className={`grid h-auto min-h-24 gap-1 whitespace-normal rounded border px-3 py-2 text-left text-sm ${selected ? 'border-stone-950 bg-stone-950 text-white hover:bg-stone-900' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50 hover:text-stone-900'}`}
+                    className={`grid h-auto min-h-24 gap-1 whitespace-normal rounded border px-3 py-2 text-left text-sm ${selected ? 'border-primary' : 'border-stone-300 bg-white text-stone-700 hover:bg-stone-50 hover:text-stone-900'}`}
                     key={persona.personaId}
                     onClick={() => toggleDraftDebatePersona(persona.personaId)}
                     title={
@@ -474,7 +474,7 @@ export function BookDetailPage(props: BookDetailPageProps) {
                         : persona.description
                     }
                     type="button"
-                    variant="outline"
+                    variant={selected ? 'default' : 'outline'}
                     {...testAttr('debate-participant-toggle')}
                   >
                     <span className="font-medium">
@@ -491,13 +491,15 @@ export function BookDetailPage(props: BookDetailPageProps) {
                       )}
                     </span>
                     {tone && (
-                      <span className={`text-xs ${selected ? 'text-stone-200' : 'text-stone-500'}`}>
+                      <span
+                        className={`text-xs ${selected ? 'text-primary-foreground' : 'text-stone-500'}`}
+                      >
                         {tone}
                       </span>
                     )}
                     {persona.description && (
                       <span
-                        className={`line-clamp-2 text-xs leading-5 ${selected ? 'text-stone-200' : 'text-stone-500'}`}
+                        className={`line-clamp-2 text-xs leading-5 ${selected ? 'text-primary-foreground' : 'text-stone-500'}`}
                       >
                         {persona.description}
                       </span>

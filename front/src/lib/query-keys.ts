@@ -18,17 +18,17 @@ export const bookKeys = {
   searchCommand: () => [...bookKeys.searches(), 'command'] as const,
   details: () => [...bookKeys.all, 'detail'] as const,
   detail: (bookId: number) => [...bookKeys.details(), bookId] as const,
-  knowledge: (bookId: number) => [...bookKeys.detail(bookId), 'knowledge'] as const,
+  knowledge: (bookId: number, preferredLocale: 'ko' | 'en') =>
+    [...bookKeys.detail(bookId), 'knowledge', preferredLocale] as const,
 };
 
 export const sessionKeys = {
   all: [...protectedQueryRoots.reading, 'sessions'] as const,
-  lists: () => [...sessionKeys.all, 'list'] as const,
-  list: () => [...sessionKeys.lists(), 'all'] as const,
+  books: () => [...sessionKeys.all, 'book'] as const,
+  book: (bookId: number) => [...sessionKeys.books(), bookId] as const,
   latest: () => [...sessionKeys.all, 'latest'] as const,
   timelines: () => [...sessionKeys.all, 'timeline'] as const,
   timeline: (sessionId: number) => [...sessionKeys.timelines(), sessionId] as const,
-  stats: () => [...sessionKeys.all, 'stats'] as const,
   search: (query: string) => [...sessionKeys.all, 'search', query] as const,
 };
 

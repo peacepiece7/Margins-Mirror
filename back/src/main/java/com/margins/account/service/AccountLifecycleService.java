@@ -63,6 +63,11 @@ public class AccountLifecycleService {
             WHERE rc.user_id=? OR si.user_id=?
             """, userId, userId);
         jdbc.update("DELETE FROM metrics WHERE user_id=?", userId);
+        jdbc.update("""
+            DELETE drr FROM discussion_run_refinements drr
+            JOIN discussion_runs dr ON dr.id=drr.run_id
+            WHERE dr.user_id=?
+            """, userId);
         jdbc.update("DELETE FROM discussion_runs WHERE user_id=?", userId);
         jdbc.update("""
             DELETE dgi FROM discussion_guide_items dgi
@@ -80,6 +85,11 @@ public class AccountLifecycleService {
         jdbc.update("DELETE FROM messages WHERE user_id=? OR session_id IN (SELECT id FROM reading_sessions WHERE user_id=?)", userId, userId);
         jdbc.update("UPDATE reflection_interview_answer_revisions SET source_answer_revision_id=NULL WHERE user_id=?", userId);
         jdbc.update("DELETE FROM reflection_interview_answer_revisions WHERE user_id=?", userId);
+        jdbc.update("""
+            DELETE rs FROM reflection_summaries rs
+            JOIN session_insights si ON si.id=rs.reflection_insight_id
+            WHERE si.user_id=?
+            """, userId);
         jdbc.update("DELETE FROM session_insights WHERE user_id=? AND question_id IS NOT NULL", userId);
         jdbc.update("""
             UPDATE session_windows sw
@@ -89,6 +99,11 @@ public class AccountLifecycleService {
             """, userId);
         jdbc.update("DELETE FROM questions WHERE user_id=?", userId);
         jdbc.update("DELETE FROM reflection_interviews WHERE user_id=?", userId);
+        jdbc.update("""
+            DELETE swp FROM session_window_personas swp
+            JOIN session_windows sw ON sw.id=swp.window_id
+            WHERE sw.user_id=?
+            """, userId);
         jdbc.update("DELETE FROM session_windows WHERE user_id=?", userId);
         jdbc.update("""
             UPDATE reflection_revisions child

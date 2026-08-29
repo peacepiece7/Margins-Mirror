@@ -1,15 +1,21 @@
 import type { ReactNode } from 'react';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { bookKeys } from '@/lib/query-keys';
 import { booksApi } from './api';
 import {
+  useBookKnowledgeQuery,
   useBookSearchInfiniteQuery,
   useRegenerateBookKnowledgeMutation,
   useUpdateBookMutation,
 } from './queries';
+
+beforeEach(() => {
+  sessionStorage.clear();
+  vi.restoreAllMocks();
+});
 
 describe('book query mutations', () => {
   it('invalidates the related book and lists without touching another detail', async () => {
@@ -42,6 +48,7 @@ describe('Book Knowledge mutation', () => {
       discussionPoints: [],
       fallbackUsed: false,
       famousQuotes: [],
+      generationLocale: 'en' as const,
       keywords: [],
       knowledgeId: 7,
       recommendedPersonas: [],
@@ -62,7 +69,91 @@ describe('Book Knowledge mutation', () => {
 
     await act(() => result.current.mutateAsync());
 
-    expect(client.getQueryData(bookKeys.knowledge(7))).toEqual(knowledge);
+    expect(client.getQueryData(bookKeys.knowledge(7, 'en'))).toEqual(knowledge);
+    expect(client.getQueryData(bookKeys.knowledge(7, 'ko'))).toBeUndefined();
+  });
+
+  it('keeps an in-flight response under its captured persisted locale key', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    sessionStorage.setItem('margins.auth', JSON.stringify({ preferredLocale: 'en' }));
+    let resolveEnglish!: (value: Awaited<ReturnType<typeof booksApi.knowledge>>) => void;
+    const english = new Promise<Awaited<ReturnType<typeof booksApi.knowledge>>>((resolve) => {
+      resolveEnglish = resolve;
+    });
+    vi.spyOn(booksApi, 'knowledge').mockReturnValueOnce(english).mockResolvedValueOnce({
+      discussionPoints: [],
+      famousQuotes: [],
+      generationLocale: 'ko',
+      keywords: [],
+      knowledgeId: 8,
+      recommendedPersonas: [],
+      status: 'ready',
+      themes: [],
+      title: '한국어 지식',
+      version: 'book-knowledge-v1',
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { rerender } = renderHook(() => useBookKnowledgeQuery(7), { wrapper });
+    await waitFor(() => expect(booksApi.knowledge).toHaveBeenCalledTimes(1));
+
+    sessionStorage.setItem('margins.auth', JSON.stringify({ preferredLocale: 'ko' }));
+    rerender();
+    await waitFor(() => expect(booksApi.knowledge).toHaveBeenCalledTimes(2));
+    resolveEnglish({
+      discussionPoints: [],
+      famousQuotes: [],
+      generationLocale: 'en',
+      keywords: [],
+      knowledgeId: 7,
+      recommendedPersonas: [],
+      status: 'ready',
+      themes: [],
+      title: 'English knowledge',
+      version: 'book-knowledge-v1',
+    });
+
+    await waitFor(() => {
+      expect(client.getQueryData(bookKeys.knowledge(7, 'en'))).toMatchObject({ knowledgeId: 7 });
+      expect(client.getQueryData(bookKeys.knowledge(7, 'ko'))).toMatchObject({ knowledgeId: 8 });
+    });
+  });
+
+  it('keeps an in-flight regeneration under its captured persisted locale key', async () => {
+    const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    sessionStorage.setItem('margins.auth', JSON.stringify({ preferredLocale: 'en' }));
+    let resolveRegeneration!: (
+      value: Awaited<ReturnType<typeof booksApi.regenerateKnowledge>>,
+    ) => void;
+    vi.spyOn(booksApi, 'regenerateKnowledge').mockReturnValue(
+      new Promise((resolve) => {
+        resolveRegeneration = resolve;
+      }),
+    );
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useRegenerateBookKnowledgeMutation(7), { wrapper });
+
+    const pending = result.current.mutateAsync();
+    sessionStorage.setItem('margins.auth', JSON.stringify({ preferredLocale: 'ko' }));
+    resolveRegeneration({
+      discussionPoints: [],
+      famousQuotes: [],
+      generationLocale: 'en',
+      keywords: [],
+      knowledgeId: 9,
+      recommendedPersonas: [],
+      status: 'ready',
+      themes: [],
+      title: 'Regenerated English knowledge',
+      version: 'book-knowledge-v1',
+    });
+    await act(() => pending);
+
+    expect(client.getQueryData(bookKeys.knowledge(7, 'en'))).toMatchObject({ knowledgeId: 9 });
+    expect(client.getQueryData(bookKeys.knowledge(7, 'ko'))).toBeUndefined();
   });
 });
 

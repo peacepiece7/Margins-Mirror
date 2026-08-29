@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /book/
+Disallow: /memory-card/
+
+Sitemap: https://margins.cloud/sitemap.xml

@@ -13,9 +13,8 @@ interface AppNavigationProps {
 }
 
 export function AppNavigation({ activeApp, onLogout, session }: AppNavigationProps) {
-  const { locale, setLocale, t } = useI18n();
+  const { t } = useI18n();
   const navigate = useNavigate();
-  const nextLocale = locale === 'en' ? 'ko' : 'en';
 
   return (
     <nav className="flex items-center gap-1.5" aria-label="Authenticated app navigation">
@@ -38,15 +37,15 @@ export function AppNavigation({ activeApp, onLogout, session }: AppNavigationPro
         </NavigationButton>
       )}
       <Button
-        aria-label={`${t('language')}: ${nextLocale.toUpperCase()}`}
+        aria-label={t('contactLink')}
         className="grid min-h-11 min-w-11 place-items-center"
-        onClick={() => setLocale(nextLocale)}
-        title={`${t('language')}: ${nextLocale.toUpperCase()}`}
+        onClick={() => navigate('/contact')}
+        title={t('contactLink')}
         type="button"
         variant="outline"
-        {...testAttr('language-toggle')}
+        {...testAttr('nav-contact')}
       >
-        {locale.toUpperCase()}
+        <span aria-hidden="true">?</span>
       </Button>
       <Button
         aria-label="회원정보"

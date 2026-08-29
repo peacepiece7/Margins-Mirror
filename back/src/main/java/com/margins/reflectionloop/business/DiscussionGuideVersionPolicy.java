@@ -96,7 +96,9 @@ public class DiscussionGuideVersionPolicy {
                 .toList(),
             draft.model(),
             draft.tokenUsageJson(),
-            draft.generationMetadataJson()
+            draft.generationMetadataJson(),
+            draft.generationLocale(),
+            draft.languageValidationOutcome()
         );
     }
 
@@ -185,7 +187,9 @@ public class DiscussionGuideVersionPolicy {
             List.copyOf(items),
             source.getModel(),
             source.getTokenUsageJson(),
-            source.getGenerationMetadataJson()
+            source.getGenerationMetadataJson(),
+            null,
+            null
         );
     }
 
@@ -207,7 +211,9 @@ public class DiscussionGuideVersionPolicy {
         List<VersionItem> items,
         String model,
         String tokenUsageJson,
-        String generationMetadataJson
+        String generationMetadataJson,
+        String generationLocale,
+        String languageValidationOutcome
     ) {
     }
 

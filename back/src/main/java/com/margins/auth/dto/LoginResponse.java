@@ -14,4 +14,5 @@ public class LoginResponse {
     long accessTokenExpiresInSeconds;
     boolean consentRequired;
     String membershipTier;
+    String preferredLocale;
 }

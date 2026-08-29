@@ -20,13 +20,7 @@ public class DiscussionRunRecord {
     private String status;
     private String refinementOutcome;
     private Long refinedRevisionId;
-    private String refinementInputHash;
-    private String refinementTranscriptHash;
-    private String refinementPromptVersion;
-    private String refinementSuggestionStatus;
-    private String refinementSuggestionContent;
-    private String refinementGenerationMetadataJson;
-    private LocalDateTime refinementGeneratedAt;
+
     private String directorVersion;
     private String lastDirectorAction;
     private Long pendingPerspectiveItemId;

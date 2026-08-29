@@ -24,8 +24,6 @@ public class SessionWindowContext {
     private String sourceQuestionAnswer;
     private Long reflectionInsightId;
     private String reflectionContent;
-    private String reflectionSummary;
-    private String reflectionSummarySourceHash;
     private boolean testData;
 
     public SessionWindowContext(Long id, Long sessionId, Long userId) {

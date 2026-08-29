@@ -6,13 +6,13 @@ import type {
   BookListResponse,
   SaveBookResponse,
 } from '@/types/api/book';
-import type { ReadingSessionListResponse } from '@/types/api/session';
+import type { BookReadingSessionResponse } from '@/types/api/session';
 
 import type { BookShelfQuery } from './types';
 
 export const booksApi = {
-  sessions(): Promise<ReadingSessionListResponse> {
-    return getJson('/api/reading-sessions');
+  readingSession(bookId: number): Promise<BookReadingSessionResponse | null> {
+    return getJson(`/api/books/${bookId}/reading-session`);
   },
   searchCandidates(query: string, page = 1, limit = 5): Promise<BookCandidateSearchResponse> {
     return postJson('/api/books/search-candidates', { query, page, limit });

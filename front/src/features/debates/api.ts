@@ -2,8 +2,8 @@ import { deleteJson, getJson, patchJson, postJson } from '@/lib/api-client';
 import { postStream } from '@/lib/sse-client';
 import type {
   AiMessageResponse,
+  BookReadingSessionResponse,
   CreateSessionWindowResponse,
-  ReadingSessionListResponse,
   ReadingSessionTimelineResponse,
   DebateTurnResponse,
   ModerationEvent,
@@ -20,8 +20,8 @@ export interface PersonaInput {
 }
 
 export const debatesApi = {
-  sessions(): Promise<ReadingSessionListResponse> {
-    return getJson('/api/reading-sessions');
+  readingSession(bookId: number): Promise<BookReadingSessionResponse | null> {
+    return getJson(`/api/books/${bookId}/reading-session`);
   },
 
   timeline(sessionId: number): Promise<ReadingSessionTimelineResponse | null> {

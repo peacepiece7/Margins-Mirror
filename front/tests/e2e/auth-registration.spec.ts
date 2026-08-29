@@ -60,7 +60,7 @@ test.beforeEach(async ({ page, request }) => {
 });
 
 async function prepareVerification(page: import('@playwright/test').Page, email: string) {
-  await page.goto('/');
+  await page.goto('/login');
   await page.getByTestId('auth-mode-register').click();
   await page.getByTestId('register-email-input').fill(email);
   await page.getByTestId('register-email-check-submit').click();
@@ -70,7 +70,7 @@ async function prepareVerification(page: import('@playwright/test').Page, email:
 
 test('keeps signup inline controls level before the desktop breakpoint', async ({ page }) => {
   await page.setViewportSize({ width: 700, height: 900 });
-  await page.goto('/');
+  await page.goto('/login');
   await page.getByTestId('auth-mode-register').click();
 
   const controls = [
@@ -86,6 +86,95 @@ test('keeps signup inline controls level before the desktop breakpoint', async (
   }
 });
 
+test('starts the bot challenge only after the email check succeeds', async ({ page }) => {
+  await page.goto('/login');
+  await page.getByTestId('auth-mode-register').click();
+
+  await expect(page.getByTestId('register-bot-challenge')).toHaveCount(0);
+  await page.getByTestId('register-email-input').fill('turnstile_trigger@example.test');
+  await expect(page.getByTestId('register-bot-challenge')).toHaveCount(0);
+
+  await page.getByTestId('register-email-check-submit').click();
+
+  await expect(page.getByTestId('register-email-check-message')).toBeVisible();
+  await expect(page.getByTestId('register-bot-challenge')).toBeVisible();
+});
+
+test('uses a frame-free auth shell, home-linked title, and labeled two-column signup grid', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto('/login');
+
+  await expect(page.locator('label[for="login-username"]')).toBeVisible();
+  await expect(page.locator('label[for="login-password"]')).toBeVisible();
+  await expect(page.getByTestId('login-fields-grid')).toHaveCSS('row-gap', '4px');
+  await expect(page.locator('[data-slot="toggle-group"]')).toHaveCSS('column-gap', '4px');
+  await page.getByTestId('auth-mode-register').click();
+
+  await expect(page.getByTestId('register-fields-grid')).toBeVisible();
+  await expect(page.getByTestId('register-fields-grid')).toHaveCSS('row-gap', '4px');
+  await expect(page.getByTestId('auth-home-link')).toHaveAttribute('href', '/');
+  await expect(page.getByRole('tablist')).toHaveCSS('column-gap', '4px');
+  await page.getByTestId('auth-mode-register').hover();
+  await expect(page.getByTestId('auth-mode-register')).toHaveCSS(
+    'background-color',
+    'rgb(59, 75, 89)',
+  );
+  await expect(page.getByTestId('auth-mode-register')).toHaveCSS('color', 'rgb(252, 250, 246)');
+  expect(
+    await page
+      .getByTestId('auth-page')
+      .evaluate((element) => [
+        window.getComputedStyle(element, '::before').content,
+        window.getComputedStyle(element, '::after').content,
+      ]),
+  ).toEqual(['none', 'none']);
+  expect(
+    await page
+      .getByTestId('register-fields-grid')
+      .evaluate(
+        (element) => window.getComputedStyle(element).gridTemplateColumns.split(' ').length,
+      ),
+  ).toBe(2);
+
+  for (const inputId of [
+    'register-username',
+    'register-display-name',
+    'register-email',
+    'register-email-code',
+    'register-password',
+    'register-password-confirm',
+  ]) {
+    await expect(page.locator(`label[for="${inputId}"]`)).toBeVisible();
+  }
+
+  const displayNameBeforeValidation = await page
+    .getByTestId('register-display-name-input')
+    .boundingBox();
+  await expect(page.getByTestId('register-username-error')).toHaveCSS('min-height', '20px');
+  await page.getByTestId('register-username-input').focus();
+  await page.getByTestId('register-display-name-input').focus();
+  await expect(page.getByTestId('register-username-error')).not.toBeEmpty();
+  const displayNameAfterValidation = await page
+    .getByTestId('register-display-name-input')
+    .boundingBox();
+  expect(displayNameAfterValidation?.y).toBe(displayNameBeforeValidation?.y);
+
+  await page.setViewportSize({ width: 700, height: 900 });
+  expect(
+    await page
+      .getByTestId('register-fields-grid')
+      .evaluate(
+        (element) => window.getComputedStyle(element).gridTemplateColumns.split(' ').length,
+      ),
+  ).toBe(1);
+
+  await page.getByTestId('auth-home-link').click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByTestId('public-landing-page')).toBeVisible();
+});
+
 test('creates a local account, replaces a stale route, and signs in with the new credentials', async ({
   page,
 }) => {
@@ -97,7 +186,7 @@ test('creates a local account, replaces a stale route, and signs in with the new
 
   await page.goto('/book/999/reflection/discuss/999');
   await expect(page.getByTestId('login-form')).toBeVisible();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByTestId('auth-mode-register')).toContainText(/Sign up|회원가입/);
 
   await page.getByTestId('auth-mode-register').click();
@@ -127,7 +216,7 @@ test('creates a local account, replaces a stale route, and signs in with the new
   await page.getByTestId('login-password-input').fill(password);
   await page.getByTestId('register-password-confirm-input').fill(password);
 
-  await page.getByTestId('register-email-input').fill('demo_reader@test.margins.local');
+  await page.getByTestId('register-email-input').fill('peacepiece@test.margins.local');
   await Promise.all([
     page.waitForResponse(
       (response) =>
@@ -235,8 +324,11 @@ test('creates a local account, replaces a stale route, and signs in with the new
   await expect(page.getByTestId('logout-submit')).toBeVisible();
 
   await page.getByTestId('logout-submit').click();
-  await expect(page.getByTestId('login-form')).toBeVisible();
+  await expect(page.getByTestId('public-landing-page')).toBeVisible();
   await expect(page).toHaveURL(/\/$/);
+  await page.getByTestId('landing-login').click();
+  await expect(page.getByTestId('login-form')).toBeVisible();
+  await expect(page).toHaveURL(/\/login$/);
 
   await page.getByTestId('auth-mode-login').click();
   await page.getByTestId('login-username-input').fill(updatedUsername);
@@ -274,18 +366,22 @@ test('prevents duplicate sends and allows a fresh-token resend after 60 seconds'
     (element as HTMLButtonElement).click();
   });
   await expect(page.getByTestId('register-email-code-resend-timer')).toContainText('60s');
+  await expect(page.getByTestId('register-bot-challenge')).toBeVisible();
   expect(requests).toBe(1);
 
   const resetResponse = await request.post(`${backendUrl}/api/test/reset`);
   expect(resetResponse.ok()).toBeTruthy();
-  await page.clock.runFor(60_000);
+  await page.clock.runFor(59_000);
+  await expect(page.getByTestId('register-bot-challenge')).toBeVisible();
+  await page.clock.runFor(1_000);
+  await expect(page.getByTestId('register-bot-challenge')).toBeVisible();
   await expect(page.getByTestId('register-email-code-submit')).toBeEnabled();
   await page.getByTestId('register-email-code-submit').click();
   await expect.poll(() => requests).toBe(2);
 });
 
 test('keeps send disabled when the CAPTCHA widget reports failure', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/login');
   await page.getByTestId('auth-mode-register').click();
   await page.getByTestId('register-email-input').fill('captcha_failure@example.test');
   await page.getByTestId('register-email-check-submit').click();

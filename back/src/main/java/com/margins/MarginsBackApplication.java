@@ -1,6 +1,7 @@
 package com.margins;
 
 import com.margins.ai.OpenAiProperties;
+import com.margins.ai.observability.LangfuseProperties;
 import com.margins.auth.config.AuthCookieProperties;
 import com.margins.auth.config.AuthJwtProperties;
 import com.margins.auth.config.AuthProperties;
@@ -9,6 +10,7 @@ import com.margins.auth.config.MailVerificationProperties;
 import com.margins.auth.config.ResendProperties;
 import com.margins.auth.config.EmailVerificationAbuseProperties;
 import com.margins.book.BookKnowledgeProperties;
+import com.margins.contact.config.ContactProperties;
 import com.margins.moderation.ModerationProperties;
 import com.margins.reflectionloop.ReflectionLoopProperties;
 import org.springframework.boot.SpringApplication;
@@ -22,6 +24,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 // @ConfigurationPropertiesScan Properties 많아지면 고려
 @EnableConfigurationProperties({
     OpenAiProperties.class,
+    LangfuseProperties.class,
     AuthJwtProperties.class,
     AuthCookieProperties.class,
     AuthProperties.class,
@@ -29,6 +32,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     MailVerificationProperties.class,
     ResendProperties.class,
     EmailVerificationAbuseProperties.class,
+    ContactProperties.class,
     ModerationProperties.class,
     ReflectionLoopProperties.class,
     BookKnowledgeProperties.class

@@ -19,13 +19,15 @@ public interface ModerationEventMapper {
           input_text, decision, intent, relevance_score, confidence,
           reason_code, suggested_question, model, policy_version, prompt_version,
           schema_version, latency_ms, fallback_used, routing_outcome,
-          persona_called, provider_error_code, is_test_data
+          persona_called, provider_error_code, generation_locale,
+          language_validation_outcome, is_test_data
         ) VALUES (
           #{requestId}, #{userId}, #{bookId}, #{sessionId}, #{windowId}, #{messageId},
           #{inputText}, #{decision}, #{intent}, #{relevanceScore}, #{confidence},
           #{reasonCode}, #{suggestedQuestion}, #{model}, #{policyVersion}, #{promptVersion},
           #{schemaVersion}, #{latencyMs}, #{fallbackUsed}, #{routingOutcome},
-          #{personaCalled}, #{providerErrorCode}, #{testData}
+          #{personaCalled}, #{providerErrorCode}, #{generationLocale},
+          #{languageValidationOutcome}, #{testData}
         )
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
@@ -84,6 +86,7 @@ public interface ModerationEventMapper {
           reason_code, suggested_question, model, policy_version, prompt_version,
           schema_version, latency_ms, fallback_used, routing_outcome,
           persona_called, provider_error_code, user_feedback, is_test_data,
+          generation_locale, language_validation_outcome,
           created_at, updated_at
         FROM moderation_events
         WHERE id = #{eventId}
@@ -100,6 +103,7 @@ public interface ModerationEventMapper {
           decision, intent, reason_code, suggested_question, model,
           policy_version, prompt_version, schema_version, latency_ms,
           fallback_used, routing_outcome, persona_called, provider_error_code,
+          generation_locale, language_validation_outcome,
           user_feedback, is_test_data, created_at, updated_at
         FROM moderation_events
         WHERE session_id = #{sessionId}

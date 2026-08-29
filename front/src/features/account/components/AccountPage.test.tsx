@@ -26,6 +26,7 @@ describe('AccountPage profile', () => {
       email: 'reader@example.com',
       authProvider: 'local',
       accountStatus: 'ACTIVE',
+      preferredLocale: 'en',
     });
     vi.mocked(accountApi.updateProfile).mockResolvedValue({
       account: {
@@ -35,6 +36,7 @@ describe('AccountPage profile', () => {
         email: 'reader@example.com',
         authProvider: 'local',
         accountStatus: 'ACTIVE',
+        preferredLocale: 'en',
       },
     });
   });
@@ -54,13 +56,17 @@ describe('AccountPage profile', () => {
     );
 
     expect(await screen.findByLabelText('Username')).toHaveAttribute('readonly');
+    expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact');
     fireEvent.change(screen.getByLabelText('Display name'), {
       target: { value: 'Reader Name' },
     });
     fireEvent.click(screen.getByTestId('account-profile-save'));
 
     await waitFor(() =>
-      expect(accountApi.updateProfile).toHaveBeenCalledWith({ displayName: 'Reader Name' }),
+      expect(accountApi.updateProfile).toHaveBeenCalledWith({
+        displayName: 'Reader Name',
+        preferredLocale: 'en',
+      }),
     );
   });
 });

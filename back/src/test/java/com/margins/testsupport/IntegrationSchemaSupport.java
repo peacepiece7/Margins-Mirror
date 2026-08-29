@@ -67,9 +67,9 @@ public final class IntegrationSchemaSupport {
             INSERT INTO users (id, username, display_name, email, email_verified, password_hash, auth_provider, is_test_data)
             VALUES (
               1,
-              'demo_reader',
-              'demo_reader',
-              'demo_reader@test.margins.local',
+              'peacepiece',
+              'peacepiece',
+              'peacepiece@test.margins.local',
               TRUE,
               '$2b$12$x0GhNoH36hSY1OcS4EdDd.Nc8sm8B3mvPfBPr6aOFspYF2nqYtAhy',
               'local',

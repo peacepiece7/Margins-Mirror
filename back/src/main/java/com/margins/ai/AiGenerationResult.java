@@ -16,7 +16,9 @@ public record AiGenerationResult<T>(
     int latencyMs,
     String outcome,
     boolean fallbackUsed,
-    String failureCategory
+    String failureCategory,
+    GenerationLocale generationLocale,
+    AiLanguageValidationOutcome languageValidationOutcome
 ) {
     private static final Set<String> FAILURE_CATEGORIES = Set.of(
         "TIMEOUT",
@@ -73,6 +75,8 @@ public record AiGenerationResult<T>(
             latencyMs,
             outcome,
             fallbackUsed,
+            null,
+            task.generationLocale(),
             null
         );
     }
@@ -136,7 +140,9 @@ public record AiGenerationResult<T>(
             latencyMs,
             finalOutcome,
             finalFallbackUsed,
-            "FAILURE".equalsIgnoreCase(finalOutcome) ? failureCategory : null
+            "FAILURE".equalsIgnoreCase(finalOutcome) ? failureCategory : null,
+            generationLocale,
+            languageValidationOutcome
         );
     }
 
@@ -154,7 +160,31 @@ public record AiGenerationResult<T>(
             latencyMs,
             "FAILURE",
             false,
-            finalFailureCategory
+            finalFailureCategory,
+            generationLocale,
+            languageValidationOutcome
+        );
+    }
+
+    public AiGenerationResult<T> withLanguageValidation(AiLanguageValidationOutcome validationOutcome) {
+        return new AiGenerationResult<>(
+            value, taskType, provider, model, promptVersion, schemaVersion,
+            inputTokens, cachedInputTokens, outputTokens, latencyMs, outcome,
+            fallbackUsed, failureCategory, generationLocale, validationOutcome
+        );
+    }
+
+    public <R> AiGenerationResult<R> withValue(
+        R finalValue,
+        String finalOutcome,
+        boolean finalFallbackUsed,
+        AiLanguageValidationOutcome validationOutcome
+    ) {
+        return new AiGenerationResult<>(
+            finalValue, taskType, provider, model, promptVersion, schemaVersion,
+            inputTokens, cachedInputTokens, outputTokens, latencyMs, finalOutcome,
+            finalFallbackUsed, "FAILURE".equalsIgnoreCase(finalOutcome) ? failureCategory : null,
+            generationLocale, validationOutcome
         );
     }
 

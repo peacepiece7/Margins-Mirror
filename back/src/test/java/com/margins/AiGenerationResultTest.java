@@ -2,6 +2,7 @@ package com.margins;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -10,11 +11,46 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.ai.AiGenerationEventPersister;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
+import com.margins.ai.GenerationLocale;
 import com.margins.ai.AiTokenUsage;
 import com.margins.ai.PersistentAiGenerationObserver;
 import org.junit.jupiter.api.Test;
 
 class AiGenerationResultTest {
+
+    @Test
+    void requiresExplicitLocaleForEveryGenerationTask() {
+        assertThatThrownBy(() -> new AiGenerationTask("PERSONA", "v1", "text-v1", null))
+            .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AiGenerationTask(
+            "PERSONA", "v1", "text-v1", GenerationLocale.KO, false
+        )).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new AiGenerationTask(
+            "BOOK_KNOWLEDGE", "v1", "text-v1", GenerationLocale.EN, false
+        )).isInstanceOf(IllegalArgumentException.class);
+        AiGenerationTask scoped = new AiGenerationTask(
+            "REFLECTION_REFINEMENT", "v1", "text-v1", GenerationLocale.EN
+        );
+        AiGenerationResult<String> result = AiGenerationResult.completed(
+            "value", scoped, "placeholder", "placeholder", AiTokenUsage.NONE, 0,
+            "FALLBACK", true
+        );
+        assertThat(scoped.generationLocale()).isEqualTo(GenerationLocale.EN);
+        assertThat(scoped.localeScoped()).isTrue();
+        assertThat(result.generationLocale()).isEqualTo(GenerationLocale.EN);
+    }
+
+    @Test
+    void exposesNoPublicLocaleOmittingTaskOrResultConstructor() {
+        assertThat(AiGenerationTask.class.getConstructors())
+            .allSatisfy(constructor -> assertThat(constructor.getParameterTypes())
+                .contains(GenerationLocale.class));
+        assertThat(AiGenerationResult.class.getConstructors())
+            .allSatisfy(constructor -> assertThat(constructor.getParameterCount()).isEqualTo(15));
+        assertThatThrownBy(() -> AiGenerationResult.completed(
+            "value", null, "openai", "model", AiTokenUsage.NONE, 0, "SUCCESS", false
+        )).isInstanceOf(NullPointerException.class);
+    }
 
     @Test
     void preservesCachedInputTokensAcrossProviderAndStoredJsonShapes() throws Exception {
@@ -36,7 +72,7 @@ class AiGenerationResultTest {
         assertThat(roundTrip).isEqualTo(new AiTokenUsage(120, 80, 30, 150));
         AiGenerationResult<String> result = AiGenerationResult.completed(
             "value",
-            new AiGenerationTask("INTERVIEW", "prompt-v1", "schema-v1"),
+            new AiGenerationTask("INTERVIEW", "prompt-v1", "schema-v1", GenerationLocale.KO),
             "openai",
             "gpt-test",
             roundTrip,
@@ -55,7 +91,7 @@ class AiGenerationResultTest {
         PersistentAiGenerationObserver observer = new PersistentAiGenerationObserver(persister);
         AiGenerationResult<String> result = AiGenerationResult.completed(
             "reader-visible value",
-            new AiGenerationTask("PERSONA", "persona-v1", "text-v1"),
+            new AiGenerationTask("PERSONA", "persona-v1", "text-v1", GenerationLocale.EN),
             "openai",
             "gpt-test",
             AiTokenUsage.NONE,
@@ -72,7 +108,9 @@ class AiGenerationResultTest {
     @Test
     void coercesUnknownFailureCategoriesWithoutRetainingProviderText() {
         AiGenerationResult<String> result = AiGenerationResult.failure(
-            new AiGenerationTask("DISCUSSION_GUIDE", "guide-v1", "schema-v1"),
+            new AiGenerationTask(
+                "DISCUSSION_GUIDE", "guide-v1", "schema-v1", GenerationLocale.KO
+            ),
             "openai",
             "gpt-test",
             AiTokenUsage.NONE,

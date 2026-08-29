@@ -24,6 +24,7 @@ public final class IntegrationFixtureSupport {
             "TRUNCATE TABLE refresh_tokens",
             "TRUNCATE TABLE user_oauth_identities",
             "TRUNCATE TABLE messages",
+            "TRUNCATE TABLE session_window_personas",
             "TRUNCATE TABLE session_tags",
             "TRUNCATE TABLE session_windows",
             "TRUNCATE TABLE reading_sessions",

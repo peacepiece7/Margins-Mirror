@@ -23,6 +23,7 @@ describe('BookKnowledgeStatus', () => {
             discussionPoints: [],
             fallbackUsed: true,
             famousQuotes: [],
+            generationLocale: 'en',
             keywords: [],
             knowledgeId: 1,
             recommendedPersonas: [],

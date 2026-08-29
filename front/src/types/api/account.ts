@@ -5,6 +5,7 @@ export interface Account {
   email: string;
   authProvider: string;
   accountStatus: 'ACTIVE' | 'RESIGNED' | 'PURGED';
+  preferredLocale: 'ko' | 'en';
 }
 
 export interface ProfileResult {

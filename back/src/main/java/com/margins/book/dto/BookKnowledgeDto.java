@@ -18,6 +18,7 @@ public class BookKnowledgeDto {
     List<String> famousQuotes;
     List<String> keywords;
     String version;
+    String generationLocale;
     String status;
     String generatedAt;
     boolean stale;

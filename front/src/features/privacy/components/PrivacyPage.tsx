@@ -40,6 +40,11 @@ export function PrivacyPage() {
             {t('privacyViewHistory')}
           </Link>
         </p>
+        <p>
+          <Link className="underline" to="/contact">
+            {t('contactLink')}
+          </Link>
+        </p>
       </div>
     </main>
   );

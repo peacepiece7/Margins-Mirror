@@ -14,6 +14,14 @@ server:
   port: ${MARGINS_BACKEND_PORT:8080}
 
 margins:
+  contact:
+    enabled: ${MARGINS_CONTACT_ENABLED:false}
+    recipient: ${MARGINS_CONTACT_RECIPIENT:support@margins.cloud}
+    turnstile:
+      secret-key: ${MARGINS_TURNSTILE_SECRET_KEY:}
+      site-verify-url: ${MARGINS_TURNSTILE_SITEVERIFY_URL:https://challenges.cloudflare.com/turnstile/v0/siteverify}
+      allowed-hostnames: ${MARGINS_TURNSTILE_ALLOWED_HOSTNAMES:}
+      timeout-seconds: ${MARGINS_TURNSTILE_TIMEOUT_SECONDS:5}
   auth:
     max-failed-logins: 5
     lockout-minutes: 15
@@ -21,8 +29,9 @@ margins:
       refresh-name: margins_refresh
       oauth-state-name: margins_oauth_state
       secure: ${MARGINS_AUTH_COOKIE_SECURE:false}
-      refresh-same-site: Strict
-      oauth-state-same-site: Lax
+      domain: ${MARGINS_AUTH_COOKIE_DOMAIN:}
+      refresh-same-site: ${MARGINS_AUTH_REFRESH_SAME_SITE:Strict}
+      oauth-state-same-site: ${MARGINS_AUTH_OAUTH_STATE_SAME_SITE:Lax}
       path: /api/auth
     jwt:
       issuer: ${MARGINS_AUTH_JWT_ISSUER:margins}
@@ -45,6 +54,8 @@ margins:
       client-id: ${MARGINS_GOOGLE_CLIENT_ID:}
       client-secret: ${MARGINS_GOOGLE_CLIENT_SECRET:}
       frontend-callback-url: ${MARGINS_GOOGLE_OAUTH_FRONTEND_CALLBACK_URL:http://localhost:5173/auth/callback}
+  cors:
+    allowed-origin: ${MARGINS_CORS_ALLOWED_ORIGIN:http://localhost:5173}
   mail:
     verification:
       enabled: ${MARGINS_MAIL_VERIFICATION_ENABLED:false}
@@ -58,6 +69,15 @@ margins:
   ai:
     provider: ${MARGINS_AI_PROVIDER:openai}
     streaming-ready: true
+    langfuse:
+      enabled: ${LANGFUSE_ENABLED:true}
+      public-key: ${LANGFUSE_PUBLIC_KEY:}
+      secret-key: ${LANGFUSE_SECRET_KEY:}
+      base-url: ${LANGFUSE_BASE_URL:https://jp.cloud.langfuse.com}
+      environment: ${LANGFUSE_TRACING_ENVIRONMENT:local}
+      release: ${LANGFUSE_RELEASE:local}
+      sample-rate: ${LANGFUSE_SAMPLE_RATE:1.0}
+      export-timeout-seconds: ${LANGFUSE_EXPORT_TIMEOUT_SECONDS:5}
     openai:
       api-key: ${OPENAI_API_KEY:}
       base-url: ${OPENAI_BASE_URL:https://api.openai.com/v1}

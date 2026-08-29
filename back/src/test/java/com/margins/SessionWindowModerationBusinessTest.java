@@ -10,6 +10,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.margins.ai.AiProvider;
+import com.margins.ai.AiGenerationResult;
+import com.margins.ai.AiOutputLanguageValidator;
+import com.margins.ai.AiTokenUsage;
+import com.margins.ai.GenerationLocale;
+import com.margins.ai.GenerationLocaleResolver;
 import com.margins.message.mapper.MessageMapper;
 import com.margins.message.model.MessageRecord;
 import com.margins.moderation.business.ModerationBusiness;
@@ -49,7 +54,7 @@ class SessionWindowModerationBusinessTest {
         assertThat(response.getMessages()).isEmpty();
         assertThat(response.getModeration().getDecision()).isEqualTo("REJECT");
         verify(fixture.messageMapper, never()).insert(any());
-        verify(fixture.aiProvider, never()).answerDebateMessage(any(), any());
+        verify(fixture.aiProvider, never()).answerDebateMessageWithMetadata(any(), any(), any());
     }
 
     @Test
@@ -64,7 +69,7 @@ class SessionWindowModerationBusinessTest {
         assertThat(response.getMessages()).isEmpty();
         assertThat(response.getModeration().getSuggestedQuestion()).contains("선택");
         verify(fixture.messageMapper, never()).insert(any());
-        verify(fixture.aiProvider, never()).answerDebateMessage(any(), any());
+        verify(fixture.aiProvider, never()).answerDebateMessageWithMetadata(any(), any(), any());
     }
 
     @Test
@@ -77,16 +82,24 @@ class SessionWindowModerationBusinessTest {
             record.setId(ids.getAndIncrement());
             return 1;
         }).when(fixture.messageMapper).insert(any());
-        when(fixture.aiProvider.answerDebateMessage(eq(10L), any())).thenReturn(
-            AiMessageResponse.builder()
-                .windowId(10L)
-                .personaId(4L)
-                .role("assistant")
-                .content("근거를 더 살펴보죠.")
-                .streamingReady(true)
-                .aiModel("placeholder")
-                .build()
-        );
+        when(fixture.aiProvider.answerDebateMessageWithMetadata(eq(10L), any(), any()))
+            .thenAnswer(invocation -> AiGenerationResult.completed(
+                AiMessageResponse.builder()
+                    .windowId(10L)
+                    .personaId(4L)
+                    .role("assistant")
+                    .content("근거를 더 살펴보죠.")
+                    .streamingReady(true)
+                    .aiModel("test-model")
+                    .build(),
+                invocation.getArgument(2),
+                "openai",
+                "test-model",
+                AiTokenUsage.NONE,
+                0,
+                "SUCCESS",
+                false
+            ));
         ModerationEventRecord finalized = fixture.event.toBuilder()
             .messageId(100L)
             .routingOutcome("PERSONA_CALLED")
@@ -105,7 +118,7 @@ class SessionWindowModerationBusinessTest {
             .satisfies(message -> assertThat(message.getPersonaId()).isEqualTo(4L));
         assertThat(response.getModeration().isPersonaCalled()).isTrue();
         verify(fixture.messageMapper, org.mockito.Mockito.times(2)).insert(any());
-        verify(fixture.aiProvider).answerDebateMessage(eq(10L), any());
+        verify(fixture.aiProvider).answerDebateMessageWithMetadata(eq(10L), any(), any());
     }
 
     private static final class Fixture {
@@ -131,7 +144,7 @@ class SessionWindowModerationBusinessTest {
                 null
             );
             when(windowMapper.findContextById(10L)).thenReturn(context);
-            when(personaMapper.findActiveById(4L)).thenReturn(PersonaRecord.builder()
+            when(personaMapper.findActiveByIdForUser(eq(4L), eq(30L))).thenReturn(PersonaRecord.builder()
                 .id(4L)
                 .name("writer")
                 .displayName("작가")
@@ -154,7 +167,9 @@ class SessionWindowModerationBusinessTest {
                 .createdAt(Instant.parse("2026-07-29T00:00:00Z"))
                 .build();
             when(moderationBusiness.isEnabled()).thenReturn(true);
-            when(moderationBusiness.evaluate(eq(context), any())).thenReturn(event);
+            when(moderationBusiness.evaluate(
+                eq(context), any(), org.mockito.ArgumentMatchers.isNull(), eq(GenerationLocale.KO)
+            )).thenReturn(event);
             when(moderationBusiness.toDto(event)).thenReturn(dto(event));
             business = new SessionWindowBusiness(
                 aiProvider,
@@ -163,6 +178,9 @@ class SessionWindowModerationBusinessTest {
                 questionMapper,
                 personaMapper
             );
+            GenerationLocaleResolver resolver = mock(GenerationLocaleResolver.class);
+            when(resolver.resolve(any())).thenReturn(GenerationLocale.KO);
+            business.configureGenerationLocale(resolver, new AiOutputLanguageValidator());
             ReflectionTestUtils.setField(business, "moderationBusiness", moderationBusiness);
         }
 

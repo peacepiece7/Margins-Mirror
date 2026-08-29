@@ -53,3 +53,7 @@ WHERE created_at <= CURRENT_TIMESTAMP - INTERVAL 1 YEAR;
 SELECT COUNT(*) AS overdue_exit_survey_aggregate_count
 FROM anonymous_exit_survey_monthly_aggregates
 WHERE aggregate_month <= CURRENT_DATE - INTERVAL 3 YEAR;
+
+SELECT COUNT(*) AS overdue_contact_inquiry_count
+FROM contact_inquiries
+WHERE delete_after <= CURRENT_TIMESTAMP;

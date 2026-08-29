@@ -1,6 +1,7 @@
 package com.margins.reflectionloop.business;
 
 import com.margins.auth.support.AuthContext;
+import com.margins.ai.GenerationLocale;
 import com.margins.book.business.BookKnowledgeBusiness;
 import com.margins.book.business.BookKnowledgeBusiness.ResolvedKnowledge;
 import com.margins.book.mapper.BookMapper;
@@ -39,7 +40,8 @@ public class ReflectionEvidenceCatalog {
     public EvidenceCatalog load(
         ReflectionInterviewRecord interview,
         ReflectionRevisionRecord revision,
-        boolean includePrivateAnswers
+        boolean includePrivateAnswers,
+        GenerationLocale generationLocale
     ) {
         long userId = AuthContext.requireUserId();
         ReadingSessionRecord session = readingSessionMapper.findByIdAndUserId(
@@ -67,7 +69,7 @@ public class ReflectionEvidenceCatalog {
             ? answerSources(interview, userId)
             : List.of();
         List<Source> highlights = highlightSources(interview, userId);
-        Source bookKnowledge = bookKnowledgeSource(book);
+        Source bookKnowledge = bookKnowledgeSource(book, generationLocale);
         return new EvidenceCatalog(
             reflection,
             answers,
@@ -134,8 +136,10 @@ public class ReflectionEvidenceCatalog {
         return List.copyOf(sources);
     }
 
-    private Source bookKnowledgeSource(BookRecord book) {
-        ResolvedKnowledge resolved = bookKnowledgeBusiness.findReusableForBook(book);
+    private Source bookKnowledgeSource(BookRecord book, GenerationLocale generationLocale) {
+        ResolvedKnowledge resolved = bookKnowledgeBusiness.findReusableForBook(
+            book, generationLocale
+        );
         if (resolved == null
             || resolved.record() == null
             || blank(resolved.record().getSummary())) {

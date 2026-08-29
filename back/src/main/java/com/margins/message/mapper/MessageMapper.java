@@ -31,6 +31,8 @@ public interface MessageMapper {
           context_snapshot,
           token_usage,
           streaming_status,
+          generation_locale,
+          language_validation_outcome,
           is_test_data
         )
         VALUES (
@@ -47,6 +49,8 @@ public interface MessageMapper {
           #{contextSnapshot},
           #{tokenUsage},
           #{streamingStatus},
+          #{generationLocale},
+          #{languageValidationOutcome},
           #{testData}
         )
         """)
@@ -76,6 +80,8 @@ public interface MessageMapper {
           m.persona_id,
           m.question_id,
           m.streaming_status,
+          m.generation_locale,
+          m.language_validation_outcome,
           m.is_test_data,
           m.created_at
         FROM messages m
@@ -103,6 +109,8 @@ public interface MessageMapper {
           m.context_snapshot,
           m.token_usage,
           m.streaming_status,
+          m.generation_locale,
+          m.language_validation_outcome,
           m.is_test_data,
           m.created_at
         FROM messages m
@@ -122,7 +130,8 @@ public interface MessageMapper {
         SELECT
           m.id, m.session_id, m.window_id, m.user_id, m.parent_message_id,
           m.role, m.content, m.message_order, m.ai_model, m.persona_id,
-          m.question_id, m.streaming_status, m.is_test_data, m.created_at
+          m.question_id, m.streaming_status, m.generation_locale,
+          m.language_validation_outcome, m.is_test_data, m.created_at
         FROM messages m
         WHERE m.window_id = #{windowId}
           AND m.deleted_at IS NULL
@@ -152,6 +161,8 @@ public interface MessageMapper {
           m.persona_id,
           m.question_id,
           m.streaming_status,
+          m.generation_locale,
+          m.language_validation_outcome,
           m.is_test_data,
           m.created_at
         FROM messages m
@@ -185,14 +196,23 @@ public interface MessageMapper {
 
     @Update("""
         UPDATE session_windows
-        SET context_snapshot = JSON_REMOVE(context_snapshot, '$.conversationSummary'),
+        SET context_snapshot = JSON_REMOVE(
+              JSON_REMOVE(context_snapshot, '$.conversationSummaries.ko'),
+              '$.conversationSummaries.en'
+            ),
             updated_at = CURRENT_TIMESTAMP
         WHERE id = #{windowId}
           AND deleted_at IS NULL
-          AND CAST(
-            JSON_UNQUOTE(JSON_EXTRACT(context_snapshot, '$.conversationSummary.lastMessageId'))
-            AS UNSIGNED
-          ) >= #{messageId}
+          AND (
+            CAST(
+              JSON_UNQUOTE(JSON_EXTRACT(context_snapshot, '$.conversationSummaries.ko.lastMessageId'))
+              AS UNSIGNED
+            ) >= #{messageId}
+            OR CAST(
+              JSON_UNQUOTE(JSON_EXTRACT(context_snapshot, '$.conversationSummaries.en.lastMessageId'))
+              AS UNSIGNED
+            ) >= #{messageId}
+          )
         """)
     int invalidateConversationSummary(
         @Param("windowId") Long windowId,

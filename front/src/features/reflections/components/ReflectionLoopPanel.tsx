@@ -143,11 +143,7 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
       {missingReflection ? (
         <Alert className="border-amber-300 bg-amber-50" role="status">
           <AlertTitle>Reflection을 아직 작성하지 않았어</AlertTitle>
-          <AlertDescription>
-            {reflection.error instanceof ApiRequestError
-              ? reflection.error.message
-              : '지금의 생각을 먼저 적어 저장해줘.'}
-          </AlertDescription>
+          <AlertDescription>지금의 생각을 먼저 적어 저장해줘.</AlertDescription>
         </Alert>
       ) : null}
 

@@ -11,6 +11,7 @@ import org.apache.ibatis.annotations.*;
 public interface AccountMapper {
     String USER_COLUMNS = """
         id, username, display_name AS displayName, email, email_verified AS emailVerified,
+        preferred_locale AS preferredLocale,
         password_hash AS passwordHash, auth_provider AS authProvider,
         account_status AS accountStatus, resigned_at AS resignedAt,
         personal_data_purge_scheduled_at AS personalDataPurgeScheduledAt,
@@ -26,10 +27,14 @@ public interface AccountMapper {
     Optional<UserRecord> findUserByEmail(String email);
 
     @Update("""
-        UPDATE users SET display_name=#{displayName}, updated_at=CURRENT_TIMESTAMP
+        UPDATE users
+        SET display_name=#{displayName},
+            preferred_locale=COALESCE(#{preferredLocale}, preferred_locale),
+            updated_at=CURRENT_TIMESTAMP
         WHERE id=#{userId} AND account_status='ACTIVE'
         """)
-    int updateDisplayName(@Param("userId") Long userId, @Param("displayName") String displayName);
+    int updateProfile(@Param("userId") Long userId, @Param("displayName") String displayName,
+        @Param("preferredLocale") String preferredLocale);
 
     @Update("""
         UPDATE users SET password_hash=#{passwordHash}, credentials_version=credentials_version+1,

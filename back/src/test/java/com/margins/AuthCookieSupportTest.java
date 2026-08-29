@@ -11,11 +11,12 @@ import org.springframework.mock.web.MockHttpServletResponse;
 
 class AuthCookieSupportTest {
 
+    private AuthCookieProperties properties;
     private AuthCookieSupport cookieSupport;
 
     @BeforeEach
     void setUp() {
-        AuthCookieProperties properties = new AuthCookieProperties();
+        properties = new AuthCookieProperties();
         properties.setSecure(true);
         cookieSupport = new AuthCookieSupport(properties);
     }
@@ -62,5 +63,24 @@ class AuthCookieSupportTest {
         assertThat(refreshResponse.getHeader("Set-Cookie"))
             .contains("Max-Age=0")
             .contains("SameSite=Strict");
+    }
+
+    @Test
+    void cookiesAreHostOnlyWhenDomainIsBlank() {
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        cookieSupport.writeRefreshCookie(response, "refresh-value", Duration.ofDays(7));
+
+        assertThat(response.getHeader("Set-Cookie")).doesNotContain("Domain=");
+    }
+
+    @Test
+    void configuredDomainIsAppliedToCookies() {
+        properties.setDomain("dev.margins.cloud");
+        MockHttpServletResponse response = new MockHttpServletResponse();
+
+        cookieSupport.writeRefreshCookie(response, "refresh-value", Duration.ofDays(7));
+
+        assertThat(response.getHeader("Set-Cookie")).contains("Domain=dev.margins.cloud");
     }
 }

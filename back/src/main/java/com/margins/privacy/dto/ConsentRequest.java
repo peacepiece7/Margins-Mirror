@@ -2,6 +2,7 @@ package com.margins.privacy.dto;
 
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import lombok.Builder;
 import lombok.Value;
 import lombok.extern.jackson.Jacksonized;
@@ -20,4 +21,6 @@ public class ConsentRequest {
     String privacyPolicyVersion;
     @NotBlank
     String aiTransferVersion;
+    @Pattern(regexp = "ko|en", message = "preferredLocale must be ko or en")
+    String preferredLocale;
 }

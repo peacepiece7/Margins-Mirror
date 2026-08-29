@@ -1,9 +1,6 @@
 import { deleteJson, getJson, patchJson, postJson } from '@/lib/api-client';
 import type {
-  CreateReadingSessionResponse,
   MetricSnapshotResponse,
-  ReadingLibraryStatsResponse,
-  ReadingSessionListResponse,
   ReadingSessionTimelineResponse,
   SessionSearchResponse,
 } from '@/types/api/session';
@@ -24,24 +21,8 @@ export const readingSessionsApi = {
     return getJson(`/api/reading-sessions/${sessionId}`);
   },
 
-  list(): Promise<ReadingSessionListResponse> {
-    return getJson('/api/reading-sessions');
-  },
-
-  stats(): Promise<ReadingLibraryStatsResponse> {
-    return getJson('/api/reading-sessions/stats');
-  },
-
   search(query: string): Promise<SessionSearchResponse> {
     return getJson(`/api/reading-sessions/search?query=${encodeURIComponent(query)}`);
-  },
-
-  create(bookId: number, title: string): Promise<CreateReadingSessionResponse> {
-    return postJson('/api/reading-sessions', { bookId, title });
-  },
-
-  archive(sessionId: number): Promise<ReadingSessionListResponse> {
-    return deleteJson(`/api/reading-sessions/${sessionId}`);
   },
 
   createMetricSnapshot(sessionId: number): Promise<MetricSnapshotResponse> {

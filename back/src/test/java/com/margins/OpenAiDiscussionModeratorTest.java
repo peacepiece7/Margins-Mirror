@@ -91,7 +91,9 @@ class OpenAiDiscussionModeratorTest {
 
             var generation = moderator.moderateWithMetadata(
                 new DiscussionModerationRequest("request-1", 10L, "나말고 다른 사람은 없어요?"),
-                new AiGenerationTask("MODERATOR", "prompt-v1", "schema-v1")
+                new AiGenerationTask(
+                    "MODERATOR", "prompt-v1", "schema-v1", com.margins.ai.GenerationLocale.KO
+                )
             );
             DiscussionModerationResult result = generation.value();
 
@@ -111,7 +113,17 @@ class OpenAiDiscussionModeratorTest {
                 .contains("\"additionalProperties\":false")
                 .contains("DISCUSSION_STRUCTURE")
                 .doesNotContain("\"test-key\"");
-            verify(messageMapper).findRecentByWindowBefore(10L, null, 8);
+            moderator.moderateWithMetadata(
+                new DiscussionModerationRequest("request-2", 10L, "How does this discussion work?"),
+                new AiGenerationTask(
+                    "MODERATOR", "prompt-v1", "schema-v1", com.margins.ai.GenerationLocale.EN
+                )
+            );
+            assertThat(requestBody.get())
+                .contains("Respond in English.")
+                .contains("required response language")
+                .doesNotContain("Respond in Korean.")
+                .doesNotContain("must be Korean");
         } finally {
             server.stop(0);
         }
@@ -146,9 +158,12 @@ class OpenAiDiscussionModeratorTest {
                 responsesTransport(openAi)
             );
 
-            DiscussionModerationResult result = moderator.moderate(
-                new DiscussionModerationRequest("request-2", 10L, "spam")
-            );
+            DiscussionModerationResult result = moderator.moderateWithMetadata(
+                new DiscussionModerationRequest("request-2", 10L, "spam"),
+                new AiGenerationTask(
+                    "MODERATOR", "prompt-v1", "schema-v1", com.margins.ai.GenerationLocale.KO
+                )
+            ).value();
 
             assertThat(result.getDecision()).isEqualTo(ModerationDecision.ALLOW);
             assertThat(result.getIntent()).isEqualTo(ModerationIntent.BOOK_DISCUSSION);

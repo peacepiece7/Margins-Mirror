@@ -30,7 +30,7 @@ import org.springframework.stereotype.Component;
 public final class OpenAiDiscussionGuideClient {
 
     private static final String INSTRUCTIONS = """
-        Create one evidence-grounded Korean reading discussion guide.
+        Create one evidence-grounded reading discussion guide in the required response language.
         Do not invent book facts or reader experiences. Use sourceAlias exactly as supplied.
         Keep each question open-ended and non-leading. EXPERIENCE must be answerable without
         personal disclosure. Return exactly one required item for each required stage and
@@ -62,7 +62,7 @@ public final class OpenAiDiscussionGuideClient {
         try {
             generated = createStructuredTextResult(
                 properties.getModel(),
-                INSTRUCTIONS,
+                request.generationLocale().languageInstruction() + " " + INSTRUCTIONS,
                 discussionGuideInput(request),
                 discussionGuideTextFormat()
             );
@@ -114,7 +114,8 @@ public final class OpenAiDiscussionGuideClient {
         AiGenerationTask task = new AiGenerationTask(
             "DISCUSSION_GUIDE",
             request.promptVersion(),
-            request.schemaVersion()
+            request.schemaVersion(),
+            request.generationLocale()
         );
         try {
             Response response = generate(request, placeholder);

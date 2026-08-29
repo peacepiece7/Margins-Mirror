@@ -30,6 +30,8 @@ public class DiscussionGuideRecord {
     private String model;
     private String tokenUsageJson;
     private String generationMetadataJson;
+    private String generationLocale;
+    private String languageValidationOutcome;
     private Integer guideVersion;
     private Long sourceGuideId;
     private String origin;

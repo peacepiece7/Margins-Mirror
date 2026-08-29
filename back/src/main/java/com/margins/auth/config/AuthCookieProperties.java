@@ -11,6 +11,7 @@ public class AuthCookieProperties {
     private String registrationIntentName = "margins_registration_intent";
     private String googleRegistrationName = "margins_google_registration";
     private boolean secure = false;
+    private String domain = "";
     private String refreshSameSite = "Strict";
     private String oauthStateSameSite = "Lax";
     private String path = "/api/auth";

@@ -7,7 +7,9 @@ import com.margins.ai.AiProvider;
 import com.margins.ai.AiGenerationObserver;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
-import com.margins.ai.AiTokenUsage;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.AiOutputLanguageValidator;
+import com.margins.ai.GenerationLocale;
 import com.margins.reflectionloop.model.DiscussionGuideItemRecord;
 import com.margins.persona.model.PersonaRecord;
 import com.margins.session.dto.AiMessageResponse;
@@ -34,6 +36,7 @@ public class DiscussionDirector {
     private final AiProvider aiProvider;
     private final ObjectMapper objectMapper;
     private AiGenerationObserver generationObserver = AiGenerationObserver.NO_OP;
+    private final AiOutputLanguageValidator languageValidator = new AiOutputLanguageValidator();
 
     @Autowired
     void configureGenerationObserver(AiGenerationObserver generationObserver) {
@@ -45,79 +48,47 @@ public class DiscussionDirector {
         DiscussionGuideItemRecord current,
         List<DiscussionGuideItemRecord> items,
         String content,
-        String navigation
+        String navigation,
+        GenerationLocale locale
     ) {
         return decide(
-            windowId,
-            current,
-            items,
-            content,
-            navigation,
-            "discussion-director-v1",
-            null,
-            false,
-            List.of()
+            windowId, current, items, content, navigation,
+            "discussion-director-v1", null, false, List.of(), locale
         );
     }
 
     public DirectorDecision decide(
-        Long windowId,
-        DiscussionGuideItemRecord current,
-        List<DiscussionGuideItemRecord> items,
-        String content,
-        String navigation,
-        String promptVersion,
-        String depth,
-        boolean testData
-    ) {
-        return decide(
-            windowId,
-            current,
-            items,
-            content,
-            navigation,
-            promptVersion,
-            depth,
-            testData,
-            List.of()
-        );
-    }
-
-    public DirectorDecision decide(
-        Long windowId,
-        DiscussionGuideItemRecord current,
-        List<DiscussionGuideItemRecord> items,
-        String content,
-        String navigation,
-        String promptVersion,
-        String depth,
-        boolean testData,
-        List<PersonaRecord> personas
+        Long windowId, DiscussionGuideItemRecord current,
+        List<DiscussionGuideItemRecord> items, String content, String navigation,
+        String promptVersion, String depth, boolean testData,
+        List<PersonaRecord> personas, GenerationLocale locale
     ) {
         if ("FINISH".equals(navigation)) {
-            return new DirectorDecision("FINISH_DISCUSSION", null);
+            return ruleDecision("FINISH_DISCUSSION", null, locale);
         }
         DiscussionGuideItemRecord next = next(items, current);
         if ("NEXT".equals(navigation)) {
-            return new DirectorDecision(
+            return ruleDecision(
                 next == null ? "FINISH_DISCUSSION" : "MOVE_NEXT_TOPIC",
-                next
+                next,
+                locale
             );
         }
         AiGenerationTask task = new AiGenerationTask(
             "DISCUSSION_DIRECTOR",
             promptVersion,
-            "director-action-v1"
+            "director-action-v1",
+            locale
         );
         AiGenerationResult<AiMessageResponse> generation = null;
         try {
             SendMessageRequest request = SendMessageRequest.builder()
                     .questionId(current.getQuestionId())
-                    .content(prompt(current, content, personas))
+                    .content(prompt(current, content, personas, locale))
                     .build();
             generation = aiProvider.answerWindowMessageWithMetadata(windowId, request, task);
             if (generation == null) {
-                generation = legacyGeneration(windowId, request, task);
+                generation = AiGenerationResult.failure(task, "unknown", "unknown", 0);
             }
             AiMessageResponse response = generation.value();
             DirectorPayload parsed = parsePayload(
@@ -130,7 +101,23 @@ public class DiscussionDirector {
                     depth,
                     testData
                 );
-                return safeFallback(current);
+                return safeFallback(current, locale, null);
+            }
+            String displayContent = displayContent(parsed.reply(), parsed.focus(), locale);
+            AiLanguageValidationOutcome validation = generation.fallbackUsed()
+                && generation.languageValidationOutcome() == null
+                    ? null
+                    : languageValidator.validate(locale, displayContent);
+            if (validation == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+                generationObserver.observe(
+                    generation.withOutcome("FALLBACK", true).withLanguageValidation(validation),
+                    depth,
+                    testData
+                );
+                return safeFallback(current, locale, validation);
+            }
+            if (validation != null) {
+                generation = generation.withLanguageValidation(validation);
             }
             generationObserver.observe(generation, depth, testData);
             String action = parsed.action();
@@ -140,7 +127,10 @@ public class DiscussionDirector {
                     current,
                     List.of(),
                     parsed.reply(),
-                    parsed.focus()
+                    parsed.focus(),
+                    displayContent,
+                    locale,
+                    validation
                 );
             }
             return new DirectorDecision(
@@ -152,7 +142,10 @@ public class DiscussionDirector {
                 },
                 parsed.candidatePersonaIds(),
                 parsed.reply(),
-                parsed.focus()
+                parsed.focus(),
+                displayContent,
+                locale,
+                validation
             );
         } catch (RuntimeException exception) {
             AiGenerationResult<AiMessageResponse> fallbackGeneration = generation == null
@@ -168,50 +161,100 @@ public class DiscussionDirector {
                 depth,
                 testData
             );
-            return safeFallback(current);
+            return safeFallback(current, locale, null);
         }
     }
 
-    private AiGenerationResult<AiMessageResponse> legacyGeneration(
-        Long windowId,
-        SendMessageRequest request,
-        AiGenerationTask task
+    private DirectorDecision safeFallback(
+        DiscussionGuideItemRecord current,
+        GenerationLocale locale,
+        AiLanguageValidationOutcome validationOutcome
     ) {
-        long startedAt = System.nanoTime();
-        try {
-            AiMessageResponse response = aiProvider.answerWindowMessage(windowId, request);
-            String model = response == null ? "unknown" : response.getAiModel();
-            boolean fallbackUsed = "placeholder".equalsIgnoreCase(model);
-            return AiGenerationResult.completed(
-                response,
-                task,
-                fallbackUsed ? "placeholder" : "unknown",
-                model,
-                response == null ? AiTokenUsage.NONE : AiTokenUsage.fromJson(response.getTokenUsage()),
-                elapsedMillis(startedAt),
-                fallbackUsed ? "FALLBACK" : "SUCCESS",
-                fallbackUsed
-            );
-        } catch (RuntimeException exception) {
-            return AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(startedAt));
-        }
-    }
-
-    private int elapsedMillis(long startedAt) {
-        return (int) Math.min(
-            Integer.MAX_VALUE,
-            Math.max(0, (System.nanoTime() - startedAt) / 1_000_000L)
+        return decision(
+            "ASK_FOLLOW_UP",
+            current,
+            List.of(),
+            locale == GenerationLocale.KO
+                ? "이 지점에서 한 문장만 더 구체화해 볼까요?"
+                : "Could you make that point one sentence more specific?",
+            locale == GenerationLocale.KO ? "현재 쟁점" : "Current focus",
+            locale,
+            validationOutcome
         );
     }
 
-    private DirectorDecision safeFallback(DiscussionGuideItemRecord current) {
-        return new DirectorDecision("ASK_FOLLOW_UP", current);
+    public DirectorDecision ruleDecision(
+        String action,
+        DiscussionGuideItemRecord target,
+        GenerationLocale locale
+    ) {
+        String reply = switch (action) {
+            case "ASK_FOLLOW_UP" -> locale == GenerationLocale.KO
+                ? "좋아요. 지금 답에서 가장 중요한 근거나 망설임을 한 문장만 더 구체화해 볼까요?"
+                : "Good. Could you make the most important evidence or hesitation one sentence more specific?";
+            case "MOVE_NEXT_TOPIC" -> target == null
+                ? locale == GenerationLocale.KO
+                    ? "여기까지의 생각을 정리하고 토론을 마무리해 볼까요?"
+                    : "Shall we summarize the discussion so far and bring it to a close?"
+                : locale == GenerationLocale.KO
+                    ? "좋아요. 다음은 “" + target.getQuestionText() + "”를 살펴보겠습니다."
+                    : "Good. Next, let's consider: “" + target.getQuestionText() + "”";
+            case "FINISH_DISCUSSION" -> locale == GenerationLocale.KO
+                ? "지금까지의 관점을 바탕으로 처음 Reflection을 유지하거나 다듬어 보세요."
+                : "Use the perspectives so far to keep or refine your initial reflection.";
+            case "SUMMARIZE_TOPIC" -> locale == GenerationLocale.KO
+                ? "이 주제에서 확인한 핵심을 한 문장으로 정리해 보겠습니다."
+                : "Let's summarize the key point from this topic in one sentence.";
+            default -> locale == GenerationLocale.KO
+                ? "이 지점에서 한 문장만 더 구체화해 볼까요?"
+                : "Could you make that point one sentence more specific?";
+        };
+        return decision(
+            action,
+            target,
+            List.of(),
+            reply,
+            null,
+            locale,
+            languageValidator.validate(locale, reply)
+        );
+    }
+
+    private DirectorDecision decision(
+        String action,
+        DiscussionGuideItemRecord target,
+        List<Long> candidatePersonaIds,
+        String reply,
+        String focus,
+        GenerationLocale locale,
+        AiLanguageValidationOutcome validationOutcome
+    ) {
+        return new DirectorDecision(
+            action,
+            target,
+            candidatePersonaIds,
+            reply,
+            focus,
+            displayContent(reply, focus, locale),
+            locale,
+            validationOutcome
+        );
+    }
+
+    private String displayContent(String reply, String focus, GenerationLocale locale) {
+        if (reply == null || focus == null || focus.isBlank()) {
+            return reply;
+        }
+        return reply
+            + (locale == GenerationLocale.KO ? "\n\n이번 쟁점: " : "\n\nCurrent focus: ")
+            + focus;
     }
 
     private String prompt(
         DiscussionGuideItemRecord current,
         String content,
-        List<PersonaRecord> personas
+        List<PersonaRecord> personas,
+        GenerationLocale locale
     ) {
         String personaCatalog = personas == null || personas.isEmpty()
             ? "[]"
@@ -222,6 +265,29 @@ public class DiscussionDirector {
                     + "\",\"description\":\"" + escapeJson(persona.getDescription()) + "\"}")
                 .toList()
                 .toString();
+        if (locale == GenerationLocale.EN) {
+            return """
+                [DISCUSSION_DIRECTOR]
+                Current guide question: %s
+                Question intent: %s
+                Bounded evidence: %s
+                Reader's latest answer: %s
+                Available perspectives: %s
+                Choose exactly one next action.
+                Allowed actions: ASK_FOLLOW_UP, CALL_PERSPECTIVE, MOVE_NEXT_TOPIC,
+                SUMMARIZE_TOPIC, FINISH_DISCUSSION.
+                For CALL_PERSPECTIVE, put only one or two personaId values from the catalog in candidatePersonaIds.
+                reply must be a brief facilitation message reflecting the reader's answer, at most 400 characters.
+                focus must summarize the issue within the current Guide issue/stage, at most 200 characters.
+                Return exactly one JSON object: {"action":"ALLOWED_ACTION","reply":"...","focus":"...","candidatePersonaIds":[]}.
+                """.formatted(
+                truncate(current.getQuestionText(), 500),
+                truncate(current.getIntent(), 500),
+                truncate(current.getSourceExcerpt(), 500),
+                truncate(content, 2000),
+                personaCatalog
+            );
+        }
         return """
             [DISCUSSION_DIRECTOR]
             현재 발제 질문: %s
@@ -348,12 +414,11 @@ public class DiscussionDirector {
         DiscussionGuideItemRecord targetItem,
         List<Long> candidatePersonaIds,
         String reply,
-        String focus
+        String focus,
+        String displayContent,
+        GenerationLocale generationLocale,
+        AiLanguageValidationOutcome languageValidationOutcome
     ) {
-        public DirectorDecision(String action, DiscussionGuideItemRecord targetItem) {
-            this(action, targetItem, List.of(), null, null);
-        }
-
         public DirectorDecision {
             candidatePersonaIds = candidatePersonaIds == null
                 ? List.of()

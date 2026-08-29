@@ -25,6 +25,8 @@ public class MessageRecord {
     private String contextSnapshot;
     private String tokenUsage;
     private String streamingStatus;
+    private String generationLocale;
+    private String languageValidationOutcome;
     private boolean testData;
     private Instant createdAt;
 }

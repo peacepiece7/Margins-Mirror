@@ -5,7 +5,11 @@ import com.margins.ai.AiProvider;
 import com.margins.ai.AiGenerationObserver;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
-import com.margins.ai.AiTokenUsage;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.AiOutputLanguageValidator;
+import com.margins.ai.GenerationLocale;
+import com.margins.ai.GenerationLocaleResolver;
+import com.margins.ai.observability.AiTraceContext;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
 import com.margins.message.mapper.MessageMapper;
@@ -21,6 +25,7 @@ import com.margins.question.dto.QuestionDto;
 import com.margins.question.dto.QuestionListResponse;
 import com.margins.question.mapper.QuestionMapper;
 import com.margins.question.model.QuestionRecord;
+import com.margins.reflectionloop.ai.DiscussionDirector.DirectorDecision;
 import com.margins.session.dto.AiMessageResponse;
 import com.margins.session.dto.CreateSessionWindowRequest;
 import com.margins.session.dto.CreateSessionWindowResponse;
@@ -54,6 +59,11 @@ public class SessionWindowBusiness {
     private long currentUserId() {
         return AuthContext.requireUserId();
     }
+
+    private AiTraceContext traceContext(SessionWindowContext context) {
+        return new AiTraceContext(context.getUserId(), context.getSessionId());
+    }
+
     private static final String OPEN_STATUS = "open";
     private static final String ACTIVE_STATUS = "active";
     private static final String READER_QUESTION_TYPE = "reader";
@@ -65,6 +75,8 @@ public class SessionWindowBusiness {
     private final MessageMapper messageMapper;
     private final QuestionMapper questionMapper;
     private final PersonaMapper personaMapper;
+    private GenerationLocaleResolver generationLocaleResolver;
+    private AiOutputLanguageValidator languageValidator = new AiOutputLanguageValidator();
     private SessionWindowPersonaMapper sessionWindowPersonaMapper;
     private ModerationBusiness moderationBusiness;
     private AiGenerationObserver generationObserver = AiGenerationObserver.NO_OP;
@@ -75,8 +87,17 @@ public class SessionWindowBusiness {
     }
 
     @Autowired
-    void configureGenerationObserver(AiGenerationObserver generationObserver) {
+    public void configureGenerationObserver(AiGenerationObserver generationObserver) {
         this.generationObserver = generationObserver;
+    }
+
+    @Autowired
+    public void configureGenerationLocale(
+        GenerationLocaleResolver generationLocaleResolver,
+        AiOutputLanguageValidator languageValidator
+    ) {
+        this.generationLocaleResolver = generationLocaleResolver;
+        this.languageValidator = languageValidator;
     }
 
     @Autowired
@@ -213,6 +234,7 @@ public class SessionWindowBusiness {
     /** 사용자 메시지를 저장하고 AI에 한 번 요청한 뒤 사용자 메시지에 연결된 AI 응답을 저장한다. */
     public AiMessageResponse sendMessage(Long windowId, SendMessageRequest request) {
         SessionWindowContext context = requireWindowContext(windowId);
+        GenerationLocale locale = resolveLocale(context.getUserId());
         validateQuestionForWindow(request.getQuestionId(), windowId, context);
         Long userId = resolveUserId(request.getUserId(), context);
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
@@ -232,7 +254,21 @@ public class SessionWindowBusiness {
             .clientCorrelationId(request.getClientCorrelationId())
             .contextMessageId(userMessage.getId())
             .build();
-        AiMessageResponse aiResponse = aiProvider.answerWindowMessage(windowId, providerRequest);
+        AiGenerationTask task = new AiGenerationTask(
+            "WINDOW_MESSAGE", "window-message-v1", "text-v1", locale
+        );
+        AiGenerationResult<AiMessageResponse> generation = aiProvider.answerWindowMessageWithMetadata(
+            windowId, providerRequest, task
+        );
+        generation = validateMessageGeneration(
+            generation,
+            locale,
+            false,
+            context.isTestData(),
+            traceContext(context)
+        );
+        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
+        AiMessageResponse aiResponse = requireGenerated(generation);
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -245,6 +281,8 @@ public class SessionWindowBusiness {
             .contextSnapshot(aiResponse.getContextSnapshot())
             .tokenUsage(aiResponse.getTokenUsage())
             .streamingStatus(COMPLETE_STREAMING_STATUS)
+            .generationLocale(locale.value())
+            .languageValidationOutcome(outcomeName(generation))
             .testData(true)
             .build());
 
@@ -254,6 +292,7 @@ public class SessionWindowBusiness {
     /** AI 델타를 호출자에게 스트리밍하되 완료 뒤 최종 응답은 저장한다. */
     public AiMessageResponse streamMessage(Long windowId, SendMessageRequest request, Consumer<String> deltaConsumer) {
         SessionWindowContext context = requireWindowContext(windowId);
+        GenerationLocale locale = resolveLocale(context.getUserId());
         validateQuestionForWindow(request.getQuestionId(), windowId, context);
         Long userId = resolveUserId(request.getUserId(), context);
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
@@ -273,7 +312,21 @@ public class SessionWindowBusiness {
             .clientCorrelationId(request.getClientCorrelationId())
             .contextMessageId(userMessage.getId())
             .build();
-        AiMessageResponse aiResponse = aiProvider.streamWindowMessage(windowId, providerRequest, deltaConsumer);
+        AiGenerationTask task = new AiGenerationTask(
+            "WINDOW_MESSAGE_STREAM", "window-message-v1", "text-v1", locale
+        );
+        AiGenerationResult<AiMessageResponse> generation = aiProvider.streamWindowMessageWithMetadata(
+            windowId, providerRequest, deltaConsumer, task
+        );
+        generation = validateMessageGeneration(
+            generation,
+            locale,
+            true,
+            context.isTestData(),
+            traceContext(context)
+        );
+        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
+        AiMessageResponse aiResponse = requireGenerated(generation);
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -286,6 +339,8 @@ public class SessionWindowBusiness {
             .contextSnapshot(aiResponse.getContextSnapshot())
             .tokenUsage(aiResponse.getTokenUsage())
             .streamingStatus(COMPLETE_STREAMING_STATUS)
+            .generationLocale(locale.value())
+            .languageValidationOutcome(outcomeName(generation))
             .testData(true)
             .build());
 
@@ -317,11 +372,32 @@ public class SessionWindowBusiness {
     /** AI 질문을 생성하고 각 제안을 지속 가능한 프롬프트로 저장한다. */
     public QuestionListResponse generateQuestions(Long windowId, GenerateQuestionsRequest request) {
         SessionWindowContext context = requireWindowContext(windowId);
-        QuestionListResponse suggestions = aiProvider.suggestQuestions(windowId, request);
+        GenerationLocale locale = resolveLocale(context.getUserId());
+        AiGenerationTask task = new AiGenerationTask(
+            "QUESTION_GENERATION", "question-generation-v1", "question-list-v1", locale
+        );
+        AiGenerationResult<QuestionListResponse> generation = aiProvider.suggestQuestionsWithMetadata(
+            windowId, request, task
+        );
+        AiLanguageValidationOutcome validation = isOrdinaryFallback(generation)
+            ? null
+            : validateQuestions(locale, generation.value());
+        if (validation == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+            generation = generation.withValue(
+                localizedQuestionFallback(locale), "FALLBACK", true, validation
+            );
+        } else if (validation != null) {
+            generation = generation.withLanguageValidation(validation);
+        }
+        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
+        QuestionListResponse suggestions = requireGenerated(generation);
+        AiLanguageValidationOutcome questionValidation = generation.languageValidationOutcome();
 
         return QuestionListResponse.builder()
             .questions(suggestions.getQuestions().stream()
-                .map((suggestion) -> insertQuestion(context, windowId, suggestion))
+                .map((suggestion) -> insertQuestion(
+                    context, windowId, suggestion, locale, questionValidation
+                ))
                 .toList())
             .build();
     }
@@ -336,8 +412,9 @@ public class SessionWindowBusiness {
     /** debate window에 독자 프롬프트와 persona 응답 하나를 저장한다. */
     public DebateTurnResponse debate(Long windowId, DebateMessageRequest request) {
         SessionWindowContext context = requireWindowContext(windowId);
+        GenerationLocale locale = resolveLocale(context.getUserId());
         requireActivePersona(request.getPersonaId());
-        ModerationEventRecord moderation = moderate(context, request.getContent());
+        ModerationEventRecord moderation = moderate(context, request.getContent(), null, locale);
         if (blocksPersona(moderation)) {
             return debateTurn(moderation, List.of());
         }
@@ -360,9 +437,17 @@ public class SessionWindowBusiness {
             .build();
         AiGenerationResult<AiMessageResponse> generation = personaGeneration(
             windowId,
-            providerRequest
+            providerRequest,
+            locale
         );
-        generationObserver.observe(generation, null, context.isTestData());
+        generation = validateMessageGeneration(
+            generation,
+            locale,
+            false,
+            context.isTestData(),
+            traceContext(context)
+        );
+        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
         AiMessageResponse aiResponse = requireGenerated(generation);
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
@@ -376,6 +461,8 @@ public class SessionWindowBusiness {
             .contextSnapshot(aiResponse.getContextSnapshot())
             .tokenUsage(aiResponse.getTokenUsage())
             .streamingStatus(COMPLETE_STREAMING_STATUS)
+            .generationLocale(locale.value())
+            .languageValidationOutcome(outcomeName(generation))
             .testData(true)
             .build());
 
@@ -386,8 +473,9 @@ public class SessionWindowBusiness {
     /** 독자 토론 프롬프트 하나와 선택된 모든 persona의 응답을 저장한다. */
     public DebateTurnResponse debateAll(Long windowId, DebateAllMessageRequest request) {
         SessionWindowContext context = requireWindowContext(windowId);
+        GenerationLocale locale = resolveLocale(context.getUserId());
         List<PersonaRecord> personas = selectedDebatePersonas(request.getPersonaIds());
-        ModerationEventRecord moderation = moderate(context, request.getContent());
+        ModerationEventRecord moderation = moderate(context, request.getContent(), null, locale);
         if (blocksPersona(moderation)) {
             return debateTurn(moderation, List.of());
         }
@@ -412,28 +500,39 @@ public class SessionWindowBusiness {
             .toList();
         AiGenerationResult<List<AiMessageResponse>> generation = personaBatchGeneration(
             windowId,
-            personaRequests
+            personaRequests,
+            locale
         );
-        generationObserver.observe(generation, null, context.isTestData());
-        List<AiMessageResponse> aiResponses = requireGenerated(generation);
+        ValidatedPersonaBatch validated = validatePersonaBatch(generation, locale);
+        generationObserver.observe(
+            validated.generation(),
+            null,
+            context.isTestData(),
+            traceContext(context)
+        );
+        requireGenerated(validated.generation());
 
-        List<AiMessageResponse> persistedResponses = aiResponses.stream()
-            .map((aiResponse) -> insertPersonaDebateResponse(windowId, context, userId, userMessage, aiResponse))
+        List<AiMessageResponse> persistedResponses = validated.items().stream()
+            .map((item) -> insertPersonaDebateResponse(
+                windowId, context, userId, userMessage, item.response(),
+                locale, item.validationOutcome()
+            ))
             .toList();
         return debateTurn(finalizeAllowed(moderation, userMessage.getId()), persistedResponses);
     }
 
     /** guided discussion에서 Director보다 먼저 기존 Moderator를 실행한다. */
-    public ModerationEventRecord moderateGuidedTurn(Long windowId, String content) {
-        return moderateGuidedTurn(windowId, content, null);
-    }
-
     public ModerationEventRecord moderateGuidedTurn(
         Long windowId,
         String content,
-        String depth
+        String depth,
+        GenerationLocale locale
     ) {
-        return moderate(requireWindowContext(windowId), content, depth);
+        SessionWindowContext context = requireWindowContext(windowId);
+        if (moderationBusiness == null || !moderationBusiness.isEnabled()) {
+            return null;
+        }
+        return moderationBusiness.evaluate(context, content, depth, locale);
     }
 
     /** guided discussion이 차단 판정을 compact response로 반환할 수 있게 한다. */
@@ -441,48 +540,20 @@ public class SessionWindowBusiness {
         return blocksPersona(moderation);
     }
 
-    /**
-     * Moderator와 Director 결정 뒤 reader turn과 Director 또는 Persona 응답 하나를
-     * 현재 guide question trace에 저장한다.
-     */
-    public DebateTurnResponse persistGuidedTurn(
+    private DebateTurnResponse persistGuidedTurn(
         Long windowId,
         Long questionId,
-        Long personaId,
         String content,
-        String directorReply,
+        DirectorDecision decision,
         ModerationEventRecord moderation
-    ) {
-        return persistGuidedTurn(
-            windowId,
-            questionId,
-            personaId,
-            content,
-            directorReply,
-            moderation,
-            null
-        );
-    }
-
-    public DebateTurnResponse persistGuidedTurn(
-        Long windowId,
-        Long questionId,
-        Long personaId,
-        String content,
-        String directorReply,
-        ModerationEventRecord moderation,
-        String depth
     ) {
         SessionWindowContext context = requireWindowContext(windowId);
         if (blocksPersona(moderation)) {
             return debateTurn(moderation, List.of());
         }
-        if (personaId != null) {
-            requireActivePersona(personaId);
+        if (decision == null || decision.displayContent() == null || decision.generationLocale() == null) {
+            throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Director response is incomplete");
         }
-        AiMessageResponse generatedResponse = personaId == null
-            ? null
-            : generateGuidedPersonaResponse(windowId, personaId, content, null, depth);
         Long userId = resolveUserId(null, context);
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
@@ -495,53 +566,33 @@ public class SessionWindowBusiness {
             .testData(context.isTestData())
             .build());
 
-        AiMessageResponse response;
-        if (personaId != null) {
-            AiMessageResponse generated = generatedResponse;
-            MessageRecord aiMessage = insertMessage(MessageRecord.builder()
-                .sessionId(context.getSessionId())
-                .windowId(windowId)
-                .userId(userId)
-                .parentMessageId(userMessage.getId())
-                .role(generated.getRole())
-                .content(generated.getContent())
-                .aiModel(generated.getAiModel())
-                .personaId(personaId)
-                .questionId(questionId)
-                .contextSnapshot(generated.getContextSnapshot())
-                .tokenUsage(generated.getTokenUsage())
-                .streamingStatus(COMPLETE_STREAMING_STATUS)
-                .testData(context.isTestData())
-                .build());
-            response = copyWithPersistedMessageId(generated, aiMessage.getId());
-        } else {
-            String reply = directorReply == null || directorReply.isBlank()
-                ? "이 지점에서 한 문장만 더 구체화해 볼까요?"
-                : directorReply.trim();
-            MessageRecord aiMessage = insertMessage(MessageRecord.builder()
-                .sessionId(context.getSessionId())
-                .windowId(windowId)
-                .userId(userId)
-                .parentMessageId(userMessage.getId())
-                .role("assistant")
-                .content(reply)
-                .aiModel("discussion-director")
-                .questionId(questionId)
-                .streamingStatus(COMPLETE_STREAMING_STATUS)
-                .testData(context.isTestData())
-                .build());
-            response = AiMessageResponse.builder()
-                .messageId(aiMessage.getId())
-                .windowId(windowId)
-                .role("assistant")
-                .content(reply)
-                .streamingReady(true)
-                .aiModel("discussion-director")
-                .build();
-        }
+        MessageRecord aiMessage = insertMessage(MessageRecord.builder()
+            .sessionId(context.getSessionId())
+            .windowId(windowId)
+            .userId(userId)
+            .parentMessageId(userMessage.getId())
+            .role("assistant")
+            .content(decision.displayContent())
+            .aiModel("discussion-director")
+            .questionId(questionId)
+            .streamingStatus(COMPLETE_STREAMING_STATUS)
+            .generationLocale(decision.generationLocale().value())
+            .languageValidationOutcome(decision.languageValidationOutcome() == null
+                ? null
+                : decision.languageValidationOutcome().name())
+            .testData(context.isTestData())
+            .build());
+        AiMessageResponse response = AiMessageResponse.builder()
+            .messageId(aiMessage.getId())
+            .windowId(windowId)
+            .role("assistant")
+            .content(decision.displayContent())
+            .streamingReady(true)
+            .aiModel("discussion-director")
+            .build();
         ModerationEventRecord finalized = moderation == null
             ? null
-            : moderationBusiness.finalizeAllowed(moderation, userMessage.getId(), personaId != null);
+            : moderationBusiness.finalizeAllowed(moderation, userMessage.getId(), false);
         return debateTurn(finalized, List.of(response));
     }
 
@@ -551,19 +602,10 @@ public class SessionWindowBusiness {
         Long windowId,
         Long questionId,
         String content,
-        String directorReply,
-        ModerationEventRecord moderation,
-        String depth
+        DirectorDecision decision,
+        ModerationEventRecord moderation
     ) {
-        return persistGuidedTurn(
-            windowId,
-            questionId,
-            null,
-            content,
-            directorReply,
-            moderation,
-            depth
-        );
+        return persistGuidedTurn(windowId, questionId, content, decision, moderation);
     }
 
     /** Director가 고른 Persona의 provider 결과를 기존 reader message에 연결한다. */
@@ -573,41 +615,46 @@ public class SessionWindowBusiness {
         Long questionId,
         Long personaId,
         MessageRecord userMessage,
-        AiMessageResponse generated
+        GeneratedAiMessage generated
     ) {
         SessionWindowContext context = requireWindowContext(windowId);
         requireActivePersona(personaId);
-        if (userMessage == null || generated == null || generated.getContent() == null) {
+        if (userMessage == null || generated == null || generated.response().getContent() == null) {
             throw new ApiException(
                 ApiErrorCode.COMMON_INTERNAL_ERROR,
                 "Persona response could not be persisted"
             );
         }
+        AiMessageResponse response = generated.response();
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
             .userId(userMessage.getUserId())
             .parentMessageId(userMessage.getId())
-            .role(generated.getRole() == null ? "assistant" : generated.getRole())
-            .content(generated.getContent())
-            .aiModel(generated.getAiModel())
+            .role(response.getRole() == null ? "assistant" : response.getRole())
+            .content(response.getContent())
+            .aiModel(response.getAiModel())
             .personaId(personaId)
             .questionId(questionId)
-            .contextSnapshot(generated.getContextSnapshot())
-            .tokenUsage(generated.getTokenUsage())
+            .contextSnapshot(response.getContextSnapshot())
+            .tokenUsage(response.getTokenUsage())
             .streamingStatus(COMPLETE_STREAMING_STATUS)
+            .generationLocale(generated.generationLocale().value())
+            .languageValidationOutcome(generated.languageValidationOutcome() == null
+                ? null
+                : generated.languageValidationOutcome().name())
             .testData(context.isTestData())
             .build());
         AiMessageResponse persisted = copyWithPersistedMessageId(
             AiMessageResponse.builder()
                 .windowId(windowId)
                 .personaId(personaId)
-                .role(generated.getRole() == null ? "assistant" : generated.getRole())
-                .content(generated.getContent())
-                .streamingReady(generated.isStreamingReady())
-                .aiModel(generated.getAiModel())
-                .contextSnapshot(generated.getContextSnapshot())
-                .tokenUsage(generated.getTokenUsage())
+                .role(response.getRole() == null ? "assistant" : response.getRole())
+                .content(response.getContent())
+                .streamingReady(response.isStreamingReady())
+                .aiModel(response.getAiModel())
+                .contextSnapshot(response.getContextSnapshot())
+                .tokenUsage(response.getTokenUsage())
                 .build(),
             aiMessage.getId()
         );
@@ -620,41 +667,46 @@ public class SessionWindowBusiness {
         Long windowId,
         Long questionId,
         Long personaId,
-        AiMessageResponse generated
+        GeneratedAiMessage generated
     ) {
         SessionWindowContext context = requireWindowContext(windowId);
         requireActivePersona(personaId);
-        if (generated == null || generated.getContent() == null) {
+        if (generated == null || generated.response().getContent() == null) {
             throw new ApiException(
                 ApiErrorCode.COMMON_INTERNAL_ERROR,
                 "Persona response could not be persisted"
             );
         }
+        AiMessageResponse response = generated.response();
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
             .userId(resolveUserId(null, context))
             .parentMessageId(null)
-            .role(generated.getRole() == null ? "assistant" : generated.getRole())
-            .content(generated.getContent())
-            .aiModel(generated.getAiModel())
+            .role(response.getRole() == null ? "assistant" : response.getRole())
+            .content(response.getContent())
+            .aiModel(response.getAiModel())
             .personaId(personaId)
             .questionId(questionId)
-            .contextSnapshot(generated.getContextSnapshot())
-            .tokenUsage(generated.getTokenUsage())
+            .contextSnapshot(response.getContextSnapshot())
+            .tokenUsage(response.getTokenUsage())
             .streamingStatus(COMPLETE_STREAMING_STATUS)
+            .generationLocale(generated.generationLocale().value())
+            .languageValidationOutcome(generated.languageValidationOutcome() == null
+                ? null
+                : generated.languageValidationOutcome().name())
             .testData(context.isTestData())
             .build());
         AiMessageResponse persisted = copyWithPersistedMessageId(
             AiMessageResponse.builder()
                 .windowId(windowId)
                 .personaId(personaId)
-                .role(generated.getRole() == null ? "assistant" : generated.getRole())
-                .content(generated.getContent())
-                .streamingReady(generated.isStreamingReady())
-                .aiModel(generated.getAiModel())
-                .contextSnapshot(generated.getContextSnapshot())
-                .tokenUsage(generated.getTokenUsage())
+                .role(response.getRole() == null ? "assistant" : response.getRole())
+                .content(response.getContent())
+                .streamingReady(response.isStreamingReady())
+                .aiModel(response.getAiModel())
+                .contextSnapshot(response.getContextSnapshot())
+                .tokenUsage(response.getTokenUsage())
                 .build(),
             aiMessage.getId()
         );
@@ -662,12 +714,13 @@ public class SessionWindowBusiness {
     }
 
     /** Persona provider는 message/run transaction 밖에서 실행한다. */
-    public AiMessageResponse generateGuidedPersonaResponse(
+    public GeneratedAiMessage generateGuidedPersonaResponse(
         Long windowId,
         Long personaId,
         String content,
         Long contextMessageId,
-        String depth
+        String depth,
+        GenerationLocale locale
     ) {
         SessionWindowContext context = requireWindowContext(windowId);
         requireActivePersona(personaId);
@@ -678,45 +731,63 @@ public class SessionWindowBusiness {
             .build();
         AiGenerationResult<AiMessageResponse> generation = personaGeneration(
             windowId,
-            providerRequest
+            providerRequest,
+            locale
         );
-        generationObserver.observe(generation, depth, context.isTestData());
+        generation = validateMessageGeneration(
+            generation,
+            locale,
+            false,
+            context.isTestData(),
+            traceContext(context)
+        );
+        generationObserver.observe(generation, depth, context.isTestData(), traceContext(context));
         if (generation == null
             || generation.value() == null
-            || "FAILURE".equalsIgnoreCase(generation.outcome())
-            || (generation.fallbackUsed()
-                && !"placeholder".equalsIgnoreCase(generation.provider()))) {
+            || generation.fallbackUsed()
+            || "FAILURE".equalsIgnoreCase(generation.outcome())) {
             throw new ApiException(
                 ApiErrorCode.COMMON_UPSTREAM_ERROR,
                 "Persona response could not be generated"
             );
         }
-        return generation.value();
+        return new GeneratedAiMessage(
+            generation.value(),
+            locale,
+            generation.languageValidationOutcome()
+        );
+    }
+
+    public record GeneratedAiMessage(
+        AiMessageResponse response,
+        GenerationLocale generationLocale,
+        AiLanguageValidationOutcome languageValidationOutcome
+    ) {
+        public GeneratedAiMessage {
+            Objects.requireNonNull(response, "response");
+            Objects.requireNonNull(generationLocale, "generationLocale");
+        }
     }
 
     /** feature flag가 켜진 경우에만 reader message 저장 전 판정 event를 만든다. */
-    private ModerationEventRecord moderate(SessionWindowContext context, String content) {
-        return moderate(context, content, null);
-    }
-
     private ModerationEventRecord moderate(
         SessionWindowContext context,
         String content,
-        String depth
+        String depth,
+        GenerationLocale locale
     ) {
         if (moderationBusiness == null || !moderationBusiness.isEnabled()) {
             return null;
         }
-        return depth == null
-            ? moderationBusiness.evaluate(context, content)
-            : moderationBusiness.evaluate(context, content, depth);
+        return moderationBusiness.evaluate(context, content, depth, locale);
     }
 
     private AiGenerationResult<AiMessageResponse> personaGeneration(
         Long windowId,
-        DebateMessageRequest request
+        DebateMessageRequest request,
+        GenerationLocale locale
     ) {
-        AiGenerationTask task = personaTask();
+        AiGenerationTask task = personaTask(locale);
         AiGenerationResult<AiMessageResponse> generation;
         long metadataStartedAt = System.nanoTime();
         try {
@@ -729,23 +800,17 @@ public class SessionWindowBusiness {
                 elapsedMillis(metadataStartedAt)
             );
         }
-        if (generation != null) {
-            return generation;
-        }
-        long startedAt = System.nanoTime();
-        try {
-            AiMessageResponse response = aiProvider.answerDebateMessage(windowId, request);
-            return legacyMessageGeneration(response, task, elapsedMillis(startedAt));
-        } catch (RuntimeException exception) {
-            return AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(startedAt));
-        }
+        return generation == null
+            ? AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(metadataStartedAt))
+            : generation;
     }
 
     private AiGenerationResult<List<AiMessageResponse>> personaBatchGeneration(
         Long windowId,
-        List<DebateMessageRequest> requests
+        List<DebateMessageRequest> requests,
+        GenerationLocale locale
     ) {
-        AiGenerationTask task = personaTask();
+        AiGenerationTask task = personaTask(locale);
         AiGenerationResult<List<AiMessageResponse>> generation;
         long metadataStartedAt = System.nanoTime();
         try {
@@ -758,64 +823,13 @@ public class SessionWindowBusiness {
                 elapsedMillis(metadataStartedAt)
             );
         }
-        if (generation != null) {
-            return generation;
-        }
-        long startedAt = System.nanoTime();
-        try {
-            List<AiMessageResponse> responses = aiProvider.answerDebateMessages(windowId, requests);
-            AiMessageResponse first = responses == null
-                ? null
-                : responses.stream().filter(Objects::nonNull).findFirst().orElse(null);
-            AiGenerationResult<AiMessageResponse> metadata = legacyMessageGeneration(
-                first,
-                task,
-                elapsedMillis(startedAt)
-            );
-            return new AiGenerationResult<>(
-                responses,
-                metadata.taskType(),
-                metadata.provider(),
-                metadata.model(),
-                metadata.promptVersion(),
-                metadata.schemaVersion(),
-                metadata.inputTokens(),
-                metadata.cachedInputTokens(),
-                metadata.outputTokens(),
-                metadata.latencyMs(),
-                metadata.outcome(),
-                metadata.fallbackUsed(),
-                metadata.failureCategory()
-            );
-        } catch (RuntimeException exception) {
-            return AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(startedAt));
-        }
+        return generation == null
+            ? AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(metadataStartedAt))
+            : generation;
     }
 
-    private AiGenerationResult<AiMessageResponse> legacyMessageGeneration(
-        AiMessageResponse response,
-        AiGenerationTask task,
-        int latencyMs
-    ) {
-        if (response == null) {
-            return AiGenerationResult.failure(task, "unknown", "unknown", latencyMs);
-        }
-        String model = response.getAiModel();
-        boolean fallbackUsed = "placeholder".equalsIgnoreCase(model);
-        return AiGenerationResult.completed(
-            response,
-            task,
-            fallbackUsed ? "placeholder" : "unknown",
-            model,
-            AiTokenUsage.fromJson(response.getTokenUsage()),
-            latencyMs,
-            fallbackUsed ? "FALLBACK" : "SUCCESS",
-            fallbackUsed
-        );
-    }
-
-    private AiGenerationTask personaTask() {
-        return new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1");
+    private AiGenerationTask personaTask(GenerationLocale locale) {
+        return new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1", locale);
     }
 
     private <T> T requireGenerated(AiGenerationResult<T> generation) {
@@ -944,7 +958,9 @@ public class SessionWindowBusiness {
         SessionWindowContext context,
         Long userId,
         MessageRecord userMessage,
-        AiMessageResponse aiResponse
+        AiMessageResponse aiResponse,
+        GenerationLocale locale,
+        AiLanguageValidationOutcome validationOutcome
     ) {
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
@@ -958,6 +974,10 @@ public class SessionWindowBusiness {
             .contextSnapshot(aiResponse.getContextSnapshot())
             .tokenUsage(aiResponse.getTokenUsage())
             .streamingStatus(COMPLETE_STREAMING_STATUS)
+            .generationLocale(locale.value())
+            .languageValidationOutcome(
+                validationOutcome == null ? null : validationOutcome.name()
+            )
             .testData(true)
             .build());
 
@@ -966,6 +986,16 @@ public class SessionWindowBusiness {
 
     /** 생성되었거나 독자가 작성한 질문을 대상 윈도우에 저장한다. */
     private QuestionDto insertQuestion(SessionWindowContext context, Long windowId, QuestionDto suggestion) {
+        return insertQuestion(context, windowId, suggestion, null, null);
+    }
+
+    private QuestionDto insertQuestion(
+        SessionWindowContext context,
+        Long windowId,
+        QuestionDto suggestion,
+        GenerationLocale locale,
+        AiLanguageValidationOutcome validationOutcome
+    ) {
         QuestionRecord record = QuestionRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -974,11 +1004,152 @@ public class SessionWindowBusiness {
             .questionType(suggestion.getQuestionType() == null ? "reflection" : suggestion.getQuestionType())
             .status(ACTIVE_STATUS)
             .aiModel(suggestion.getAiModel())
+            .generationLocale(locale == null ? null : locale.value())
+            .languageValidationOutcome(validationOutcome == null ? null : validationOutcome.name())
             .testData(true)
             .build();
 
         requireInserted(questionMapper.insert(record), "Question could not be saved");
         return toQuestionDto(record);
+    }
+
+    private AiGenerationResult<AiMessageResponse> validateMessageGeneration(
+        AiGenerationResult<AiMessageResponse> generation,
+        GenerationLocale locale,
+        boolean streaming,
+        boolean testData,
+        AiTraceContext traceContext
+    ) {
+        AiMessageResponse value = generation == null ? null : generation.value();
+        if (value == null) return generation;
+        if (isOrdinaryFallback(generation)) return generation;
+        AiLanguageValidationOutcome validation = languageValidator.validate(locale, value.getContent());
+        if (validation != AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+            return generation.withLanguageValidation(validation);
+        }
+        if (streaming) {
+            AiGenerationResult<AiMessageResponse> failure = generation
+                .<AiMessageResponse>withValue(null, "FAILURE", false, validation)
+                .withFailureCategory("SCHEMA_VALIDATION")
+                .withLanguageValidation(validation);
+            generationObserver.observe(failure, null, testData, traceContext);
+            throw new ApiException(ApiErrorCode.STREAM_MESSAGE_FAILED, "AI response language mismatch");
+        }
+        AiMessageResponse fallback = localizedMessageFallback(value, locale);
+        return generation.withValue(fallback, "FALLBACK", true, validation);
+    }
+
+    private ValidatedPersonaBatch validatePersonaBatch(
+        AiGenerationResult<List<AiMessageResponse>> generation,
+        GenerationLocale locale
+    ) {
+        if (generation == null || generation.value() == null) {
+            return new ValidatedPersonaBatch(generation, List.of());
+        }
+        if (isOrdinaryFallback(generation)) {
+            return new ValidatedPersonaBatch(
+                generation,
+                generation.value().stream()
+                    .map(response -> new ValidatedPersonaMessage(response, null))
+                    .toList()
+            );
+        }
+        boolean replaced = false;
+        boolean matched = false;
+        List<ValidatedPersonaMessage> items = new ArrayList<>();
+        for (AiMessageResponse response : generation.value()) {
+            AiLanguageValidationOutcome itemOutcome = languageValidator.validate(
+                locale,
+                response.getContent()
+            );
+            if (itemOutcome == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+                items.add(new ValidatedPersonaMessage(
+                    localizedMessageFallback(response, locale),
+                    itemOutcome
+                ));
+                replaced = true;
+            } else {
+                items.add(new ValidatedPersonaMessage(response, itemOutcome));
+                matched = matched || itemOutcome == AiLanguageValidationOutcome.MATCH;
+            }
+        }
+        AiGenerationResult<List<AiMessageResponse>> aggregate = generation.withValue(
+            items.stream().map(ValidatedPersonaMessage::response).toList(),
+            replaced ? "FALLBACK" : generation.outcome(),
+            replaced || generation.fallbackUsed(),
+            replaced
+                ? AiLanguageValidationOutcome.KNOWN_MISMATCH
+                : matched ? AiLanguageValidationOutcome.MATCH : AiLanguageValidationOutcome.UNKNOWN
+        );
+        return new ValidatedPersonaBatch(aggregate, List.copyOf(items));
+    }
+
+    private record ValidatedPersonaMessage(
+        AiMessageResponse response,
+        AiLanguageValidationOutcome validationOutcome
+    ) {
+    }
+
+    private record ValidatedPersonaBatch(
+        AiGenerationResult<List<AiMessageResponse>> generation,
+        List<ValidatedPersonaMessage> items
+    ) {
+    }
+
+    private boolean isOrdinaryFallback(AiGenerationResult<?> generation) {
+        return generation != null
+            && generation.fallbackUsed()
+            && generation.languageValidationOutcome() == null;
+    }
+
+    private AiLanguageValidationOutcome validateQuestions(
+        GenerationLocale locale,
+        QuestionListResponse response
+    ) {
+        if (response == null || response.getQuestions() == null) {
+            return AiLanguageValidationOutcome.UNKNOWN;
+        }
+        return languageValidator.validateUnits(
+            locale,
+            response.getQuestions().stream().map(QuestionDto::getQuestionText).toList()
+        );
+    }
+
+    private QuestionListResponse localizedQuestionFallback(GenerationLocale locale) {
+        String text = locale == GenerationLocale.KO
+            ? "이 장면에서 가장 중요하게 느껴진 선택은 무엇인가요?"
+            : "Which choice in this scene feels most important to you?";
+        return QuestionListResponse.builder().questions(List.of(
+            QuestionDto.builder().questionText(text).questionType("reflection").aiModel("placeholder").build()
+        )).build();
+    }
+
+    private AiMessageResponse localizedMessageFallback(AiMessageResponse source, GenerationLocale locale) {
+        return AiMessageResponse.builder()
+            .windowId(source.getWindowId())
+            .personaId(source.getPersonaId())
+            .role(source.getRole() == null ? "assistant" : source.getRole())
+            .content(locale == GenerationLocale.KO
+                ? "지금 남은 생각을 한 문장으로 더 들려주세요."
+                : "Tell me one more sentence about the thought that remains with you.")
+            .streamingReady(true)
+            .aiModel("placeholder")
+            .contextSnapshot(source.getContextSnapshot())
+            .tokenUsage(source.getTokenUsage())
+            .build();
+    }
+
+    private String outcomeName(AiGenerationResult<?> generation) {
+        return generation.languageValidationOutcome() == null
+            ? null
+            : generation.languageValidationOutcome().name();
+    }
+
+    private GenerationLocale resolveLocale(Long userId) {
+        if (generationLocaleResolver == null) {
+            throw new IllegalStateException("GenerationLocaleResolver is required");
+        }
+        return generationLocaleResolver.resolve(userId);
     }
 
     /** 이미 참조하는 사용자 답변이 없을 때만 질문 삭제를 허용한다. */

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.auth.support.AuthContext;
+import com.margins.ai.GenerationLocale;
+import com.margins.ai.GenerationLocaleResolver;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
 import com.margins.reflectionloop.ReflectionLoopProperties;
@@ -48,6 +50,7 @@ public class DiscussionGuideBusiness {
     private final DiscussionGuideVersionWriter versionWriter;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private final GenerationLocaleResolver generationLocaleResolver;
 
     public DiscussionGuideResponse create(Long interviewId, GuideBriefRequest request) {
         GuideBrief brief = versionPolicy.brief(request);
@@ -60,7 +63,9 @@ public class DiscussionGuideBusiness {
         if (preparation.existing() != null) {
             return response(preparation.existing());
         }
-        GuideDraft draft = generate(preparation.sources(), preparation.interview(), brief);
+        GuideDraft draft = generate(
+            preparation.sources(), preparation.interview(), brief, preparation.generationLocale()
+        );
         try {
             DiscussionGuideRecord guide = transactionTemplate.execute(
                 status -> persistInitial(preparation, draft)
@@ -102,7 +107,9 @@ public class DiscussionGuideBusiness {
         if (preparation == null) {
             throw internal("Discussion guide regeneration preparation failed");
         }
-        GuideDraft draft = generate(preparation.sources(), preparation.interview(), brief);
+        GuideDraft draft = generate(
+            preparation.sources(), preparation.interview(), brief, preparation.generationLocale()
+        );
         DiscussionGuideRecord guide = transactionTemplate.execute(
             status -> persistRegeneration(preparation, draft)
         );
@@ -186,15 +193,17 @@ public class DiscussionGuideBusiness {
             currentUserId()
         );
         if (existing != null) {
-            return new InitialPreparation(interview, null, List.of(), existing, brief);
+            return new InitialPreparation(interview, null, List.of(), existing, brief, null);
         }
         ReflectionRevisionRecord revision = requireRevision(interview);
+        GenerationLocale generationLocale = generationLocaleResolver.resolve(interview.getUserId());
         return new InitialPreparation(
             interview,
             revision,
-            sources(interview, revision, brief.disclosureMode()),
+            sources(interview, revision, brief.disclosureMode(), generationLocale),
             null,
-            brief
+            brief,
+            generationLocale
         );
     }
 
@@ -241,12 +250,14 @@ public class DiscussionGuideBusiness {
         requireCurrentSource(interview, source, request.getExpectedVersion());
         requireGuideEligible(interview);
         ReflectionRevisionRecord revision = requireRevision(interview);
+        GenerationLocale generationLocale = generationLocaleResolver.resolve(interview.getUserId());
         return new RegenerationPreparation(
             interview,
             revision,
-            sources(interview, revision, brief.disclosureMode()),
+            sources(interview, revision, brief.disclosureMode(), generationLocale),
             source,
-            brief
+            brief,
+            generationLocale
         );
     }
 
@@ -314,7 +325,8 @@ public class DiscussionGuideBusiness {
     private GuideDraft generate(
         List<SourceDraft> sources,
         ReflectionInterviewRecord interview,
-        GuideBrief brief
+        GuideBrief brief,
+        GenerationLocale generationLocale
     ) {
         try {
             return guideGenerator.generate(
@@ -323,7 +335,8 @@ public class DiscussionGuideBusiness {
                 sources,
                 brief,
                 depth(interview.getAnsweredCount()),
-                interview.isTestData()
+                interview.isTestData(),
+                generationLocale
             );
         } catch (ApiException exception) {
             throw exception;
@@ -339,10 +352,13 @@ public class DiscussionGuideBusiness {
     private List<SourceDraft> sources(
         ReflectionInterviewRecord interview,
         ReflectionRevisionRecord revision,
-        String disclosureMode
+        String disclosureMode,
+        GenerationLocale generationLocale
     ) {
         boolean includePrivateAnswers = !"REFLECTION_ONLY".equals(disclosureMode);
-        return evidenceCatalog.load(interview, revision, includePrivateAnswers)
+        return evidenceCatalog.load(
+            interview, revision, includePrivateAnswers, generationLocale
+        )
             .all()
             .stream()
             .map(source -> new SourceDraft(
@@ -506,7 +522,8 @@ public class DiscussionGuideBusiness {
         ReflectionRevisionRecord revision,
         List<SourceDraft> sources,
         DiscussionGuideRecord existing,
-        GuideBrief brief
+        GuideBrief brief,
+        GenerationLocale generationLocale
     ) {
     }
 
@@ -515,7 +532,8 @@ public class DiscussionGuideBusiness {
         ReflectionRevisionRecord revision,
         List<SourceDraft> sources,
         DiscussionGuideRecord source,
-        GuideBrief brief
+        GuideBrief brief,
+        GenerationLocale generationLocale
     ) {
     }
 

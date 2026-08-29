@@ -132,6 +132,16 @@ export function markAuthSessionConsentSatisfied(): LoginResponse | undefined {
   return updated;
 }
 
+export function updateAuthSessionPreferredLocale(
+  preferredLocale: NonNullable<LoginResponse['preferredLocale']>,
+): LoginResponse | undefined {
+  const session = readAuthSession();
+  if (!session) return undefined;
+  const updated = { ...session, preferredLocale };
+  writeAuthSession(updated, { preserveLifetime: true });
+  return updated;
+}
+
 export type ClearAuthSessionOptions = {
   clearRefreshHint?: boolean;
   markExplicitLogout?: boolean;

@@ -12,6 +12,7 @@ public class UserRecord {
     String displayName;
     String email;
     boolean emailVerified;
+    String preferredLocale;
     String passwordHash;
     String authProvider;
     String accountStatus;

@@ -134,7 +134,3 @@ Slack은 대화형 gateway, Kanban과 GitHub Issue/PR은 durable work state로 �
 - `.github/workflows/ci.yml`: 공개 mirror용 최소 CI
 
 이 저장소는 포트폴리오 검토를 위해 정리한 공개 스냅샷입니다. 비공개 원본의 Git 이력, 운영 credential·host 설정, 내부 작업 기록과 배포 runbook은 포함하지 않습니다.
-
-## Rights
-
-이 공개본은 현재 오픈소스 배포물이 아닙니다. 별도 라이선스가 부여될 때까지 코드와 문서의 권리는 `COPYRIGHT.md`를 따릅니다. 화면에 표시된 도서 표지와 메타데이터의 권리는 각 저작권자와 외부 데이터 제공자에게 있습니다.

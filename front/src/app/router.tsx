@@ -1,6 +1,7 @@
 import { createBrowserRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AuthBoundary } from '@/features/auth/components/AuthBoundary';
+import { PublicLandingPage } from '@/features/landing/components/PublicLandingPage';
 import { MemoryCardApp } from '@/features/memory-cards/components/MemoryCardApp';
 import { BookLibraryPanel } from '@/features/books/components/BookLibraryPanel';
 import { BookSearchPanel } from '@/features/books/components/BookSearchPanel';
@@ -29,11 +30,13 @@ import { RecoveryPage } from '@/features/account/components/RecoveryPage';
 import { PrivacyPage } from '@/features/privacy/components/PrivacyPage';
 import { PrivacyHistoryPage } from '@/features/privacy/components/PrivacyHistoryPage';
 import { ConsentPage } from '@/features/privacy/components/ConsentPage';
+import { ContactPage } from '@/features/contact/components/ContactPage';
 
-const router = createBrowserRouter([
+export const router = createBrowserRouter([
   { path: '/privacy', element: <PrivacyPage /> },
   { path: '/privacy/history', element: <PrivacyHistoryPage /> },
   { path: '/consent', element: <ConsentPage /> },
+  { path: '/contact', element: <ContactPage /> },
   { path: '/account/recovery', element: <RecoveryPage /> },
   {
     path: '/',
@@ -42,10 +45,12 @@ const router = createBrowserRouter([
         authenticated={({ logout, session }) => (
           <AuthenticatedAppShell onLogout={logout} session={session} />
         )}
+        publicRoot={<PublicLandingPage />}
       />
     ),
     children: [
       { index: true, element: <Navigate replace to="/book/library" /> },
+      { path: 'login', element: <Navigate replace to="/book/library" /> },
       { path: 'account', element: <AccountPage /> },
       { path: 'memory-card', element: <Navigate replace to="/memory-card/groups" /> },
       {

@@ -28,7 +28,7 @@ class JwtAuthenticationFilterTest {
     @Test
     void allowsProtectedApiWithValidBearerToken() throws ServletException, IOException {
         JwtTokenService tokenService = tokenService();
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         UserMapper userMapper = mock(UserMapper.class);
         when(userMapper.findById(1L)).thenReturn(Optional.of(user));
         JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
@@ -43,14 +43,14 @@ class JwtAuthenticationFilterTest {
         assertThat(response.getStatus()).isEqualTo(200);
         assertThat(chain.getRequest()).isSameAs(request);
         assertThat(request.getAttribute(JwtAuthenticationFilter.USER_ID_ATTRIBUTE)).isEqualTo(1L);
-        assertThat(request.getAttribute(JwtAuthenticationFilter.USERNAME_ATTRIBUTE)).isEqualTo("demo_reader");
+        assertThat(request.getAttribute(JwtAuthenticationFilter.USERNAME_ATTRIBUTE)).isEqualTo("peacepiece");
         assertThat(SecurityContextHolder.getContext().getAuthentication()).isNotNull();
     }
 
     @Test
     void blocksMainApiWith428WhenCurrentConsentIsMissing() throws ServletException, IOException {
         JwtTokenService tokenService = tokenService();
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         UserMapper userMapper = mock(UserMapper.class);
         PrivacyConsentService privacy = mock(PrivacyConsentService.class);
         when(userMapper.findById(1L)).thenReturn(Optional.of(user));
@@ -68,14 +68,15 @@ class JwtAuthenticationFilterTest {
         assertThat(response.getStatus()).isEqualTo(428);
         assertThat(response.getContentAsString())
             .contains("\"code\":\"PRIVACY_CONSENT_REQUIRED\"")
-            .doesNotContain("required consents missing", "\"message\"");
+            .contains("\"message\":null")
+            .doesNotContain("required consents missing");
         assertThat(chain.getRequest()).isNull();
     }
 
     @Test
     void allowsOnlyExplicitAccountEndpointsWhileConsentIsPending() throws ServletException, IOException {
         JwtTokenService tokenService = tokenService();
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         UserMapper userMapper = mock(UserMapper.class);
         PrivacyConsentService privacy = mock(PrivacyConsentService.class);
         when(userMapper.findById(1L)).thenReturn(Optional.of(user));
@@ -96,9 +97,25 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
+    void allowsContactInquiryWhileConsentIsPending() throws ServletException, IOException {
+        JwtTokenService tokenService = tokenService();
+        UserRecord user = TestAuthSupport.peacepieceUser();
+        UserMapper userMapper = mock(UserMapper.class);
+        PrivacyConsentService privacy = mock(PrivacyConsentService.class);
+        when(userMapper.findById(1L)).thenReturn(Optional.of(user));
+        when(privacy.hasCurrentRequiredConsents(1L)).thenReturn(false);
+        JwtAuthenticationFilter filter = new JwtAuthenticationFilter(
+            tokenService, userMapper, new ObjectMapper(), privacy);
+        ReflectionTestUtils.setField(filter, "privacyEnforcementEnabled", true);
+
+        assertPendingRequestAllowed(filter, authenticatedRequest(
+            tokenService, user, "POST", "/api/contact-inquiries"));
+    }
+
+    @Test
     void sameAccessTokenIsAllowedImmediatelyAfterCurrentConsentIsRecorded() throws ServletException, IOException {
         JwtTokenService tokenService = tokenService();
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         UserMapper userMapper = mock(UserMapper.class);
         PrivacyConsentService privacy = mock(PrivacyConsentService.class);
         when(userMapper.findById(1L)).thenReturn(Optional.of(user));

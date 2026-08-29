@@ -35,6 +35,8 @@ public interface QuestionMapper {
           sensitivity,
           status,
           ai_model,
+          generation_locale,
+          language_validation_outcome,
           is_test_data
         )
         VALUES (
@@ -55,6 +57,8 @@ public interface QuestionMapper {
           #{sensitivity},
           #{status},
           #{aiModel},
+          #{generationLocale},
+          #{languageValidationOutcome},
           #{testData}
         )
         """)
@@ -71,6 +75,8 @@ public interface QuestionMapper {
           q.question_type,
           q.status,
           q.ai_model,
+          q.generation_locale,
+          q.language_validation_outcome,
           q.is_test_data
         FROM questions q
         LEFT JOIN session_windows sw ON sw.id = q.window_id
@@ -91,6 +97,8 @@ public interface QuestionMapper {
           q.question_type,
           q.status,
           q.ai_model,
+          q.generation_locale,
+          q.language_validation_outcome,
           q.is_test_data
         FROM questions q
         INNER JOIN session_windows sw ON sw.id = q.window_id
@@ -111,6 +119,8 @@ public interface QuestionMapper {
           q.question_type,
           q.status,
           q.ai_model,
+          q.generation_locale,
+          q.language_validation_outcome,
           q.is_test_data
         FROM questions q
         INNER JOIN session_windows sw ON sw.id = q.window_id

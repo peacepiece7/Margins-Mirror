@@ -194,31 +194,23 @@ class ReadingSessionBusinessPersistenceTest {
     }
 
     @Test
-    void findSummariesReturnsSessionLibrary() {
-        ReadingSessionBusiness business = business(new FakeReadingSessionMapper(), new FakeSessionHighlightMapper());
+    void findForBookReturnsOnlyTheLatestSessionLocator() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.existingBookSession = true;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
 
-        assertThat(business.findSummaries().getSessions()).hasSize(1);
-        assertThat(business.findSummaries().getSessions().get(0).getMessageCount()).isEqualTo(2);
-        assertThat(business.findSummaries().getSessions().get(0).getHighlightCount()).isEqualTo(1);
-        assertThat(business.findSummaries().getSessions().get(0).getAnsweredQuestionCount()).isEqualTo(1);
-
-        assertThat(business.findSummaries().getSessions().get(0).getTags()).extracting("label").containsExactly("politics");
+        assertThat(business.findForBook(7L))
+            .satisfies((session) -> {
+                assertThat(session.getSessionId()).isEqualTo(77L);
+                assertThat(session.getTitle()).isEqualTo("My Session");
+            });
     }
 
     @Test
-    void findLibraryStatsAggregatesSavedSessionSummaries() {
+    void findForBookReturnsNullWhenNoAccessibleSessionExists() {
         ReadingSessionBusiness business = business(new FakeReadingSessionMapper(), new FakeSessionHighlightMapper());
 
-        assertThat(business.findLibraryStats())
-            .satisfies((stats) -> {
-                assertThat(stats.getSessionCount()).isEqualTo(1);
-
-                assertThat(stats.getDistinctBookCount()).isEqualTo(1);
-                assertThat(stats.getAnsweredQuestionCount()).isEqualTo(1);
-                assertThat(stats.getHighlightCount()).isEqualTo(1);
-                assertThat(stats.getMessageCount()).isEqualTo(2);
-
-            });
+        assertThat(business.findForBook(7L)).isNull();
     }
 
     @Test
@@ -401,11 +393,11 @@ class ReadingSessionBusinessPersistenceTest {
 
 
     @Test
-    void archiveSoftDeletesSessionAndReturnsUpdatedLibrary() {
+    void archiveSoftDeletesSessionWithoutReloadingAList() {
         FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
         ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
 
-        assertThat(business.archive(77L).getSessions()).isEmpty();
+        business.archive(77L);
 
         assertThat(mapper.deletedSessionId).isEqualTo(77L);
         assertThat(mapper.deletedUserId).isEqualTo(1L);
@@ -862,6 +854,7 @@ class ReadingSessionBusinessPersistenceTest {
         private int updatedRows = 1;
         private int activeBookCount = 1;
         private boolean owningBookTestData;
+        private boolean existingBookSession;
         private boolean sessionMissing;
 
         @Override
@@ -871,7 +864,9 @@ class ReadingSessionBusinessPersistenceTest {
 
         @Override
         public ReadingSessionRecord findFirstByBookIdAndUserId(Long bookId, Long userId) {
-            return null;
+            return existingBookSession
+                ? ReadingSessionRecord.builder().id(77L).title("My Session").build()
+                : null;
         }
 
         @Override
@@ -893,27 +888,6 @@ class ReadingSessionBusinessPersistenceTest {
             }
 
             return sessionRecord(userId);
-        }
-
-        @Override
-        public List<ReadingSessionRecord> findSummariesByUserId(Long userId) {
-            if (deletedSessionId != null) {
-                return List.of();
-            }
-
-            return List.of(ReadingSessionRecord.builder()
-                .id(77L)
-                .userId(userId)
-                .bookId(7L)
-                .bookTitle("Seed Book")
-                .bookAuthor("Seed Author")
-                .title(updatedTitle == null ? "My Session" : updatedTitle)
-                .windowCount(1)
-                .questionCount(1)
-                .answeredQuestionCount(1)
-                .highlightCount(1)
-                .messageCount(2)
-                .build());
         }
 
         @Override
@@ -961,9 +935,15 @@ class ReadingSessionBusinessPersistenceTest {
         }
 
         @Override
-        public int updateReflectionSummary(Long insightId, String summary, String sourceHash, String model, String tokenUsage) {
+        public int updateConversationSummaryKo(Long windowId, String summaryJson) {
             return 1;
         }
+
+        @Override
+        public int updateConversationSummaryEn(Long windowId, String summaryJson) {
+            return 1;
+        }
+
         @Override
         public int insert(SessionWindowRecord record) {
             return 1;
@@ -1200,13 +1180,6 @@ class ReadingSessionBusinessPersistenceTest {
                 .userId(userId)
                 .label("politics")
                 .build());
-        }
-
-        @Override
-        public List<SessionTagRecord> findBySessionIds(List<Long> sessionIds, Long userId) {
-            return sessionIds.stream()
-                .flatMap((sessionId) -> findBySessionId(sessionId, userId).stream())
-                .toList();
         }
 
         @Override

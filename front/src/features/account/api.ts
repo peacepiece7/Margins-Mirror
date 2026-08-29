@@ -5,7 +5,10 @@ export const accountApi = {
   get(): Promise<Account> {
     return getJson<Account>('/api/account');
   },
-  updateProfile(data: { displayName: string }): Promise<ProfileResult> {
+  updateProfile(data: {
+    displayName: string;
+    preferredLocale: 'ko' | 'en';
+  }): Promise<ProfileResult> {
     return patchJson<ProfileResult>('/api/account/profile', data);
   },
   changePassword(data: {

@@ -15,48 +15,11 @@ public final class DiscussionGuideGeneration {
         int targetMinutes,
         String disclosureMode,
         String facilitationLevel,
-        List<Evidence> evidence
+        List<Evidence> evidence,
+        GenerationLocale generationLocale
     ) {
-        public Request(
-            Long windowId,
-            String promptVersion,
-            String schemaVersion,
-            List<Evidence> evidence
-        ) {
-            this(
-                windowId,
-                promptVersion,
-                schemaVersion,
-                "THOUGHT_EXPANSION",
-                "SELF_AI",
-                40,
-                "PRIVATE_CONTEXT",
-                "BEGINNER",
-                evidence
-            );
-        }
-
-        public Request(
-            Long windowId,
-            String promptVersion,
-            String schemaVersion,
-            String purpose,
-            String audienceMode,
-            int targetMinutes,
-            String disclosureMode,
-            List<Evidence> evidence
-        ) {
-            this(
-                windowId,
-                promptVersion,
-                schemaVersion,
-                purpose,
-                audienceMode,
-                targetMinutes,
-                disclosureMode,
-                "BEGINNER",
-                evidence
-            );
+        public Request {
+            if (generationLocale == null) throw new IllegalArgumentException("generationLocale is required");
         }
     }
 

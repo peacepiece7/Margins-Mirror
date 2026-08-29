@@ -147,7 +147,6 @@ export function useSavePrimaryReflectionMutation(sessionId?: number, reflectionI
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.reflections() }),
         queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(reflection.sessionId) }),
-        queryClient.invalidateQueries({ queryKey: sessionKeys.lists() }),
         queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() }),
       ]);
     },

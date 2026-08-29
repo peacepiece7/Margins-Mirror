@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query';
 
 import { bookKeys, sessionKeys } from '@/lib/query-keys';
+import { readAuthSession } from '@/lib/auth-session';
 import type { BookCandidate } from '@/types/api/book';
 
 import { booksApi } from './api';
@@ -18,17 +19,18 @@ export const bookQueryOptions = {
       queryKey: bookKeys.list(query),
       queryFn: () => booksApi.books(query),
     }),
-  knowledge: (bookId: number) =>
+  knowledge: (bookId: number, preferredLocale: 'ko' | 'en') =>
     queryOptions({
-      queryKey: bookKeys.knowledge(bookId),
+      queryKey: bookKeys.knowledge(bookId, preferredLocale),
       queryFn: () => booksApi.knowledge(bookId),
       enabled: Number.isSafeInteger(bookId) && bookId > 0,
       refetchInterval: (query) => (query.state.data?.refreshPending ? 2_000 : false),
     }),
-  sessions: () =>
+  session: (bookId: number) =>
     queryOptions({
-      queryKey: sessionKeys.list(),
-      queryFn: booksApi.sessions,
+      queryKey: sessionKeys.book(bookId),
+      queryFn: () => booksApi.readingSession(bookId),
+      enabled: Number.isSafeInteger(bookId) && bookId > 0,
     }),
 };
 
@@ -80,23 +82,22 @@ export function useBookQuery(bookId: number) {
 }
 
 export function useBookKnowledgeQuery(bookId: number) {
-  return useQuery(bookQueryOptions.knowledge(bookId));
+  const preferredLocale = readAuthSession()?.preferredLocale === 'ko' ? 'ko' : 'en';
+  return useQuery(bookQueryOptions.knowledge(bookId, preferredLocale));
 }
 
 export function useRegenerateBookKnowledgeMutation(bookId: number) {
   const queryClient = useQueryClient();
+  const preferredLocale = readAuthSession()?.preferredLocale === 'ko' ? 'ko' : 'en';
   return useMutation({
     mutationFn: () => booksApi.regenerateKnowledge(bookId),
-    onSuccess: (knowledge) => queryClient.setQueryData(bookKeys.knowledge(bookId), knowledge),
+    onSuccess: (knowledge) =>
+      queryClient.setQueryData(bookKeys.knowledge(bookId, preferredLocale), knowledge),
   });
 }
 
 export function useBookSessionQuery(bookId: number) {
-  const sessions = useQuery(bookQueryOptions.sessions());
-  return {
-    ...sessions,
-    data: sessions.data?.sessions.find((session) => session.bookId === bookId),
-  };
+  return useQuery(bookQueryOptions.session(bookId));
 }
 
 function useInvalidateBooks() {
@@ -153,6 +154,7 @@ export function useDeleteBookMutation() {
     mutationFn: (bookId: number) => booksApi.delete(bookId).then(() => bookId),
     onSuccess: async (bookId) => {
       queryClient.removeQueries({ queryKey: bookKeys.detail(bookId) });
+      queryClient.removeQueries({ queryKey: sessionKeys.book(bookId) });
       await queryClient.invalidateQueries({ queryKey: bookKeys.lists() });
     },
   });

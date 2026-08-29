@@ -23,6 +23,8 @@ import com.margins.question.dto.QuestionDto;
 import com.margins.question.dto.QuestionListResponse;
 import com.margins.question.mapper.QuestionMapper;
 import com.margins.question.model.QuestionRecord;
+import com.margins.reflectionloop.mapper.ReflectionSummaryMapper;
+import com.margins.reflectionloop.model.ReflectionSummaryRecord;
 import com.margins.session.dto.AiMessageResponse;
 import com.margins.session.dto.DebateMessageRequest;
 import com.margins.session.dto.SendMessageRequest;
@@ -68,6 +70,12 @@ public class OpenAiAiProvider implements AiProvider {
 
     @Autowired(required = false)
     private BookKnowledgeProperties bookKnowledgeProperties;
+
+    @Autowired(required = false)
+    private ReflectionSummaryMapper reflectionSummaryMapper;
+
+    @Autowired(required = false)
+    private AiOutputLanguageValidator languageValidator = new AiOutputLanguageValidator();
 
     @Autowired
     public OpenAiAiProvider(
@@ -116,11 +124,6 @@ public class OpenAiAiProvider implements AiProvider {
     }
 
     @Override
-    public BookKnowledgeDto analyzeBookKnowledge(BookKnowledgeAnalyzeRequest request) {
-        return analyzeBookKnowledgeWithMetadata(request).value();
-    }
-
-    @Override
     public AiGenerationResult<BookKnowledgeDto> analyzeBookKnowledgeWithMetadata(
         BookKnowledgeAnalyzeRequest request
     ) {
@@ -132,12 +135,15 @@ public class OpenAiAiProvider implements AiProvider {
         AiGenerationTask task = new AiGenerationTask(
             "BOOK_KNOWLEDGE",
             request.getPromptVersion(),
-            "book-knowledge-schema-v1"
+            "book-knowledge-schema-v1",
+            request.getGenerationLocale()
         );
         GeneratedText generated = null;
         try {
             generated = createTextResult(
-                "Analyze the book for a reading discussion app. Return only JSON with summary, themes, discussionPoints, recommendedPersonas, famousQuotes, keywords, and version. Summary should be Korean and around 300-600 Korean characters. Discussion points must be open-ended. Each discussion point must include id, question, rationale, and exactly two recommendedPersonaKeys from psychological-counselor, journalist, elementary-school-teacher, college-student, neighborhood-grandmother, soldier, middle-school-teacher, lawyer, university-professor, doctor, developer, writer.",
+                "Analyze the book for a reading discussion app. Return only JSON with summary, themes, discussionPoints, recommendedPersonas, famousQuotes, keywords, and version. "
+                    + request.getGenerationLocale().languageInstruction()
+                    + " Keep the summary around 300-600 characters. Discussion points must be open-ended. Each discussion point must include id, question, rationale, and exactly two recommendedPersonaKeys from psychological-counselor, journalist, elementary-school-teacher, college-student, neighborhood-grandmother, soldier, middle-school-teacher, lawyer, university-professor, doctor, developer, writer.",
                 "Title: " + safe(request.getTitle())
                     + "\nAuthor: " + safe(request.getAuthor())
                     + "\nISBN: " + safe(request.getIsbn())
@@ -150,7 +156,7 @@ public class OpenAiAiProvider implements AiProvider {
             if (parsed.getSummary() == null || parsed.getSummary().isBlank()
                 || parsed.getDiscussionPoints() == null || parsed.getDiscussionPoints().isEmpty()) {
                 return AiGenerationResult.completed(
-                    AiProvider.super.analyzeBookKnowledge(request),
+                    AiProvider.super.fallbackBookKnowledge(request),
                     task,
                     "openai",
                     properties.getModel(),
@@ -173,7 +179,7 @@ public class OpenAiAiProvider implements AiProvider {
         } catch (RuntimeException exception) {
             logOpenAiFallback("book knowledge", exception);
             return AiGenerationResult.completed(
-                AiProvider.super.analyzeBookKnowledge(request),
+                AiProvider.super.fallbackBookKnowledge(request),
                 task,
                 "openai",
                 properties.getModel(),
@@ -187,16 +193,6 @@ public class OpenAiAiProvider implements AiProvider {
         }
     }
 
-    /** 저장된 윈도우 context에서 성찰 질문을 생성한다. */
-    @Override
-    public QuestionListResponse suggestQuestions(Long windowId, GenerateQuestionsRequest request) {
-        return suggestQuestionsWithMetadata(
-            windowId,
-            request,
-            new AiGenerationTask("QUESTION_GENERATION", "question-generation-v1", "question-list-v1")
-        ).value();
-    }
-
     @Override
     public AiGenerationResult<QuestionListResponse> suggestQuestionsWithMetadata(
         Long windowId,
@@ -205,28 +201,22 @@ public class OpenAiAiProvider implements AiProvider {
     ) {
         long startedAt = System.nanoTime();
         if (!configured()) {
-            QuestionListResponse response = fallback.suggestQuestions(windowId, request);
-            return AiGenerationResult.completed(
-                response,
-                task,
-                "placeholder",
-                "placeholder",
-                AiTokenUsage.NONE,
-                elapsedMillis(startedAt),
-                "FALLBACK",
-                true
-            );
+            return fallback.suggestQuestionsWithMetadata(windowId, request, task);
         }
 
         try {
-            String context = contextForWindow(windowId, null, null);
+            String context = contextForWindow(windowId, null, null, task.generationLocale());
             GeneratedText generated = createTextResult(
-                "Generate concise reading reflection questions in Korean. Every questionText must be natural Korean, even when the focus contains English titles or names. Return a JSON array of objects with questionText and questionType.",
+                task.generationLocale() == GenerationLocale.KO
+                    ? "Generate concise reading reflection questions in Korean. Every questionText must be natural Korean, even when the focus contains English titles or names. Return a JSON array of objects with questionText and questionType."
+                    : "Generate concise reading reflection questions in English. Every questionText must be natural English, even when the focus contains Korean titles or names. Return a JSON array of objects with questionText and questionType.",
                 context + "\nFocus: " + safe(request.getFocus()) + "\nCount: " + (request.getCount() == null ? 3 : request.getCount())
             );
             List<QuestionDto> questions = parseQuestions(windowId, generated.text());
             if (questions.isEmpty()) {
-                QuestionListResponse response = fallback.suggestQuestions(windowId, request);
+                QuestionListResponse response = fallback
+                    .suggestQuestionsWithMetadata(windowId, request, task)
+                    .value();
                 return AiGenerationResult.completed(
                     response,
                     task,
@@ -251,7 +241,9 @@ public class OpenAiAiProvider implements AiProvider {
             );
         } catch (RuntimeException exception) {
             logOpenAiFallback("question generation", exception);
-            QuestionListResponse response = fallback.suggestQuestions(windowId, request);
+            QuestionListResponse response = fallback
+                .suggestQuestionsWithMetadata(windowId, request, task)
+                .value();
             return AiGenerationResult.completed(
                 response,
                 task,
@@ -281,16 +273,6 @@ public class OpenAiAiProvider implements AiProvider {
         );
     }
 
-    /** 세션 윈도우 하나에 대한 비스트리밍 AI 응답을 만든다. */
-    @Override
-    public AiMessageResponse answerWindowMessage(Long windowId, SendMessageRequest request) {
-        return answerWindowMessageWithMetadata(
-            windowId,
-            request,
-            new AiGenerationTask("WINDOW_MESSAGE", "window-message-v1", "text-v1")
-        ).value();
-    }
-
     @Override
     public AiGenerationResult<AiMessageResponse> answerWindowMessageWithMetadata(
         Long windowId,
@@ -299,22 +281,19 @@ public class OpenAiAiProvider implements AiProvider {
     ) {
         long startedAt = System.nanoTime();
         if (!configured()) {
-            return AiGenerationResult.completed(
-                fallback.answerWindowMessage(windowId, request),
-                task,
-                "placeholder",
-                "placeholder",
-                AiTokenUsage.NONE,
-                elapsedMillis(startedAt),
-                "FALLBACK",
-                true
-            );
+            return fallback.answerWindowMessageWithMetadata(windowId, request, task);
         }
 
         try {
             GeneratedText generated = createTextResult(
-                READING_COMPANION_RULES + "Use the selected question and keep the answer under 140 words.",
-                contextForWindow(windowId, request.getContextMessageId(), request.getQuestionId()) + "\nReader answer: " + request.getContent()
+                task.generationLocale().languageInstruction() + " "
+                    + READING_COMPANION_RULES + "Use the selected question and keep the answer under 140 words.",
+                contextForWindow(
+                    windowId,
+                    request.getContextMessageId(),
+                    request.getQuestionId(),
+                    task.generationLocale()
+                ) + "\nReader answer: " + request.getContent()
             );
 
             AiMessageResponse response = AiMessageResponse.builder()
@@ -339,7 +318,7 @@ public class OpenAiAiProvider implements AiProvider {
         } catch (RuntimeException exception) {
             logOpenAiFallback("window answer", exception);
             return AiGenerationResult.completed(
-                fallback.answerWindowMessage(windowId, request),
+                fallback.answerWindowMessageWithMetadata(windowId, request, task).value(),
                 task,
                 "openai",
                 properties.getModel(),
@@ -351,50 +330,50 @@ public class OpenAiAiProvider implements AiProvider {
         }
     }
 
-    /** 제공자 델타가 아직 없을 때만 대체 응답으로 전환하며 AI 출력을 스트리밍한다. */
     @Override
-    public AiMessageResponse streamWindowMessage(Long windowId, SendMessageRequest request, Consumer<String> deltaConsumer) {
+    public AiGenerationResult<AiMessageResponse> streamWindowMessageWithMetadata(
+        Long windowId,
+        SendMessageRequest request,
+        Consumer<String> deltaConsumer,
+        AiGenerationTask task
+    ) {
+        long startedAt = System.nanoTime();
         if (!configured()) {
-            return AiProvider.super.streamWindowMessage(windowId, request, deltaConsumer);
+            return fallback.streamWindowMessageWithMetadata(windowId, request, deltaConsumer, task);
         }
-
         AtomicBoolean emittedProviderDelta = new AtomicBoolean(false);
         try {
             GeneratedText generated = createTextStreamResult(
-                READING_COMPANION_RULES + "Use the selected question and keep the answer under 140 words.",
-                contextForWindow(windowId, request.getContextMessageId(), request.getQuestionId()) + "\nReader answer: " + request.getContent(),
-                (delta) -> {
+                task.generationLocale().languageInstruction() + " "
+                    + READING_COMPANION_RULES
+                    + "Use the selected question and keep the answer under 140 words.",
+                contextForWindow(
+                    windowId,
+                    request.getContextMessageId(),
+                    request.getQuestionId(),
+                    task.generationLocale()
+                )
+                    + "\nReader answer: " + request.getContent(),
+                delta -> {
                     emittedProviderDelta.set(true);
                     deltaConsumer.accept(delta);
                 }
             );
-
-            return AiMessageResponse.builder()
-                .windowId(windowId)
-                .role("assistant")
-                .content(generated.text())
-                .streamingReady(true)
-                .aiModel(properties.getModel())
+            AiMessageResponse response = AiMessageResponse.builder()
+                .windowId(windowId).role("assistant").content(generated.text())
+                .streamingReady(true).aiModel(properties.getModel())
                 .contextSnapshot(contextSnapshot(windowId, request.getContextMessageId()))
-                .tokenUsage(generated.tokenUsage())
-                .build();
+                .tokenUsage(generated.tokenUsage()).build();
+            return AiGenerationResult.completed(
+                response, task, "openai", properties.getModel(),
+                AiTokenUsage.fromJson(generated.tokenUsage()), elapsedMillis(startedAt),
+                "SUCCESS", false
+            );
         } catch (RuntimeException exception) {
-            if (emittedProviderDelta.get()) {
-                throw exception;
-            }
+            if (emittedProviderDelta.get()) throw exception;
             logOpenAiFallback("window stream", exception);
-            return AiProvider.super.streamWindowMessage(windowId, request, deltaConsumer);
+            return fallback.streamWindowMessageWithMetadata(windowId, request, deltaConsumer, task);
         }
-    }
-
-    /** 해당 persona의 시스템 프롬프트로 토론 답변 하나를 만든다. */
-    @Override
-    public AiMessageResponse answerDebateMessage(Long windowId, DebateMessageRequest request) {
-        return answerDebateMessageWithMetadata(
-            windowId,
-            request,
-            new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1")
-        ).value();
     }
 
     @Override
@@ -405,25 +384,21 @@ public class OpenAiAiProvider implements AiProvider {
     ) {
         long startedAt = System.nanoTime();
         if (!configured()) {
-            return AiGenerationResult.completed(
-                fallback.answerDebateMessage(windowId, request),
-                task,
-                "placeholder",
-                "placeholder",
-                AiTokenUsage.NONE,
-                elapsedMillis(startedAt),
-                "FALLBACK",
-                true
-            );
+            return fallback.answerDebateMessageWithMetadata(windowId, request, task);
         }
 
         try {
             PersonaRecord persona = findPersonaForWindow(windowId, request.getPersonaId());
             String personaPrompt = personaContext(persona);
             GeneratedText generated = createTextResult(
-                READING_COMPANION_RULES + personaPrompt
+                task.generationLocale().languageInstruction() + " " + READING_COMPANION_RULES + personaPrompt
                     + "\nChallenge or extend the reader's interpretation. Keep the answer under 140 words.",
-                contextForWindow(windowId, request.getContextMessageId(), null) + "\nReader debate message: " + request.getContent()
+                contextForWindow(
+                    windowId,
+                    request.getContextMessageId(),
+                    null,
+                    task.generationLocale()
+                ) + "\nReader debate message: " + request.getContent()
             );
 
             AiMessageResponse response = AiMessageResponse.builder()
@@ -449,7 +424,7 @@ public class OpenAiAiProvider implements AiProvider {
         } catch (RuntimeException exception) {
             logOpenAiFallback("debate answer", exception);
             return AiGenerationResult.completed(
-                fallback.answerDebateMessage(windowId, request),
+                fallback.answerDebateMessageWithMetadata(windowId, request, task).value(),
                 task,
                 "openai",
                 properties.getModel(),
@@ -461,16 +436,6 @@ public class OpenAiAiProvider implements AiProvider {
         }
     }
 
-    /** 독자 프롬프트 하나가 여러 목소리로 확장되도록 persona 토론 답변을 묶어 만든다. */
-    @Override
-    public List<AiMessageResponse> answerDebateMessages(Long windowId, List<DebateMessageRequest> requests) {
-        return answerDebateMessagesWithMetadata(
-            windowId,
-            requests,
-            new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1")
-        ).value();
-    }
-
     @Override
     public AiGenerationResult<List<AiMessageResponse>> answerDebateMessagesWithMetadata(
         Long windowId,
@@ -478,7 +443,7 @@ public class OpenAiAiProvider implements AiProvider {
         AiGenerationTask task
     ) {
         long startedAt = System.nanoTime();
-        DebateBatchGeneration batch = generateDebateBatch(windowId, requests);
+        DebateBatchGeneration batch = generateDebateBatch(windowId, requests, task.generationLocale());
         AiTokenUsage usage = combinedTokenUsage(batch.responses());
         return AiGenerationResult.completed(
             batch.responses(),
@@ -494,14 +459,13 @@ public class OpenAiAiProvider implements AiProvider {
 
     private DebateBatchGeneration generateDebateBatch(
         Long windowId,
-        List<DebateMessageRequest> requests
+        List<DebateMessageRequest> requests,
+        GenerationLocale locale
     ) {
         if (!configured()) {
             List<AiMessageResponse> responses = requests == null
                 ? List.of()
-                : requests.stream()
-                    .map(request -> fallback.answerDebateMessage(windowId, request))
-                    .toList();
+                : placeholderPersonaResponses(windowId, requests, locale);
             return new DebateBatchGeneration(responses, true);
         }
         if (requests == null || requests.isEmpty()) {
@@ -510,8 +474,14 @@ public class OpenAiAiProvider implements AiProvider {
 
         try {
             GeneratedText generated = createTextResult(
-                "Return a JSON array of persona debate replies. Each object must include personaId and content. Match exactly the requested personaId values. Keep each content under 140 words.",
-                contextForWindow(windowId, requests.get(0).getContextMessageId(), null)
+                locale.languageInstruction()
+                    + " Return a JSON array of persona debate replies. Each object must include personaId and content. Match exactly the requested personaId values. Keep each content under 140 words.",
+                contextForWindow(
+                    windowId,
+                    requests.get(0).getContextMessageId(),
+                    null,
+                    locale
+                )
                     + "\nReader debate message: "
                     + safe(requests.get(0).getContent())
                     + "\nPersonas:\n"
@@ -529,7 +499,7 @@ public class OpenAiAiProvider implements AiProvider {
             }
             if (responses.isEmpty()) {
                 return new DebateBatchGeneration(
-                    AiProvider.super.answerDebateMessages(windowId, requests),
+                    placeholderPersonaResponses(windowId, requests, locale),
                     true
                 );
             }
@@ -537,7 +507,8 @@ public class OpenAiAiProvider implements AiProvider {
             List<AiMessageResponse> completed = fillMissingDebateResponses(
                 windowId,
                 requests,
-                responses
+                responses,
+                locale
             );
             return new DebateBatchGeneration(
                 completed,
@@ -546,7 +517,7 @@ public class OpenAiAiProvider implements AiProvider {
         } catch (RuntimeException exception) {
             logOpenAiFallback("debate batch answer", exception);
             return new DebateBatchGeneration(
-                AiProvider.super.answerDebateMessages(windowId, requests),
+                placeholderPersonaResponses(windowId, requests, locale),
                 true
             );
         }
@@ -600,6 +571,7 @@ public class OpenAiAiProvider implements AiProvider {
                 .famousQuotes(quotes)
                 .keywords(keywords)
                 .version(text(root, "version", request.getPromptVersion()))
+                .generationLocale(request.getGenerationLocale().value())
                 .build();
         } catch (IOException exception) {
             throw new IllegalArgumentException("Book Knowledge JSON could not be parsed", exception);
@@ -759,7 +731,12 @@ public class OpenAiAiProvider implements AiProvider {
     }
 
     /** RAG 없이 쓰는 AI 프롬프트용 세션/윈도우/책/질문/메시지 context을 조립한다. */
-    private String contextForWindow(Long windowId, Long beforeMessageId, Long selectedQuestionId) {
+    private String contextForWindow(
+        Long windowId,
+        Long beforeMessageId,
+        Long selectedQuestionId,
+        GenerationLocale generationLocale
+    ) {
         SessionWindowContext context = sessionWindowMapper.findContextById(windowId);
         if (context == null) {
             return "No persisted session context is available.";
@@ -774,8 +751,8 @@ public class OpenAiAiProvider implements AiProvider {
                 PersonaRecord::getDisplayName,
                 (left, right) -> left
             ));
-        appendBookProfile(bookContext, context);
-        appendReviewSummary(readerContext, context);
+        appendBookProfile(bookContext, context, generationLocale);
+        appendReviewSummary(readerContext, context, generationLocale);
 
         SessionWindowRecord window = sessionWindowMapper.findById(windowId);
         if (window != null) {
@@ -800,7 +777,9 @@ public class OpenAiAiProvider implements AiProvider {
         conversation.append("- Do not invent plot details or author intent when context is missing.\n");
         conversation.append("- Prefer Claim, Support, Question when it helps the discussion continue.\n");
 
-        appendConversationSummary(conversation, windowId, beforeMessageId, context, personaNames);
+        appendConversationSummary(
+            conversation, windowId, beforeMessageId, context, personaNames, generationLocale
+        );
 
         List<QuestionRecord> questions = selectedQuestionId == null
             ? List.of()
@@ -837,30 +816,60 @@ public class OpenAiAiProvider implements AiProvider {
         ).render();
     }
 
-    private void appendReviewSummary(StringBuilder builder, SessionWindowContext context) {
+    private void appendReviewSummary(
+        StringBuilder builder,
+        SessionWindowContext context,
+        GenerationLocale locale
+    ) {
         String content = safe(context.getReflectionContent()).trim();
         if (content.isBlank() || context.getReflectionInsightId() == null) {
             return;
         }
-        String sourceHash = sha256(content);
-        String summary = context.getReflectionSummary();
-        if (summary == null || !sourceHash.equals(context.getReflectionSummarySourceHash())) {
+        String sourceHash = sha256(locale.value() + "|" + content);
+        ReflectionSummaryRecord cached = reflectionSummaryMapper == null ? null
+            : reflectionSummaryMapper.findByIdentity(context.getReflectionInsightId(), locale.value(), sourceHash);
+        String summary = cached == null ? null : cached.getSummary();
+        if (summary == null || summary.isBlank()) {
             try {
                 GeneratedText generated = createTextResult(
                     properties.getModel(),
-                    "Summarize this reader reflection in Korean in at most 120 words. Preserve the reader's position, evidence, and unresolved question. Do not add book facts.",
+                    locale.languageInstruction()
+                        + " Summarize this reader reflection in at most 120 words."
+                        + " Preserve the reader's position, evidence, and unresolved question."
+                        + " Do not add book facts.",
                     content
                 );
-                summary = generated.text();
-                sessionWindowMapper.updateReflectionSummary(
-                    context.getReflectionInsightId(), summary, sourceHash, properties.getModel(), generated.tokenUsage()
-                );
+                AiLanguageValidationOutcome validation = languageValidator.validate(locale, generated.text());
+                if (validation == AiLanguageValidationOutcome.KNOWN_MISMATCH
+                    || generated.text() == null || generated.text().isBlank()) {
+                    appendRawReflection(builder, content);
+                    return;
+                }
+                ReflectionSummaryRecord record = ReflectionSummaryRecord.builder()
+                    .reflectionInsightId(context.getReflectionInsightId())
+                    .generationLocale(locale.value())
+                    .sourceHash(sourceHash)
+                    .summary(generated.text())
+                    .model(properties.getModel())
+                    .tokenUsageJson(generated.tokenUsage())
+                    .languageValidationOutcome(validation.name())
+                    .testData(context.isTestData())
+                    .build();
+                if (reflectionSummaryMapper != null) {
+                    reflectionSummaryMapper.insert(record);
+                }
+                summary = record.getSummary();
             } catch (RuntimeException exception) {
                 logOpenAiFallback("reflection summary", exception);
+                appendRawReflection(builder, content);
                 return;
             }
         }
         builder.append("Reader review summary:\n- ").append(truncate(summary, 700)).append('\n');
+    }
+
+    private void appendRawReflection(StringBuilder builder, String content) {
+        builder.append("Reader reflection:\n- ").append(truncate(content, 700)).append('\n');
     }
 
     private void appendConversationSummary(
@@ -868,10 +877,11 @@ public class OpenAiAiProvider implements AiProvider {
         Long windowId,
         Long beforeMessageId,
         SessionWindowContext context,
-        java.util.Map<Long, String> personaNames
+        java.util.Map<Long, String> personaNames,
+        GenerationLocale locale
     ) {
         ObjectNode snapshot = parseObject(context.getWindowContextSnapshot());
-        JsonNode stored = snapshot.path("conversationSummary");
+        JsonNode stored = snapshot.path("conversationSummaries").path(locale.value());
         Long lastMessageId = stored.path("lastMessageId").isNumber()
             ? stored.path("lastMessageId").asLong()
             : null;
@@ -893,19 +903,26 @@ public class OpenAiAiProvider implements AiProvider {
             try {
                 generated = createTextResult(
                     properties.getModel(),
-                    "Update a compact Korean conversation summary. Preserve the reader position, persona positions, agreements, conflicts, and unresolved questions. Use at most 160 words. Do not invent facts.",
+                    locale.languageInstruction()
+                        + " Update a compact conversation summary. Preserve the reader position,"
+                        + " persona positions, agreements, conflicts, and unresolved questions."
+                        + " Use at most 160 words. Do not invent facts.",
                     source.toString()
                 );
+                AiLanguageValidationOutcome validation = languageValidator.validate(locale, generated.text());
+                if (generated.text() == null || generated.text().isBlank()
+                    || validation == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+                    appendExistingConversationSummary(builder, existing);
+                    return;
+                }
             } catch (RuntimeException exception) {
                 logOpenAiFallback("conversation summary", exception);
-                if (!existing.isBlank()) {
-                    builder.append("Conversation summary:\n").append(truncate(existing, 900)).append('\n');
-                }
+                appendExistingConversationSummary(builder, existing);
                 return;
             }
             existing = generated.text();
             MessageRecord last = compacted.get(compacted.size() - 1);
-            ObjectNode summary = snapshot.putObject("conversationSummary");
+            ObjectNode summary = objectMapper.createObjectNode();
             summary.put("content", existing);
             summary.put("lastMessageId", last.getId());
             summary.put("messageCount", summarizedMessageCount + compacted.size());
@@ -914,8 +931,16 @@ public class OpenAiAiProvider implements AiProvider {
                 summary.set("tokenUsage", parseObject(generated.tokenUsage()));
             }
             summary.put("updatedAt", java.time.Instant.now().toString());
-            sessionWindowMapper.updateContextSnapshot(windowId, writeJson(snapshot));
+            if (locale == GenerationLocale.KO) {
+                sessionWindowMapper.updateConversationSummaryKo(windowId, writeJson(summary));
+            } else {
+                sessionWindowMapper.updateConversationSummaryEn(windowId, writeJson(summary));
+            }
         }
+        appendExistingConversationSummary(builder, existing);
+    }
+
+    private void appendExistingConversationSummary(StringBuilder builder, String existing) {
         if (!existing.isBlank()) {
             builder.append("Conversation summary:\n").append(truncate(existing, 900)).append('\n');
         }
@@ -952,7 +977,11 @@ public class OpenAiAiProvider implements AiProvider {
     }
 
     /** 저장된 책 AI 프로필 메타데이터가 있으면 프롬프트 context에 추가한다. */
-    private void appendBookProfile(StringBuilder builder, SessionWindowContext context) {
+    private void appendBookProfile(
+        StringBuilder builder,
+        SessionWindowContext context,
+        GenerationLocale generationLocale
+    ) {
         if (context.getBookId() == null) {
             return;
         }
@@ -965,7 +994,7 @@ public class OpenAiAiProvider implements AiProvider {
         if (context.getBookRating() != null) {
             builder.append("- readerRating: ").append(context.getBookRating()).append('\n');
         }
-        BookKnowledgeRecord knowledge = findReadyBookKnowledge(context);
+        BookKnowledgeRecord knowledge = findReadyBookKnowledge(context, generationLocale);
         if (knowledge != null) {
             builder.append("- bookKnowledgeVersion: ").append(safe(knowledge.getPromptVersion())).append('\n');
             builder.append("- bookKnowledgeStale: ").append(bookKnowledgeStale(knowledge)).append('\n');
@@ -979,7 +1008,10 @@ public class OpenAiAiProvider implements AiProvider {
         }
     }
 
-    private BookKnowledgeRecord findReadyBookKnowledge(SessionWindowContext context) {
+    private BookKnowledgeRecord findReadyBookKnowledge(
+        SessionWindowContext context,
+        GenerationLocale generationLocale
+    ) {
         if (bookKnowledgeMapper == null) {
             return null;
         }
@@ -994,6 +1026,7 @@ public class OpenAiAiProvider implements AiProvider {
             lookupType,
             lookupKey,
             BookKnowledgeBusiness.PROMPT_VERSION,
+            generationLocale.value(),
             bookKnowledgeFallbackDays()
         );
     }
@@ -1194,7 +1227,12 @@ public class OpenAiAiProvider implements AiProvider {
     }
 
     /** 누락된 persona 답변을 결정적 대체 응답으로 채운다. */
-    private List<AiMessageResponse> fillMissingDebateResponses(Long windowId, List<DebateMessageRequest> requests, List<AiMessageResponse> responses) {
+    private List<AiMessageResponse> fillMissingDebateResponses(
+        Long windowId,
+        List<DebateMessageRequest> requests,
+        List<AiMessageResponse> responses,
+        GenerationLocale locale
+    ) {
         java.util.Map<Long, AiMessageResponse> responseByPersonaId = responses.stream()
             .filter((response) -> response.getPersonaId() != null)
             .collect(java.util.stream.Collectors.toMap(
@@ -1208,13 +1246,26 @@ public class OpenAiAiProvider implements AiProvider {
             .filter((request) -> !responseByPersonaId.containsKey(request.getPersonaId()))
             .toList();
         if (!missingRequests.isEmpty()) {
-            AiProvider.super.answerDebateMessages(windowId, missingRequests)
+            placeholderPersonaResponses(windowId, missingRequests, locale)
                 .forEach((response) -> responseByPersonaId.putIfAbsent(response.getPersonaId(), response));
         }
 
         return requests.stream()
             .map((request) -> responseByPersonaId.get(request.getPersonaId()))
             .filter(java.util.Objects::nonNull)
+            .toList();
+    }
+
+    private List<AiMessageResponse> placeholderPersonaResponses(
+        Long windowId,
+        List<DebateMessageRequest> requests,
+        GenerationLocale locale
+    ) {
+        AiGenerationTask task = new AiGenerationTask(
+            "PERSONA", "persona-response-v1", "text-v1", locale
+        );
+        return requests.stream()
+            .map(request -> fallback.answerDebateMessageWithMetadata(windowId, request, task).value())
             .toList();
     }
 

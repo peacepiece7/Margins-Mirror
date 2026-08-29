@@ -2,6 +2,7 @@ package com.margins;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.margins.ai.AiProvider;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,6 +15,28 @@ import org.junit.jupiter.api.Test;
 class BackendBoundaryArchitectureTest {
 
     private static final Path MAIN = Path.of("src", "main", "java", "com", "margins");
+
+    @Test
+    void aiProviderExposesOnlyLocaleBearingApisForPr1GenerationPaths() {
+        Set<String> publicMethods = Stream.of(AiProvider.class.getMethods())
+            .map(java.lang.reflect.Method::getName)
+            .collect(Collectors.toSet());
+
+        assertThat(publicMethods).doesNotContain(
+            "suggestQuestions",
+            "answerWindowMessage",
+            "streamWindowMessage",
+            "answerDebateMessage",
+            "answerDebateMessages"
+        );
+        assertThat(publicMethods).contains(
+            "suggestQuestionsWithMetadata",
+            "answerWindowMessageWithMetadata",
+            "streamWindowMessageWithMetadata",
+            "answerDebateMessageWithMetadata",
+            "answerDebateMessagesWithMetadata"
+        );
+    }
 
     @Test
     void onlyResponsesTransportOwnsOpenAiHttpProtocol() throws IOException {
@@ -54,18 +77,19 @@ class BackendBoundaryArchitectureTest {
                 "discussionGuideClient.generateWithMetadata("
             )
             .doesNotContain(
-                "Create one evidence-grounded Korean reading discussion guide.",
+                "Create one evidence-grounded reading discussion guide in the required response language.",
                 "discussionGuideTextFormat",
                 "GuideProviderFailure"
             );
         assertThat(guideClient)
             .contains(
-                "Create one evidence-grounded Korean reading discussion guide.",
+                "Create one evidence-grounded reading discussion guide in the required response language.",
                 "discussionGuideTextFormat",
                 "GuideProviderFailure",
                 "OpenAiResponsesTransport"
             )
             .doesNotContain(
+                "Create one evidence-grounded Korean reading discussion guide.",
                 "SessionWindowMapper",
                 "MessageMapper",
                 "QuestionMapper",
@@ -75,7 +99,7 @@ class BackendBoundaryArchitectureTest {
     }
 
     @Test
-    void reflectionPersistenceIsSplitIntoFourAggregateMappers() throws IOException {
+    void reflectionPersistenceIncludesLocaleCacheMappers() throws IOException {
         Path mapperDirectory = MAIN.resolve("reflectionloop/mapper");
         try (Stream<Path> files = Files.list(mapperDirectory)) {
             Set<String> mapperFiles = files
@@ -86,7 +110,9 @@ class BackendBoundaryArchitectureTest {
                 "ReflectionRevisionMapper.java",
                 "ReflectionInterviewMapper.java",
                 "DiscussionGuideMapper.java",
-                "DiscussionRunMapper.java"
+                "DiscussionRunMapper.java",
+                "ReflectionSummaryMapper.java",
+                "DiscussionRunRefinementMapper.java"
             );
         }
 
@@ -102,6 +128,12 @@ class BackendBoundaryArchitectureTest {
         assertThat(source("reflectionloop/mapper/DiscussionRunMapper.java"))
             .contains("insertRun", "findOwnedDiscussionTranscript")
             .doesNotContain("insertRevision", "insertInterview", "insertGuide(");
+        assertThat(source("reflectionloop/mapper/ReflectionSummaryMapper.java"))
+            .contains("findByIdentity", "reflection_summaries")
+            .doesNotContain("discussion_run_refinements");
+        assertThat(source("reflectionloop/mapper/DiscussionRunRefinementMapper.java"))
+            .contains("findByIdentity", "discussion_run_refinements")
+            .doesNotContain("reflection_summaries");
     }
 
     @Test

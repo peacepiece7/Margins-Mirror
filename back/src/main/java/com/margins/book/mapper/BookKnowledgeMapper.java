@@ -26,6 +26,8 @@ public interface BookKnowledgeMapper {
         famous_quotes_json AS famousQuotesJson,
         keywords_json AS keywordsJson,
         prompt_version AS promptVersion,
+        generation_locale AS generationLocale,
+        language_validation_outcome AS languageValidationOutcome,
         status,
         fallback_used AS fallbackUsed,
         is_test_data AS testData,
@@ -42,11 +44,15 @@ public interface BookKnowledgeMapper {
         """ + COLUMNS + """
         FROM book_knowledge
         WHERE isbn = #{isbn}
+          AND generation_locale = #{generationLocale}
           AND status = 'ready'
         ORDER BY generated_at DESC, id DESC
         LIMIT 1
         """)
-    BookKnowledgeRecord findReadyByIsbn(String isbn);
+    BookKnowledgeRecord findReadyByIsbn(
+        @Param("isbn") String isbn,
+        @Param("generationLocale") String generationLocale
+    );
 
     @Select("""
         SELECT
@@ -54,13 +60,15 @@ public interface BookKnowledgeMapper {
         FROM book_knowledge
         WHERE title_normalized = #{titleNormalized}
           AND author_normalized = #{authorNormalized}
+          AND generation_locale = #{generationLocale}
           AND status = 'ready'
         ORDER BY generated_at DESC, id DESC
         LIMIT 1
         """)
     BookKnowledgeRecord findReadyByTitleAuthor(
         @Param("titleNormalized") String titleNormalized,
-        @Param("authorNormalized") String authorNormalized
+        @Param("authorNormalized") String authorNormalized,
+        @Param("generationLocale") String generationLocale
     );
 
     @Select("""
@@ -70,13 +78,15 @@ public interface BookKnowledgeMapper {
         WHERE lookup_key_type = #{lookupKeyType}
           AND lookup_key = #{lookupKey}
           AND prompt_version = #{promptVersion}
+          AND generation_locale = #{generationLocale}
         ORDER BY id DESC
         LIMIT 1
         """)
     BookKnowledgeRecord findByIdentityAndPromptVersion(
         @Param("lookupKeyType") String lookupKeyType,
         @Param("lookupKey") String lookupKey,
-        @Param("promptVersion") String promptVersion
+        @Param("promptVersion") String promptVersion,
+        @Param("generationLocale") String generationLocale
     );
 
     @Select("""
@@ -85,13 +95,15 @@ public interface BookKnowledgeMapper {
         FROM book_knowledge
         WHERE lookup_key_type = #{lookupKeyType}
           AND lookup_key = #{lookupKey}
+          AND generation_locale = #{generationLocale}
           AND status = 'ready'
         ORDER BY generated_at DESC, id DESC
         LIMIT 1
         """)
     BookKnowledgeRecord findLatestReadyByIdentity(
         @Param("lookupKeyType") String lookupKeyType,
-        @Param("lookupKey") String lookupKey
+        @Param("lookupKey") String lookupKey,
+        @Param("generationLocale") String generationLocale
     );
 
     @Select("""
@@ -100,6 +112,7 @@ public interface BookKnowledgeMapper {
         FROM book_knowledge
         WHERE lookup_key_type = #{lookupKeyType}
           AND lookup_key = #{lookupKey}
+          AND generation_locale = #{generationLocale}
           AND status = 'ready'
           AND generated_at
             >= CURRENT_TIMESTAMP(6) - INTERVAL #{maxAgeDays} DAY
@@ -113,6 +126,7 @@ public interface BookKnowledgeMapper {
         @Param("lookupKeyType") String lookupKeyType,
         @Param("lookupKey") String lookupKey,
         @Param("preferredPromptVersion") String preferredPromptVersion,
+        @Param("generationLocale") String generationLocale,
         @Param("maxAgeDays") int maxAgeDays
     );
 
@@ -121,6 +135,7 @@ public interface BookKnowledgeMapper {
           SELECT 1
           FROM book_knowledge
           WHERE id = #{knowledgeId}
+            AND generation_locale = #{generationLocale}
             AND generation_claim_token IS NOT NULL
             AND generation_claimed_at IS NOT NULL
             AND generation_claimed_at
@@ -129,6 +144,7 @@ public interface BookKnowledgeMapper {
         """)
     boolean hasActiveGenerationClaim(
         @Param("knowledgeId") Long knowledgeId,
+        @Param("generationLocale") String generationLocale,
         @Param("claimTtlSeconds") int claimTtlSeconds
     );
 
@@ -148,6 +164,8 @@ public interface BookKnowledgeMapper {
           famous_quotes_json,
           keywords_json,
           prompt_version,
+          generation_locale,
+          language_validation_outcome,
           status,
           fallback_used,
           is_test_data,
@@ -170,6 +188,8 @@ public interface BookKnowledgeMapper {
           #{famousQuotesJson},
           #{keywordsJson},
           #{promptVersion},
+          #{generationLocale},
+          #{languageValidationOutcome},
           #{status},
           #{fallbackUsed},
           #{testData},
@@ -189,6 +209,7 @@ public interface BookKnowledgeMapper {
             status = CASE WHEN status = 'ready' THEN status ELSE 'pending' END,
             failure_reason = NULL
         WHERE id = #{knowledgeId}
+          AND generation_locale = #{generationLocale}
           AND (
             generation_claim_token IS NULL
             OR generation_claimed_at IS NULL
@@ -199,6 +220,7 @@ public interface BookKnowledgeMapper {
     int claimGeneration(
         @Param("knowledgeId") Long knowledgeId,
         @Param("claimToken") String claimToken,
+        @Param("generationLocale") String generationLocale,
         @Param("claimTtlSeconds") int claimTtlSeconds
     );
 
@@ -212,6 +234,7 @@ public interface BookKnowledgeMapper {
             recommended_personas_json = #{recommendedPersonasJson},
             famous_quotes_json = #{famousQuotesJson},
             keywords_json = #{keywordsJson},
+            language_validation_outcome = #{languageValidationOutcome},
             status = 'ready',
             fallback_used = #{fallbackUsed},
             failure_reason = NULL,
@@ -220,6 +243,7 @@ public interface BookKnowledgeMapper {
             generation_claimed_at = NULL
         WHERE id = #{id}
           AND generation_claim_token = #{generationClaimToken}
+          AND generation_locale = #{generationLocale}
         """)
     int completeGeneration(BookKnowledgeRecord record);
 
@@ -231,10 +255,12 @@ public interface BookKnowledgeMapper {
             generation_claimed_at = NULL
         WHERE id = #{knowledgeId}
           AND generation_claim_token = #{claimToken}
+          AND generation_locale = #{generationLocale}
         """)
     int failGeneration(
         @Param("knowledgeId") Long knowledgeId,
         @Param("claimToken") String claimToken,
+        @Param("generationLocale") String generationLocale,
         @Param("failureReason") String failureReason
     );
 }

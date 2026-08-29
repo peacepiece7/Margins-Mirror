@@ -22,7 +22,8 @@ export function useAccountQuery() {
 export function useUpdateProfileMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: { displayName: string }) => accountApi.updateProfile(data),
+    mutationFn: (data: { displayName: string; preferredLocale: 'ko' | 'en' }) =>
+      accountApi.updateProfile(data),
     onSuccess: ({ account }) => queryClient.setQueryData<Account>(accountKeys.detail(), account),
   });
 }

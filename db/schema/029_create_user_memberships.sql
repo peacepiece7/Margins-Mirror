@@ -23,7 +23,7 @@ SELECT
   CURRENT_TIMESTAMP,
   NULL
 FROM users
-WHERE username = 'demo_reader'
+WHERE username = 'peacepiece'
   AND deleted_at IS NULL
 ON DUPLICATE KEY UPDATE
   tier = 'PREMIUM',

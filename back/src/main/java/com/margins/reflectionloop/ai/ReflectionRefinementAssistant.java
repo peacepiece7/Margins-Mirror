@@ -1,10 +1,12 @@
 package com.margins.reflectionloop.ai;
 
-import com.margins.ai.AiProvider;
 import com.margins.ai.AiGenerationObserver;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
-import com.margins.ai.AiTokenUsage;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.AiOutputLanguageValidator;
+import com.margins.ai.AiProvider;
+import com.margins.ai.GenerationLocale;
 import com.margins.session.dto.AiMessageResponse;
 import com.margins.session.dto.SendMessageRequest;
 import lombok.RequiredArgsConstructor;
@@ -16,10 +18,16 @@ import org.springframework.stereotype.Component;
 public class ReflectionRefinementAssistant {
     private final AiProvider aiProvider;
     private AiGenerationObserver generationObserver = AiGenerationObserver.NO_OP;
+    private AiOutputLanguageValidator languageValidator = new AiOutputLanguageValidator();
 
     @Autowired
     void configureGenerationObserver(AiGenerationObserver generationObserver) {
         this.generationObserver = generationObserver;
+    }
+
+    @Autowired
+    void configureLanguageValidator(AiOutputLanguageValidator languageValidator) {
+        this.languageValidator = languageValidator;
     }
 
     public String suggest(Long windowId, String currentReflection, String perspectiveSummary) {
@@ -29,7 +37,8 @@ public class ReflectionRefinementAssistant {
             perspectiveSummary,
             "reflection-refinement-v1",
             null,
-            false
+            false,
+            GenerationLocale.KO
         );
     }
 
@@ -41,13 +50,23 @@ public class ReflectionRefinementAssistant {
         String depth,
         boolean testData
     ) {
+        return suggest(
+            windowId, currentReflection, perspectiveSummary, promptVersion, depth, testData,
+            GenerationLocale.KO
+        );
+    }
+
+    public String suggest(
+        Long windowId,
+        String currentReflection,
+        String perspectiveSummary,
+        String promptVersion,
+        String depth,
+        boolean testData,
+        GenerationLocale locale
+    ) {
         AiGenerationResult<String> generation = suggestWithMetadata(
-            windowId,
-            currentReflection,
-            perspectiveSummary,
-            promptVersion,
-            depth,
-            testData
+            windowId, currentReflection, perspectiveSummary, promptVersion, depth, testData, locale
         );
         if (generation.value() == null) {
             throw new IllegalStateException("Reflection refinement could not be generated");
@@ -63,46 +82,53 @@ public class ReflectionRefinementAssistant {
         String depth,
         boolean testData
     ) {
+        return suggestWithMetadata(
+            windowId, currentReflection, perspectiveSummary, promptVersion, depth, testData,
+            GenerationLocale.KO
+        );
+    }
+
+    public AiGenerationResult<String> suggestWithMetadata(
+        Long windowId,
+        String currentReflection,
+        String perspectiveSummary,
+        String promptVersion,
+        String depth,
+        boolean testData,
+        GenerationLocale locale
+    ) {
         String prompt = """
-            아래 현재 Reflection과 토론에서 만난 관점을 비교해 수정 제안 초안을 작성해 주세요.
-            독자의 말투와 핵심 입장을 유지하고, 새로운 책 사실이나 개인 경험을 만들지 마세요.
-            이 결과는 자동 저장되지 않으며 독자가 직접 선택·수정합니다.
+            %s Compare the current Reflection with the perspective encountered in the discussion and draft a refinement suggestion.
+            Preserve the reader's voice and core position. Do not invent book facts or personal experiences.
+            This result is not saved automatically; the reader chooses and edits it directly.
 
-            현재 Reflection:
+            Current Reflection:
             %s
 
-            토론 관점:
+            Discussion perspective:
             %s
-            """.formatted(currentReflection, perspectiveSummary);
+            """.formatted(locale.languageInstruction(), currentReflection, perspectiveSummary);
         SendMessageRequest request = SendMessageRequest.builder().content(prompt).build();
         AiGenerationTask task = new AiGenerationTask(
             "REFLECTION_REFINEMENT",
             promptVersion,
-            "text-v1"
+            "text-v1",
+            locale
         );
-        AiGenerationResult<AiMessageResponse> generation =
-            metadataGeneration(windowId, request, task);
-        if (generation == null) {
-            generation = legacyGeneration(windowId, request, task);
-        }
+        AiGenerationResult<AiMessageResponse> generation = metadataGeneration(windowId, request, task);
         AiMessageResponse response = generation.value();
         String content = response == null ? null : response.getContent();
-        boolean failed = content == null || content.isBlank();
-        AiGenerationResult<String> result = new AiGenerationResult<>(
-            failed ? null : content,
-            generation.taskType(),
-            generation.provider(),
-            generation.model(),
-            generation.promptVersion(),
-            generation.schemaVersion(),
-            generation.inputTokens(),
-            generation.cachedInputTokens(),
-            generation.outputTokens(),
-            generation.latencyMs(),
-            failed ? "FAILURE" : generation.outcome(),
-            generation.fallbackUsed(),
-            failed ? "SCHEMA_VALIDATION" : generation.failureCategory()
-        );
+        AiLanguageValidationOutcome validation = languageValidator.validate(locale, content);
+        boolean persistable = content != null
+            && !content.isBlank()
+            && !generation.fallbackUsed()
+            && "SUCCESS".equalsIgnoreCase(generation.outcome());
+        AiGenerationResult<String> result = !persistable
+            ? generation.<String>withValue(null, "FAILURE", false, validation)
+            : validation == AiLanguageValidationOutcome.KNOWN_MISMATCH
+                ? generation.<String>withValue(null, "FAILURE", false, validation)
+                    .withFailureCategory("SCHEMA_VALIDATION")
+                : generation.withValue(content, generation.outcome(), generation.fallbackUsed(), validation);
         generationObserver.observe(result, depth, testData);
         return result;
     }
@@ -115,31 +141,6 @@ public class ReflectionRefinementAssistant {
         long startedAt = System.nanoTime();
         try {
             return aiProvider.answerWindowMessageWithMetadata(windowId, request, task);
-        } catch (RuntimeException exception) {
-            return AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(startedAt));
-        }
-    }
-
-    private AiGenerationResult<AiMessageResponse> legacyGeneration(
-        Long windowId,
-        SendMessageRequest request,
-        AiGenerationTask task
-    ) {
-        long startedAt = System.nanoTime();
-        try {
-            AiMessageResponse response = aiProvider.answerWindowMessage(windowId, request);
-            String model = response == null ? "unknown" : response.getAiModel();
-            boolean fallbackUsed = "placeholder".equalsIgnoreCase(model);
-            return AiGenerationResult.completed(
-                response,
-                task,
-                fallbackUsed ? "placeholder" : "unknown",
-                model,
-                response == null ? AiTokenUsage.NONE : AiTokenUsage.fromJson(response.getTokenUsage()),
-                elapsedMillis(startedAt),
-                fallbackUsed ? "FALLBACK" : "SUCCESS",
-                fallbackUsed
-            );
         } catch (RuntimeException exception) {
             return AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(startedAt));
         }

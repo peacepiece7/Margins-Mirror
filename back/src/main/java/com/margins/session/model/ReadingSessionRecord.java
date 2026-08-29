@@ -16,10 +16,5 @@ public class ReadingSessionRecord {
     private String bookTitle;
     private String bookAuthor;
     private String title;
-    private Integer windowCount;
-    private Integer questionCount;
-    private Integer answeredQuestionCount;
-    private Integer highlightCount;
-    private Integer messageCount;
     private boolean testData;
 }

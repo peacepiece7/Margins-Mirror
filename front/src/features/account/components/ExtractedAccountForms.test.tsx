@@ -51,6 +51,7 @@ describe('extracted account forms', () => {
         email: 'reader@example.com',
         authProvider: 'local',
         accountStatus: 'ACTIVE',
+        preferredLocale: 'en',
       },
     });
     renderForm(
@@ -62,6 +63,7 @@ describe('extracted account forms', () => {
           email: 'reader@example.com',
           authProvider: 'local',
           accountStatus: 'ACTIVE',
+          preferredLocale: 'en',
         }}
         onSaved={vi.fn()}
       />,
@@ -75,7 +77,10 @@ describe('extracted account forms', () => {
     fireEvent.click(save);
 
     await waitFor(() =>
-      expect(accountApi.updateProfile).toHaveBeenCalledWith({ displayName: 'Reader' }),
+      expect(accountApi.updateProfile).toHaveBeenCalledWith({
+        displayName: 'Reader',
+        preferredLocale: 'en',
+      }),
     );
     expect(displayName).toHaveValue('Reader');
     expect(save).toBeDisabled();
@@ -122,6 +127,7 @@ describe('extracted account forms', () => {
           email: 'reader@example.com',
           authProvider: 'local',
           accountStatus: 'ACTIVE',
+          preferredLocale: 'en',
         }}
         onSaved={vi.fn()}
       />,

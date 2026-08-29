@@ -25,7 +25,7 @@ class JwtTokenServiceTest {
     @Test
     void createsAndValidatesSignedToken() {
         JwtTokenService service = tokenService(TEST_SECRET, 60);
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
 
         String token = service.createAccessToken(user);
 
@@ -33,13 +33,13 @@ class JwtTokenServiceTest {
         Optional<AuthPrincipal> principal = service.validate(token);
         assertThat(principal).isPresent();
         assertThat(principal.get().getUserId()).isEqualTo(1L);
-        assertThat(principal.get().getUsername()).isEqualTo("demo_reader");
+        assertThat(principal.get().getUsername()).isEqualTo("peacepiece");
     }
 
     @Test
     void rejectsTamperedToken() {
         JwtTokenService service = tokenService(TEST_SECRET, 60);
-        String token = service.createAccessToken(TestAuthSupport.demo_readerUser()) + "tampered";
+        String token = service.createAccessToken(TestAuthSupport.peacepieceUser()) + "tampered";
 
         assertThat(service.validate(token)).isEmpty();
     }
@@ -63,7 +63,7 @@ class JwtTokenServiceTest {
     @Test
     void rejectsExpiredToken() {
         JwtTokenService service = tokenService(TEST_SECRET, -1);
-        String token = service.createAccessToken(TestAuthSupport.demo_readerUser());
+        String token = service.createAccessToken(TestAuthSupport.peacepieceUser());
 
         assertThat(service.validate(token)).isEmpty();
     }
@@ -81,9 +81,9 @@ class JwtTokenServiceTest {
         long now = Instant.now().getEpochSecond();
         Map<String, Object> payload = Map.of(
             "iss", "margins-test",
-            "sub", "demo_reader",
+            "sub", "peacepiece",
             "userId", 1L,
-            "displayName", "demo_reader",
+            "displayName", "peacepiece",
             "authProvider", "local",
             "iat", now,
             "exp", now + 60

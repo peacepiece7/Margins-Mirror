@@ -8,6 +8,7 @@ import { Input } from './input';
 import { Select, SelectTrigger, SelectValue } from './select';
 import { Tabs, TabsList, TabsTrigger } from './tabs';
 import { Toggle } from './toggle';
+import { ToggleGroup, ToggleGroupItem } from './toggle-group';
 
 describe('mobile interaction contract', () => {
   it('gives shared controls touch and pressed-state affordances', () => {
@@ -25,6 +26,10 @@ describe('mobile interaction contract', () => {
             <TabsTrigger value="first">First</TabsTrigger>
           </TabsList>
         </Tabs>
+        <ToggleGroup aria-label="Reading view" type="single" value="list">
+          <ToggleGroupItem value="list">List</ToggleGroupItem>
+          <ToggleGroupItem value="grid">Grid</ToggleGroupItem>
+        </ToggleGroup>
       </>,
     );
 
@@ -50,6 +55,12 @@ describe('mobile interaction contract', () => {
     expect(tabsRoot).toHaveClass('data-[orientation=horizontal]:flex-col');
     expect(tabsRoot).not.toHaveClass('data-horizontal:flex-col');
     expect(screen.getByRole('tablist')).toHaveClass('group-data-[orientation=horizontal]/tabs:h-8');
+    expect(screen.getByRole('tablist')).toHaveClass('gap-1');
+
+    const toggleGroup = screen.getByRole('radiogroup', { name: 'Reading view' });
+    expect(toggleGroup).toHaveAttribute('data-spacing', '1');
+    expect(toggleGroup).toHaveClass('gap-[calc(0.25rem*var(--gap))]');
+    expect(screen.getByRole('radio', { name: 'List' })).toHaveAttribute('data-spacing', '1');
   });
 
   it('keeps mobile fields tall and restores compact desktop density', () => {

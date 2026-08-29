@@ -16,10 +16,11 @@ describe('accountApi', () => {
     vi.mocked(getJson).mockResolvedValue({});
     vi.mocked(patchJson).mockResolvedValue({ account: {} });
     await accountApi.get();
-    await accountApi.updateProfile({ displayName: 'Reader' });
+    await accountApi.updateProfile({ displayName: 'Reader', preferredLocale: 'en' });
     expect(getJson).toHaveBeenCalledWith('/api/account');
     expect(patchJson).toHaveBeenCalledWith('/api/account/profile', {
       displayName: 'Reader',
+      preferredLocale: 'en',
     });
   });
 

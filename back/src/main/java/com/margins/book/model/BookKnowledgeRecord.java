@@ -26,6 +26,8 @@ public class BookKnowledgeRecord {
     private String famousQuotesJson;
     private String keywordsJson;
     private String promptVersion;
+    private String generationLocale;
+    private String languageValidationOutcome;
     private String status;
     private boolean fallbackUsed;
     private boolean testData;

@@ -28,5 +28,7 @@ public class QuestionRecord {
     private String sensitivity;
     private String status;
     private String aiModel;
+    private String generationLocale;
+    private String languageValidationOutcome;
     private boolean testData;
 }

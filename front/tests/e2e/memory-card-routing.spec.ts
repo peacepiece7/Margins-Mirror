@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 test.setTimeout(60000);
 
 const backendUrl = process.env.MARGINS_BACKEND_URL || 'http://localhost:8080';
-const e2eUsername = process.env.MARGINS_E2E_USERNAME || 'demo_reader';
+const e2eUsername = process.env.MARGINS_E2E_USERNAME || 'peacepiece';
 const e2ePassword = process.env.MARGINS_E2E_PASSWORD || 'reader';
 
 async function login(page: Page) {
@@ -21,7 +21,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test('restores memory-card study mode from a direct URL', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/login');
   await login(page);
 
   await page.getByTestId('nav-memory-card').click();

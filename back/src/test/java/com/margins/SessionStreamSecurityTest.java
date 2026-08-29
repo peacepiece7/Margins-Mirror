@@ -65,7 +65,7 @@ class SessionStreamSecurityTest {
 
     @BeforeEach
     void stubAuthPersistence() {
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         when(userMapper.findByUsername(TestAuthSupport.TEST_USERNAME)).thenReturn(Optional.of(user));
         when(userMapper.findById(1L)).thenReturn(Optional.of(user));
         when(userMapper.resetLoginSuccess(anyLong())).thenReturn(1);
@@ -93,7 +93,7 @@ class SessionStreamSecurityTest {
 
         String loginBody = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"username\":\"demo_reader\",\"password\":\"reader\"}"))
+                .content("{\"username\":\"peacepiece\",\"password\":\"reader\"}"))
             .andExpect(status().isOk())
             .andReturn()
             .getResponse()

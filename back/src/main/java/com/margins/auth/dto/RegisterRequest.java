@@ -35,4 +35,7 @@ public class RegisterRequest {
     @NotBlank(message = "email verification code is required")
     @Size(min = 6, max = 6)
     String emailVerificationCode;
+
+    @jakarta.validation.constraints.Pattern(regexp = "ko|en", message = "preferredLocale must be ko or en")
+    String preferredLocale;
 }

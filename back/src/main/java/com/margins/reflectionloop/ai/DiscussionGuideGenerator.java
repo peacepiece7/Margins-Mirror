@@ -7,6 +7,9 @@ import com.margins.ai.AiGenerationObserver;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
 import com.margins.ai.AiTokenUsage;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.AiOutputLanguageValidator;
+import com.margins.ai.GenerationLocale;
 import com.margins.ai.DiscussionGuideGeneration.Evidence;
 import com.margins.ai.DiscussionGuideGeneration.Item;
 import com.margins.ai.DiscussionGuideGeneration.Request;
@@ -68,6 +71,7 @@ public class DiscussionGuideGenerator {
     private final AiProvider aiProvider;
     private final ObjectMapper objectMapper;
     private AiGenerationObserver generationObserver = AiGenerationObserver.NO_OP;
+    private AiOutputLanguageValidator languageValidator = new AiOutputLanguageValidator();
 
     @Autowired
     void configureGenerationObserver(AiGenerationObserver generationObserver) {
@@ -77,25 +81,11 @@ public class DiscussionGuideGenerator {
     public GuideDraft generate(
         Long windowId,
         String promptVersion,
-        List<SourceDraft> sources
-    ) {
-        return generate(windowId, promptVersion, sources, null, false);
-    }
-
-    public GuideDraft generate(
-        Long windowId,
-        String promptVersion,
         List<SourceDraft> sources,
-        String depth,
-        boolean testData
+        GenerationLocale locale
     ) {
         return generate(
-            windowId,
-            promptVersion,
-            sources,
-            GuideBrief.defaults(),
-            depth,
-            testData
+            windowId, promptVersion, sources, GuideBrief.defaults(), null, false, locale
         );
     }
 
@@ -105,12 +95,14 @@ public class DiscussionGuideGenerator {
         List<SourceDraft> sources,
         GuideBrief brief,
         String depth,
-        boolean testData
+        boolean testData,
+        GenerationLocale locale
     ) {
         AiGenerationTask task = new AiGenerationTask(
             "DISCUSSION_GUIDE",
             promptVersion,
-            SCHEMA_VERSION
+            SCHEMA_VERSION,
+            locale
         );
         if (sources == null || sources.isEmpty()) {
             observePreflightFailure(task, "EVIDENCE_VALIDATION", depth, testData);
@@ -145,7 +137,8 @@ public class DiscussionGuideGenerator {
                     source.refId(),
                     source.excerpt()
                 ))
-                .toList()
+                .toList(),
+            locale
         );
         AiGenerationResult<Response> generation = metadataGeneration(request);
         if (generation == null) {
@@ -156,8 +149,14 @@ public class DiscussionGuideGenerator {
                 generation,
                 evidence,
                 promptVersion,
-                brief.targetMinutes()
+                brief.targetMinutes(),
+                locale
             );
+            if (draft.languageValidationOutcome() != null) {
+                generation = generation.withLanguageValidation(
+                    AiLanguageValidationOutcome.valueOf(draft.languageValidationOutcome())
+                );
+            }
             generationObserver.observe(generation, depth, testData);
             return draft;
         } catch (RuntimeException exception) {
@@ -165,8 +164,7 @@ public class DiscussionGuideGenerator {
                 && "FAILURE".equalsIgnoreCase(generation.outcome())
                 ? generation.failureCategory()
                 : validationFailureCategory(exception);
-            generationObserver.observe(
-                generation == null
+            AiGenerationResult<Response> failure = generation == null
                     ? AiGenerationResult.failure(
                         task,
                         "unknown",
@@ -175,10 +173,12 @@ public class DiscussionGuideGenerator {
                         0,
                         category
                     )
-                    : generation.withOutcome("FAILURE", false).withFailureCategory(category),
-                depth,
-                testData
-            );
+                    : generation.withOutcome("FAILURE", false).withFailureCategory(category);
+            if (exception.getMessage() != null
+                && exception.getMessage().contains("language mismatch")) {
+                failure = failure.withLanguageValidation(AiLanguageValidationOutcome.KNOWN_MISMATCH);
+            }
+            generationObserver.observe(failure, depth, testData);
             throw exception;
         }
     }
@@ -230,7 +230,8 @@ public class DiscussionGuideGenerator {
         AiGenerationResult<Response> generation,
         Map<String, SourceDraft> evidence,
         String promptVersion,
-        int targetMinutes
+        int targetMinutes,
+        GenerationLocale locale
     ) {
         Response response = generation == null ? null : generation.value();
         if (response == null) {
@@ -248,6 +249,22 @@ public class DiscussionGuideGenerator {
         List<Item> providerItems = response.items() == null ? List.of() : response.items();
         if (providerItems.size() < 5 || providerItems.size() > 8) {
             throw new IllegalStateException("Discussion Guide requires five to eight items");
+        }
+        List<String> languageUnits = new ArrayList<>();
+        languageUnits.add(goal);
+        languageUnits.add(String.join(" ", issues));
+        providerItems.forEach(item -> languageUnits.add(
+            String.join(" ", java.util.stream.Stream.concat(
+                java.util.stream.Stream.of(item.question(), item.intent()),
+                item.followUps() == null ? java.util.stream.Stream.empty() : item.followUps().stream()
+            ).filter(java.util.Objects::nonNull).toList())
+        ));
+        AiLanguageValidationOutcome languageOutcome = generation.fallbackUsed()
+            && generation.languageValidationOutcome() == null
+                ? null
+                : languageValidator.validateUnits(locale, languageUnits);
+        if (languageOutcome == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
+            throw new IllegalStateException("Discussion Guide language mismatch");
         }
 
         Map<String, Integer> requiredStages = new HashMap<>();
@@ -322,7 +339,9 @@ public class DiscussionGuideGenerator {
             generation.provider(),
             generation.model(),
             generation.tokenUsage().toJson(objectMapper),
-            metadataJson(generation, promptVersion)
+            metadataJson(generation.withLanguageValidation(languageOutcome), promptVersion),
+            locale.value(),
+            languageOutcome == null ? null : languageOutcome.name()
         );
     }
 
@@ -449,7 +468,8 @@ public class DiscussionGuideGenerator {
         AiGenerationTask task = new AiGenerationTask(
             "DISCUSSION_GUIDE",
             request.promptVersion(),
-            request.schemaVersion()
+            request.schemaVersion(),
+            request.generationLocale()
         );
         try {
             Response response = aiProvider.generateDiscussionGuide(request);
@@ -485,7 +505,8 @@ public class DiscussionGuideGenerator {
                 new AiGenerationTask(
                     "DISCUSSION_GUIDE",
                     request.promptVersion(),
-                    request.schemaVersion()
+                    request.schemaVersion(),
+                    request.generationLocale()
                 ),
                 "unknown",
                 "unknown",
@@ -549,8 +570,18 @@ public class DiscussionGuideGenerator {
         String provider,
         String model,
         String tokenUsageJson,
-        String generationMetadataJson
+        String generationMetadataJson,
+        String generationLocale,
+        String languageValidationOutcome
     ) {
+        public GuideDraft(
+            String goal, List<String> issues, List<GuideItemDraft> items,
+            String provider, String model, String tokenUsageJson,
+            String generationMetadataJson
+        ) {
+            this(goal, issues, items, provider, model, tokenUsageJson,
+                generationMetadataJson, null, null);
+        }
     }
 
     public record GuideItemDraft(

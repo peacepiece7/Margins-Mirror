@@ -1,70 +1,65 @@
 package com.margins;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import com.margins.testsupport.TestSecurityContextSupport;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import com.margins.testsupport.TestSecurityContextSupport;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.margins.ai.AiGenerationObserver;
+import com.margins.ai.AiGenerationResult;
+import com.margins.ai.AiGenerationTask;
+import com.margins.ai.AiLanguageValidationOutcome;
+import com.margins.ai.AiOutputLanguageValidator;
 import com.margins.ai.AiProvider;
+import com.margins.ai.AiTokenUsage;
+import com.margins.ai.GenerationLocale;
+import com.margins.ai.GenerationLocaleResolver;
+import com.margins.ai.observability.AiTraceContext;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
-import com.margins.testsupport.TestSecurityContextSupport;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.message.mapper.MessageMapper;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.message.model.MessageRecord;
-import com.margins.testsupport.TestSecurityContextSupport;
+import com.margins.moderation.business.ModerationBusiness;
 import com.margins.persona.mapper.PersonaMapper;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.persona.model.PersonaRecord;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.question.dto.CreateQuestionRequest;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.question.dto.GenerateQuestionsRequest;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.question.dto.QuestionDto;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.question.dto.QuestionListResponse;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.question.mapper.QuestionMapper;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.question.model.QuestionRecord;
-import com.margins.testsupport.TestSecurityContextSupport;
+import com.margins.reflectionloop.ai.DiscussionDirector.DirectorDecision;
+import com.margins.session.business.ReadingSessionBusiness;
 import com.margins.session.business.SessionWindowBusiness;
-import com.margins.session.dto.DebateTurnResponse;
-import com.margins.testsupport.TestSecurityContextSupport;
+import com.margins.session.business.SessionWindowBusiness.GeneratedAiMessage;
 import com.margins.session.dto.AiMessageResponse;
-import com.margins.testsupport.TestSecurityContextSupport;
-import com.margins.session.dto.CreateSessionWindowRequest;
-import com.margins.testsupport.TestSecurityContextSupport;
-import com.margins.session.dto.CreateSessionWindowResponse;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.session.dto.DebateAllMessageRequest;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.session.dto.DebateMessageRequest;
-import com.margins.testsupport.TestSecurityContextSupport;
+import com.margins.session.dto.DebateTurnResponse;
+import com.margins.session.dto.CreateSessionWindowRequest;
+import com.margins.session.dto.CreateSessionWindowResponse;
 import com.margins.session.dto.SendMessageRequest;
-import com.margins.testsupport.TestSecurityContextSupport;
+import com.margins.session.dto.SessionWindowTimelineDto;
 import com.margins.session.dto.UpdateSessionWindowTitleRequest;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.session.mapper.SessionWindowMapper;
 import com.margins.session.mapper.SessionWindowPersonaMapper;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.session.model.SessionWindowContext;
-import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.session.model.SessionWindowRecord;
 import com.margins.testsupport.TestSecurityContextSupport;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
-import com.margins.testsupport.TestSecurityContextSupport;
 import java.util.List;
-import com.margins.testsupport.TestSecurityContextSupport;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import com.margins.testsupport.TestSecurityContextSupport;
 import org.springframework.http.HttpStatus;
-import com.margins.testsupport.TestSecurityContextSupport;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
-import com.margins.testsupport.TestSecurityContextSupport;
 
 @ExtendWith(TestSecurityContextSupport.Extension.class)
 class SessionWindowBusinessPersistenceTest {
@@ -79,7 +74,6 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
-
         CreateSessionWindowResponse response = business.create(CreateSessionWindowRequest.builder()
             .sessionId(3L)
             .windowType("question")
@@ -107,6 +101,102 @@ class SessionWindowBusinessPersistenceTest {
         assertThat(personaMapper.windowId).isEqualTo(300L);
         assertThat(personaMapper.personaIds).containsExactly(5L, 4L);
         assertThat(response.getPersonaIds()).containsExactly(5L, 4L);
+    }
+
+    @Test
+    void createPersistsOnePersonaAndReturnsEmptySelectionWhenOmitted() {
+        FakeSessionWindowMapper selectedWindowMapper = new FakeSessionWindowMapper();
+        FakeSessionWindowPersonaMapper selectedPersonaMapper = new FakeSessionWindowPersonaMapper();
+        SessionWindowBusiness selectedBusiness = new SessionWindowBusiness(
+            new StubAiProvider(), selectedWindowMapper, new FakeMessageMapper(), new FakeQuestionMapper(), new FakePersonaMapper()
+        );
+        selectedBusiness.configureSessionWindowPersonaMapper(selectedPersonaMapper);
+
+        CreateSessionWindowResponse selected = selectedBusiness.create(CreateSessionWindowRequest.builder()
+            .sessionId(3L).windowType("debate").title("One").personaIds(List.of(5L)).build());
+
+        assertThat(selected.getPersonaIds()).containsExactly(5L);
+        assertThat(selectedPersonaMapper.personaIds).containsExactly(5L);
+        assertThat(selectedPersonaMapper.findPersonaIds(300L)).containsExactly(5L);
+
+        FakeSessionWindowMapper legacyWindowMapper = new FakeSessionWindowMapper();
+        FakeSessionWindowPersonaMapper legacyPersonaMapper = new FakeSessionWindowPersonaMapper();
+        SessionWindowBusiness legacyBusiness = new SessionWindowBusiness(
+            new StubAiProvider(), legacyWindowMapper, new FakeMessageMapper(), new FakeQuestionMapper(), new FakePersonaMapper()
+        );
+        legacyBusiness.configureSessionWindowPersonaMapper(legacyPersonaMapper);
+
+        CreateSessionWindowResponse legacy = legacyBusiness.create(CreateSessionWindowRequest.builder()
+            .sessionId(3L).windowType("debate").title("Legacy").build());
+
+        assertThat(legacy.getPersonaIds()).isEmpty();
+        assertThat(legacyPersonaMapper.personaIds).isNull();
+    }
+
+    @Test
+    void createWithExplicitEmptyPersonaIdsReturnsEmptySelectionWithoutRelationInsert() {
+        FakeSessionWindowMapper windowMapper = new FakeSessionWindowMapper();
+        FakeSessionWindowPersonaMapper personaMapper = new FakeSessionWindowPersonaMapper();
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            new StubAiProvider(), windowMapper, new FakeMessageMapper(), new FakeQuestionMapper(), new FakePersonaMapper()
+        );
+        business.configureSessionWindowPersonaMapper(personaMapper);
+
+        CreateSessionWindowResponse response = business.create(CreateSessionWindowRequest.builder()
+            .sessionId(3L).windowType("debate").title("Empty").personaIds(List.of()).build());
+
+        assertThat(response.getPersonaIds()).isEmpty();
+        assertThat(personaMapper.personaIds).isNull();
+        assertThat(personaMapper.findPersonaIds(300L)).isEmpty();
+    }
+
+    @Test
+    void timelineWindowDtoSerializesOrderedPersistedPersonaIdsAndMapperOrdersBySelection() throws Exception {
+        FakeSessionWindowPersonaMapper personaMapper = new FakeSessionWindowPersonaMapper();
+        personaMapper.insertSelections(300L, List.of(5L, 4L));
+        ReadingSessionBusiness business = new ReadingSessionBusiness(
+            null, null, null, null, null, null, null, null, null
+        );
+        business.configureSessionWindowPersonaMapper(personaMapper);
+
+        Method toWindowDto = ReadingSessionBusiness.class.getDeclaredMethod("toWindowDto", SessionWindowRecord.class);
+        toWindowDto.setAccessible(true);
+        SessionWindowTimelineDto timeline = (SessionWindowTimelineDto) toWindowDto.invoke(
+            business,
+            SessionWindowRecord.builder().id(300L).sessionId(3L).windowType("debate").title("Debate")
+                .position(5).status("open").build()
+        );
+
+        assertThat(timeline.getPersonaIds()).containsExactly(5L, 4L);
+        assertThat(new ObjectMapper().writeValueAsString(timeline))
+            .contains("\"personaIds\":[5,4]");
+    }
+
+    @Test
+    void createRejectsNullDuplicateAndTooManyPersonasBeforeWindowInsert() {
+        List<Long> nullSelection = new ArrayList<>(List.of(4L));
+        nullSelection.add(null);
+        assertCreateRejectsBadSelection(nullSelection);
+        assertCreateRejectsBadSelection(List.of(4L, 4L));
+        assertCreateRejectsBadSelection(List.of(4L, 5L, 6L));
+    }
+
+    @Test
+    void createRejectsInactiveOrMissingPersonaBeforeWindowInsert() {
+        FakeSessionWindowMapper windowMapper = new FakeSessionWindowMapper();
+        FakePersonaMapper personaMapper = new FakePersonaMapper();
+        personaMapper.inactivePersonaId = 5L;
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            new StubAiProvider(), windowMapper, new FakeMessageMapper(), new FakeQuestionMapper(), personaMapper
+        );
+
+        assertNotFound("Persona not found", () -> business.create(CreateSessionWindowRequest.builder()
+            .sessionId(3L).windowType("debate").title("Inactive").personaIds(List.of(5L)).build()));
+        assertThat(windowMapper.inserted).isNull();
+
+        assertNotFound("Persona not found", () -> business.create(CreateSessionWindowRequest.builder()
+            .sessionId(3L).windowType("debate").title("Missing").personaIds(List.of(99L)).build()));
+        assertThat(windowMapper.inserted).isNull();
     }
 
     @Test
@@ -295,6 +385,7 @@ class SessionWindowBusinessPersistenceTest {
             questionMapper,
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         AiMessageResponse response = business.sendMessage(10L, SendMessageRequest.builder()
             .content("What matters?")
@@ -304,10 +395,13 @@ class SessionWindowBusinessPersistenceTest {
         assertThat(response.getMessageId()).isEqualTo(101L);
         assertThat(messageMapper.inserted).hasSize(2);
         assertThat(messageMapper.inserted.get(0).getRole()).isEqualTo("user");
+        assertThat(messageMapper.inserted.get(0).getGenerationLocale()).isNull();
         assertThat(messageMapper.inserted.get(0).getMessageOrder()).isEqualTo(1);
         assertThat(messageMapper.inserted.get(1).getRole()).isEqualTo("assistant");
         assertThat(messageMapper.inserted.get(1).getParentMessageId()).isEqualTo(100L);
         assertThat(messageMapper.inserted.get(1).getQuestionId()).isEqualTo(9L);
+        assertThat(messageMapper.inserted.get(1).getGenerationLocale()).isEqualTo("ko");
+        assertThat(messageMapper.inserted.get(1).getLanguageValidationOutcome()).isNull();
         assertThat(messageMapper.orderWindowIds).containsExactly(10L, 10L);
     }
 
@@ -321,6 +415,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         business.sendMessage(10L, SendMessageRequest.builder()
             .userId(999L)
@@ -328,6 +423,78 @@ class SessionWindowBusinessPersistenceTest {
             .build());
 
         assertThat(messageMapper.inserted).extracting(MessageRecord::getUserId).containsOnly(1L);
+    }
+
+    @Test
+    void streamingLanguageFailureKeepsUserAndSessionTraceContext() {
+        AiProvider provider = new StubAiProvider() {
+            @Override
+            public AiGenerationResult<AiMessageResponse> streamWindowMessageWithMetadata(
+                Long windowId,
+                SendMessageRequest request,
+                java.util.function.Consumer<String> deltaConsumer,
+                AiGenerationTask task
+            ) {
+                return AiGenerationResult.completed(
+                    AiMessageResponse.builder()
+                        .windowId(windowId)
+                        .role("assistant")
+                        .content("this response is clearly written in english")
+                        .aiModel("model")
+                        .build(),
+                    task,
+                    "openai",
+                    "model",
+                    AiTokenUsage.NONE,
+                    1,
+                    "SUCCESS",
+                    false
+                );
+            }
+        };
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            provider,
+            new FakeSessionWindowMapper(),
+            new FakeMessageMapper(),
+            new FakeQuestionMapper(),
+            new FakePersonaMapper()
+        );
+        configureLocale(business);
+        AtomicReference<AiGenerationResult<?>> observed = new AtomicReference<>();
+        AtomicReference<AiTraceContext> observedContext = new AtomicReference<>();
+        business.configureGenerationObserver(new AiGenerationObserver() {
+            @Override
+            public void observe(
+                AiGenerationResult<?> result,
+                String depth,
+                boolean testData
+            ) {
+                observed.set(result);
+            }
+
+            @Override
+            public void observe(
+                AiGenerationResult<?> result,
+                String depth,
+                boolean testData,
+                AiTraceContext traceContext
+            ) {
+                observed.set(result);
+                observedContext.set(traceContext);
+            }
+        });
+
+        assertThatThrownBy(() -> business.streamMessage(
+            10L,
+            SendMessageRequest.builder().content("질문입니다").build(),
+            delta -> { }
+        ))
+            .isInstanceOf(ApiException.class)
+            .satisfies(exception -> assertThat(((ApiException) exception).getCode())
+                .isEqualTo(ApiErrorCode.STREAM_MESSAGE_FAILED));
+
+        assertThat(observed.get().outcome()).isEqualTo("FAILURE");
+        assertThat(observedContext.get()).isEqualTo(new AiTraceContext(1L, 30L));
     }
 
     @Test
@@ -342,6 +509,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         assertServerError("Message could not be saved", () -> business.sendMessage(10L, SendMessageRequest.builder()
             .content("What matters?")
@@ -369,6 +537,7 @@ class SessionWindowBusinessPersistenceTest {
             questionMapper,
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         assertThatThrownBy(() -> business.sendMessage(10L, SendMessageRequest.builder()
                 .content("Answer")
@@ -394,6 +563,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         DebateTurnResponse response = business.debate(10L, DebateMessageRequest.builder()
             .personaId(4L)
@@ -408,6 +578,57 @@ class SessionWindowBusinessPersistenceTest {
     }
 
     @Test
+    void debateResolvesLocaleOnceAndSharesSnapshotWithModerationPersonaAndRow() {
+        FakeMessageMapper messageMapper = new FakeMessageMapper();
+        AtomicReference<GenerationLocale> providerLocale = new AtomicReference<>();
+        StubAiProvider provider = new StubAiProvider() {
+            @Override
+            public AiGenerationResult<AiMessageResponse> answerDebateMessageWithMetadata(
+                Long windowId,
+                DebateMessageRequest request,
+                AiGenerationTask task
+            ) {
+                providerLocale.set(task.generationLocale());
+                return super.answerDebateMessageWithMetadata(windowId, request, task);
+            }
+        };
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            provider,
+            new FakeSessionWindowMapper(),
+            messageMapper,
+            new FakeQuestionMapper(),
+            new FakePersonaMapper()
+        );
+        AtomicInteger resolveCalls = new AtomicInteger();
+        GenerationLocaleResolver resolver = mock(GenerationLocaleResolver.class);
+        when(resolver.resolve(any())).thenAnswer(invocation ->
+            resolveCalls.getAndIncrement() == 0 ? GenerationLocale.KO : GenerationLocale.EN
+        );
+        business.configureGenerationLocale(
+            resolver,
+            new AiOutputLanguageValidator()
+        );
+        AtomicReference<GenerationLocale> moderationLocale = new AtomicReference<>();
+        ModerationBusiness moderation = mock(ModerationBusiness.class);
+        when(moderation.isEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            moderationLocale.set(invocation.getArgument(3));
+            return null;
+        }).when(moderation).evaluate(any(), any(), any(), any());
+        ReflectionTestUtils.setField(business, "moderationBusiness", moderation);
+
+        business.debate(10L, DebateMessageRequest.builder()
+            .personaId(4L)
+            .content("Challenge this interpretation")
+            .build());
+
+        assertThat(resolveCalls).hasValue(1);
+        assertThat(moderationLocale).hasValue(GenerationLocale.KO);
+        assertThat(providerLocale).hasValue(GenerationLocale.KO);
+        assertThat(messageMapper.inserted.get(1).getGenerationLocale()).isEqualTo("ko");
+    }
+
+    @Test
     void debateIgnoresClientSuppliedUserId() {
         FakeMessageMapper messageMapper = new FakeMessageMapper();
         SessionWindowBusiness business = new SessionWindowBusiness(
@@ -417,6 +638,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         business.debate(10L, DebateMessageRequest.builder()
             .userId(999L)
@@ -437,6 +659,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         assertThatThrownBy(() -> business.debate(10L, DebateMessageRequest.builder()
                 .personaId(99L)
@@ -462,6 +685,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         assertThat(business.debateAll(10L, DebateAllMessageRequest.builder()
             .content("Compare this interpretation")
@@ -476,6 +700,192 @@ class SessionWindowBusinessPersistenceTest {
     }
 
     @Test
+    void debateAllResolvesLocaleOnceAndSharesSnapshotWithModerationPersonaAndRows() {
+        FakeMessageMapper messageMapper = new FakeMessageMapper();
+        AtomicReference<GenerationLocale> providerLocale = new AtomicReference<>();
+        StubAiProvider provider = new StubAiProvider() {
+            @Override
+            public AiGenerationResult<List<AiMessageResponse>> answerDebateMessagesWithMetadata(
+                Long windowId,
+                List<DebateMessageRequest> requests,
+                AiGenerationTask task
+            ) {
+                providerLocale.set(task.generationLocale());
+                return super.answerDebateMessagesWithMetadata(windowId, requests, task);
+            }
+        };
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            provider,
+            new FakeSessionWindowMapper(),
+            messageMapper,
+            new FakeQuestionMapper(),
+            new FakePersonaMapper()
+        );
+        AtomicInteger resolveCalls = new AtomicInteger();
+        GenerationLocaleResolver resolver = mock(GenerationLocaleResolver.class);
+        when(resolver.resolve(any())).thenAnswer(invocation ->
+            resolveCalls.getAndIncrement() == 0 ? GenerationLocale.KO : GenerationLocale.EN
+        );
+        business.configureGenerationLocale(
+            resolver,
+            new AiOutputLanguageValidator()
+        );
+        AtomicReference<GenerationLocale> moderationLocale = new AtomicReference<>();
+        ModerationBusiness moderation = mock(ModerationBusiness.class);
+        when(moderation.isEnabled()).thenReturn(true);
+        doAnswer(invocation -> {
+            moderationLocale.set(invocation.getArgument(3));
+            return null;
+        }).when(moderation).evaluate(any(), any(), any(), any());
+        ReflectionTestUtils.setField(business, "moderationBusiness", moderation);
+
+        business.debateAll(10L, DebateAllMessageRequest.builder()
+            .content("Compare these interpretations")
+            .build());
+
+        assertThat(resolveCalls).hasValue(1);
+        assertThat(moderationLocale).hasValue(GenerationLocale.KO);
+        assertThat(providerLocale).hasValue(GenerationLocale.KO);
+        assertThat(messageMapper.inserted.subList(1, 3))
+            .extracting(MessageRecord::getGenerationLocale)
+            .containsOnly("ko");
+    }
+
+    @Test
+    void debateAllPreservesPerItemValidationAndAggregateLocaleOnMixedBatch() {
+        FakeMessageMapper messageMapper = new FakeMessageMapper();
+        AiProvider provider = new StubAiProvider() {
+            @Override
+            public AiGenerationResult<List<AiMessageResponse>> answerDebateMessagesWithMetadata(
+                Long windowId,
+                List<DebateMessageRequest> requests,
+                AiGenerationTask task
+            ) {
+                return AiGenerationResult.completed(
+                    List.of(
+                        AiMessageResponse.builder().windowId(windowId).personaId(4L)
+                            .role("assistant").content("가나다라마바사아").aiModel("model").build(),
+                        AiMessageResponse.builder().windowId(windowId).personaId(5L)
+                            .role("assistant").content("this response is clearly written in english").aiModel("model").build()
+                    ),
+                    task,
+                    "openai",
+                    "model",
+                    AiTokenUsage.NONE,
+                    1,
+                    "SUCCESS",
+                    false
+                );
+            }
+        };
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            provider,
+            new FakeSessionWindowMapper(),
+            messageMapper,
+            new FakeQuestionMapper(),
+            new FakePersonaMapper()
+        );
+        configureLocale(business);
+        AtomicReference<AiGenerationResult<?>> observed = new AtomicReference<>();
+        business.configureGenerationObserver((generation, depth, testData) -> observed.set(generation));
+
+        business.debateAll(10L, DebateAllMessageRequest.builder()
+            .content("Compare this interpretation")
+            .build());
+
+        assertThat(messageMapper.inserted.get(1).getGenerationLocale()).isEqualTo("ko");
+        assertThat(messageMapper.inserted.get(1).getLanguageValidationOutcome()).isEqualTo("MATCH");
+        assertThat(messageMapper.inserted.get(2).getGenerationLocale()).isEqualTo("ko");
+        assertThat(messageMapper.inserted.get(2).getLanguageValidationOutcome())
+            .isEqualTo("KNOWN_MISMATCH");
+        assertThat(messageMapper.inserted.get(2).getContent()).contains("지금 남은 생각");
+        assertThat(observed.get().generationLocale()).isEqualTo(GenerationLocale.KO);
+        assertThat(observed.get().outcome()).isEqualTo("FALLBACK");
+        assertThat(observed.get().languageValidationOutcome())
+            .isEqualTo(AiLanguageValidationOutcome.KNOWN_MISMATCH);
+    }
+
+    @Test
+    void guidedPersistenceUsesGenerationSnapshotWithoutResolverRelabelingOrRevalidation() {
+        FakeMessageMapper messageMapper = new FakeMessageMapper();
+        AiProvider provider = new StubAiProvider() {
+            @Override
+            public AiGenerationResult<AiMessageResponse> answerDebateMessageWithMetadata(
+                Long windowId,
+                DebateMessageRequest request,
+                AiGenerationTask task
+            ) {
+                return AiGenerationResult.completed(
+                    AiMessageResponse.builder().windowId(windowId).personaId(request.getPersonaId())
+                        .role("assistant").content("가나다라마바사아").aiModel("model").build(),
+                    task,
+                    "openai",
+                    "model",
+                    AiTokenUsage.NONE,
+                    1,
+                    "SUCCESS",
+                    false
+                );
+            }
+        };
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            provider,
+            new FakeSessionWindowMapper(),
+            messageMapper,
+            new FakeQuestionMapper(),
+            new FakePersonaMapper()
+        );
+        GenerationLocaleResolver resolver = mock(GenerationLocaleResolver.class);
+        when(resolver.resolve(any())).thenReturn(GenerationLocale.EN);
+        business.configureGenerationLocale(resolver, new AiOutputLanguageValidator());
+        AtomicReference<AiGenerationResult<?>> observed = new AtomicReference<>();
+        business.configureGenerationObserver((generation, depth, testData) -> observed.set(generation));
+
+        GeneratedAiMessage generated = business.generateGuidedPersonaResponse(
+            10L,
+            4L,
+            "reader answer",
+            77L,
+            "SIMPLE",
+            GenerationLocale.KO
+        );
+
+        business.persistGuidedPersonaResponse(
+            10L,
+            900L,
+            4L,
+            MessageRecord.builder().id(77L).userId(1L).build(),
+            generated
+        );
+        business.persistGuidedTurnAtomically(
+            10L,
+            900L,
+            "reader answer",
+            new DirectorDecision(
+                "ASK_FOLLOW_UP",
+                null,
+                List.of(),
+                "Could you clarify?",
+                null,
+                "Could you clarify?",
+                GenerationLocale.EN,
+                null
+            ),
+            null
+        );
+
+        assertThat(messageMapper.inserted.get(0).getGenerationLocale()).isEqualTo("ko");
+        assertThat(messageMapper.inserted.get(0).getLanguageValidationOutcome()).isEqualTo("MATCH");
+        assertThat(observed.get().generationLocale()).isEqualTo(GenerationLocale.KO);
+        assertThat(observed.get().outcome()).isEqualTo("SUCCESS");
+        assertThat(observed.get().languageValidationOutcome()).isEqualTo(AiLanguageValidationOutcome.MATCH);
+        assertThat(messageMapper.inserted.get(2).getContent()).isEqualTo("Could you clarify?");
+        assertThat(messageMapper.inserted.get(2).getGenerationLocale()).isEqualTo("en");
+        assertThat(messageMapper.inserted.get(2).getLanguageValidationOutcome()).isNull();
+        verifyNoInteractions(resolver);
+    }
+
+    @Test
     void debateAllPersistsOnlySelectedPersonaResponses() {
         FakeMessageMapper messageMapper = new FakeMessageMapper();
         SessionWindowBusiness business = new SessionWindowBusiness(
@@ -485,6 +895,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         assertThat(business.debateAll(10L, DebateAllMessageRequest.builder()
             .content("Compare this interpretation")
@@ -506,6 +917,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         assertThatThrownBy(() -> business.debateAll(10L, DebateAllMessageRequest.builder()
                 .content("Compare this interpretation")
@@ -528,6 +940,7 @@ class SessionWindowBusinessPersistenceTest {
             new FakeQuestionMapper(),
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         business.debateAll(10L, DebateAllMessageRequest.builder()
             .userId(999L)
@@ -547,6 +960,7 @@ class SessionWindowBusinessPersistenceTest {
             questionMapper,
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         QuestionListResponse response = business.generateQuestions(10L, GenerateQuestionsRequest.builder()
             .count(2)
@@ -558,6 +972,8 @@ class SessionWindowBusinessPersistenceTest {
         assertThat(questionMapper.inserted.get(0).getSessionId()).isEqualTo(30L);
         assertThat(questionMapper.inserted.get(0).getWindowId()).isEqualTo(10L);
         assertThat(questionMapper.inserted.get(0).getQuestionText()).contains("chapter one");
+        assertThat(questionMapper.inserted.get(0).getGenerationLocale()).isEqualTo("ko");
+        assertThat(questionMapper.inserted.get(0).getLanguageValidationOutcome()).isNull();
     }
 
     @Test
@@ -571,6 +987,7 @@ class SessionWindowBusinessPersistenceTest {
             questionMapper,
             new FakePersonaMapper()
         );
+        configureLocale(business);
 
         assertServerError("Question could not be saved", () -> business.generateQuestions(10L, GenerateQuestionsRequest.builder()
             .count(1)
@@ -653,6 +1070,27 @@ class SessionWindowBusinessPersistenceTest {
         assertNotFound("Question not found", () -> business.deleteQuestion(900L));
     }
 
+    private void assertCreateRejectsBadSelection(List<Long> personaIds) {
+        FakeSessionWindowMapper windowMapper = new FakeSessionWindowMapper();
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            new StubAiProvider(), windowMapper, new FakeMessageMapper(), new FakeQuestionMapper(), new FakePersonaMapper()
+        );
+
+        assertThatThrownBy(() -> business.create(CreateSessionWindowRequest.builder()
+                .sessionId(3L).windowType("debate").title("Invalid").personaIds(personaIds).build()))
+            .isInstanceOfSatisfying(ApiException.class, exception -> {
+                assertThat(exception.getCode()).isEqualTo(ApiErrorCode.COMMON_BAD_REQUEST);
+                assertThat(exception.getReason()).isEqualTo("At most two distinct personas may be selected");
+            });
+        assertThat(windowMapper.inserted).isNull();
+    }
+
+    private void configureLocale(SessionWindowBusiness business) {
+        GenerationLocaleResolver resolver = mock(GenerationLocaleResolver.class);
+        when(resolver.resolve(any())).thenReturn(GenerationLocale.KO);
+        business.configureGenerationLocale(resolver, new AiOutputLanguageValidator());
+    }
+
     private void assertNotFound(String reason, Runnable action) {
         assertThatThrownBy(action::run)
             .isInstanceOf(ResponseStatusException.class)
@@ -680,9 +1118,15 @@ class SessionWindowBusinessPersistenceTest {
         }
 
         @Override
-        public int updateReflectionSummary(Long insightId, String summary, String sourceHash, String model, String tokenUsage) {
+        public int updateConversationSummaryKo(Long windowId, String summaryJson) {
             return 1;
         }
+
+        @Override
+        public int updateConversationSummaryEn(Long windowId, String summaryJson) {
+            return 1;
+        }
+
         private SessionWindowRecord inserted;
         private Long updatedWindowId;
         private String updatedTitle;
@@ -869,6 +1313,7 @@ class SessionWindowBusinessPersistenceTest {
 
     private static class FakePersonaMapper implements PersonaMapper {
         private Long deniedPersonaId;
+        private Long inactivePersonaId;
         @Override
         public int insert(PersonaRecord record) {
             return 1;
@@ -897,7 +1342,7 @@ class SessionWindowBusinessPersistenceTest {
 
         @Override
         public PersonaRecord findActiveByIdForUser(Long id, Long userId) {
-            return id.equals(deniedPersonaId) ? null : findActiveById(id);
+            return id.equals(deniedPersonaId) || id.equals(inactivePersonaId) ? null : findActiveById(id);
         }
     }
 
@@ -918,12 +1363,16 @@ class SessionWindowBusinessPersistenceTest {
         }
     }
 
-    private static class StubAiProvider implements AiProvider {
+    private static class StubAiProvider extends com.margins.ai.PlaceholderAiProvider {
         private int windowAnswerCalls;
 
         @Override
-        public QuestionListResponse suggestQuestions(Long windowId, GenerateQuestionsRequest request) {
-            return QuestionListResponse.builder()
+        public AiGenerationResult<QuestionListResponse> suggestQuestionsWithMetadata(
+            Long windowId,
+            GenerateQuestionsRequest request,
+            AiGenerationTask task
+        ) {
+            QuestionListResponse response = QuestionListResponse.builder()
                 .questions(List.of(QuestionDto.builder()
                     .windowId(windowId)
                     .questionText("What matters in " + request.getFocus() + "?")
@@ -932,12 +1381,20 @@ class SessionWindowBusinessPersistenceTest {
                     .aiModel("placeholder")
                     .build()))
                 .build();
+            return AiGenerationResult.completed(
+                response, task, "placeholder", "placeholder", AiTokenUsage.NONE, 0,
+                "FALLBACK", true
+            );
         }
 
         @Override
-        public AiMessageResponse answerWindowMessage(Long windowId, SendMessageRequest request) {
+        public AiGenerationResult<AiMessageResponse> answerWindowMessageWithMetadata(
+            Long windowId,
+            SendMessageRequest request,
+            AiGenerationTask task
+        ) {
             windowAnswerCalls++;
-            return AiMessageResponse.builder()
+            AiMessageResponse response = AiMessageResponse.builder()
                 .messageId(null)
                 .windowId(windowId)
                 .role("assistant")
@@ -945,11 +1402,19 @@ class SessionWindowBusinessPersistenceTest {
                 .streamingReady(true)
                 .aiModel("placeholder")
                 .build();
+            return AiGenerationResult.completed(
+                response, task, "placeholder", "placeholder", AiTokenUsage.NONE, 0,
+                "FALLBACK", true
+            );
         }
 
         @Override
-        public AiMessageResponse answerDebateMessage(Long windowId, DebateMessageRequest request) {
-            return AiMessageResponse.builder()
+        public AiGenerationResult<AiMessageResponse> answerDebateMessageWithMetadata(
+            Long windowId,
+            DebateMessageRequest request,
+            AiGenerationTask task
+        ) {
+            AiMessageResponse response = AiMessageResponse.builder()
                 .messageId(null)
                 .windowId(windowId)
                 .personaId(request.getPersonaId())
@@ -958,6 +1423,10 @@ class SessionWindowBusinessPersistenceTest {
                 .streamingReady(true)
                 .aiModel("placeholder")
                 .build();
+            return AiGenerationResult.completed(
+                response, task, "placeholder", "placeholder", AiTokenUsage.NONE, 0,
+                "FALLBACK", true
+            );
         }
     }
 }

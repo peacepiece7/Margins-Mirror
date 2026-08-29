@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { useI18n, type Locale } from '@/lib/i18n';
+import { useI18n, type Locale, type TranslationKey } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 
 type TurnstileApi = {
@@ -34,12 +34,22 @@ export function isTurnstileConfigured(): boolean {
 }
 
 type TurnstileWidgetProps = {
+  action?: 'email_verification' | 'contact_inquiry';
   locale: Locale;
   onTokenChange: (token: string | undefined) => void;
+  promptKey?: TranslationKey;
   resetSignal: number;
+  testId?: string;
 };
 
-export function TurnstileWidget({ locale, onTokenChange, resetSignal }: TurnstileWidgetProps) {
+export function TurnstileWidget({
+  action = 'email_verification',
+  locale,
+  onTokenChange,
+  promptKey = 'botChallengePrompt',
+  resetSignal,
+  testId = 'register-bot-challenge',
+}: TurnstileWidgetProps) {
   const { t } = useI18n();
   const containerRef = useRef<HTMLDivElement>(null);
   const widgetIdRef = useRef<string | undefined>(undefined);
@@ -63,7 +73,7 @@ export function TurnstileWidget({ locale, onTokenChange, resetSignal }: Turnstil
       if (disposed || !containerRef.current || !window.turnstile || widgetIdRef.current) return;
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
         sitekey: siteKey,
-        action: 'email_verification',
+        action,
         theme: 'auto',
         language: locale,
         callback(token) {
@@ -103,7 +113,7 @@ export function TurnstileWidget({ locale, onTokenChange, resetSignal }: Turnstil
       if (widgetIdRef.current && window.turnstile) window.turnstile.remove(widgetIdRef.current);
       widgetIdRef.current = undefined;
     };
-  }, [locale, onTokenChange]);
+  }, [action, locale, onTokenChange]);
 
   useEffect(() => {
     if (resetSignal > 0 && widgetIdRef.current && window.turnstile) {
@@ -122,15 +132,15 @@ export function TurnstileWidget({ locale, onTokenChange, resetSignal }: Turnstil
         ? t('botChallengeError')
         : status === 'ready'
           ? t('botChallengeReady')
-          : t('botChallengePrompt');
+          : t(promptKey);
 
   return (
-    <div className="grid gap-2" {...testAttr('register-bot-challenge')}>
+    <div className="grid gap-2" {...testAttr(testId)}>
       <div ref={containerRef} />
       <p
         aria-live="polite"
         className={status === 'error' ? 'text-sm text-red-700' : 'text-sm text-stone-600'}
-        {...testAttr('register-bot-challenge-status')}
+        {...testAttr(`${testId}-status`)}
       >
         {statusMessage}
       </p>

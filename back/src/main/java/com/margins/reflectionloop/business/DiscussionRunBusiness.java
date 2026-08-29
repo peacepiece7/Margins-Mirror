@@ -3,6 +3,8 @@ package com.margins.reflectionloop.business;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.ai.AiGenerationResult;
+import com.margins.ai.GenerationLocale;
+import com.margins.ai.GenerationLocaleResolver;
 import com.margins.auth.support.AuthContext;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
@@ -16,10 +18,12 @@ import com.margins.reflectionloop.ai.DiscussionDirector.DirectorDecision;
 import com.margins.reflectionloop.ai.ReflectionRefinementAssistant;
 import com.margins.reflectionloop.mapper.DiscussionGuideMapper;
 import com.margins.reflectionloop.mapper.DiscussionRunMapper;
+import com.margins.reflectionloop.mapper.DiscussionRunRefinementMapper;
 import com.margins.reflectionloop.mapper.ReflectionRevisionMapper;
 import com.margins.reflectionloop.model.DiscussionGuideItemRecord;
 import com.margins.reflectionloop.model.DiscussionGuideRecord;
 import com.margins.reflectionloop.model.DiscussionRunRecord;
+import com.margins.reflectionloop.model.DiscussionRunRefinementRecord;
 import com.margins.reflectionloop.model.ReflectionRevisionRecord;
 import com.margins.reflectionloop.model.dto.request.CompleteDiscussionRunRequest;
 import com.margins.reflectionloop.model.dto.request.GuidedDiscussionTurnRequest;
@@ -31,8 +35,8 @@ import com.margins.reflectionloop.model.dto.response.PerspectiveCandidateDto;
 import com.margins.reflectionloop.model.dto.response.ReflectionLoopResponse;
 import com.margins.reflectionloop.model.dto.response.ReflectionRefinementResponse;
 import com.margins.session.business.SessionWindowBusiness;
+import com.margins.session.business.SessionWindowBusiness.GeneratedAiMessage;
 import com.margins.session.dto.CreateSessionWindowResponse;
-import com.margins.session.dto.AiMessageResponse;
 import com.margins.session.dto.DebateTurnResponse;
 import com.margins.session.model.SessionInsightRecord;
 import java.nio.charset.StandardCharsets;
@@ -48,6 +52,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 
 @Component
@@ -60,12 +65,19 @@ public class DiscussionRunBusiness {
     private final ReflectionRevisionMapper reflectionRevisionMapper;
     private final DiscussionGuideMapper discussionGuideMapper;
     private final DiscussionRunMapper discussionRunMapper;
+    private final DiscussionRunRefinementMapper discussionRunRefinementMapper;
     private final SessionWindowBusiness sessionWindowBusiness;
     private final PersonaMapper personaMapper;
     private final DiscussionDirector discussionDirector;
     private final ReflectionRefinementAssistant refinementAssistant;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
+    private GenerationLocaleResolver generationLocaleResolver;
+
+    @Autowired
+    void configureGenerationLocale(GenerationLocaleResolver resolver) {
+        this.generationLocaleResolver = resolver;
+    }
 
     public DiscussionRunResponse create(Long guideId) {
         reflectionBusiness.requireEnabled();
@@ -131,6 +143,7 @@ public class DiscussionRunBusiness {
         if (current == null) {
             throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Discussion run has no current item");
         }
+        GenerationLocale locale = generationLocaleResolver.resolve(run.getUserId());
         if ((request.getNavigation() == null || "RESPOND".equals(request.getNavigation()))
             && hasPendingPerspective(run)) {
             throw new ApiException(
@@ -140,7 +153,7 @@ public class DiscussionRunBusiness {
         }
 
         if ("SELECT_PERSPECTIVE".equals(request.getNavigation())) {
-            return selectPerspective(run, guide, items, current, request);
+            return selectPerspective(run, guide, items, current, request, locale);
         }
         if ("SKIP_PERSPECTIVE".equals(request.getNavigation())) {
             return skipPerspective(run, items, current);
@@ -149,7 +162,8 @@ public class DiscussionRunBusiness {
         ModerationEventRecord moderation = sessionWindowBusiness.moderateGuidedTurn(
             run.getWindowId(),
             request.getContent(),
-            guide.getDepth()
+            guide.getDepth(),
+            locale
         );
         if (sessionWindowBusiness.blocksGuidedTurn(moderation)) {
             List<Long> structureCandidateIds = isDiscussionStructure(moderation)
@@ -161,8 +175,7 @@ public class DiscussionRunBusiness {
                     current.getQuestionId(),
                     request.getContent(),
                     null,
-                    moderation,
-                    guide.getDepth()
+                    moderation
                 );
                 if (!structureCandidateIds.isEmpty()) {
                     run.setPendingPerspectiveItemId(current.getId());
@@ -196,7 +209,8 @@ public class DiscussionRunBusiness {
             properties.getDirectorVersion(),
             guide.getDepth(),
             guide.isTestData(),
-            personaMapper.findActiveForUser(currentUserId())
+            personaMapper.findActiveForUser(currentUserId()),
+            locale
         );
         if ("ASK_FOLLOW_UP".equals(decision.action())
             && discussionRunMapper.countDirectorMessages(
@@ -205,15 +219,16 @@ public class DiscussionRunBusiness {
                 currentUserId()
             ) >= 2) {
             DiscussionGuideItemRecord boundedNext = discussionDirector.next(items, current);
-            decision = new DirectorDecision(
+            decision = discussionDirector.ruleDecision(
                 boundedNext == null ? "SUMMARIZE_TOPIC" : "MOVE_NEXT_TOPIC",
-                boundedNext
+                boundedNext,
+                locale
             );
         }
         if ("CALL_PERSPECTIVE".equals(decision.action())) {
             List<Long> candidateIds = boundedCandidates(decision.candidatePersonaIds());
             if (candidateIds.isEmpty()) {
-                decision = new DirectorDecision("ASK_FOLLOW_UP", current);
+                decision = discussionDirector.ruleDecision("ASK_FOLLOW_UP", current, locale);
             } else {
                 DirectorDecision perspectiveDecision = decision;
                 run.setPendingPerspectiveItemId(current.getId());
@@ -223,9 +238,8 @@ public class DiscussionRunBusiness {
                         run.getWindowId(),
                         current.getQuestionId(),
                         request.getContent(),
-                        directorReply(perspectiveDecision, current),
-                        moderation,
-                        guide.getDepth()
+                        perspectiveDecision,
+                        moderation
                     );
                     updateProgress(run, perspectiveDecision.action(), current, candidateIds);
                     return result;
@@ -248,9 +262,8 @@ public class DiscussionRunBusiness {
                 run.getWindowId(),
                 current.getQuestionId(),
                 request.getContent(),
-                directorReply(resolvedDecision, current),
-                moderation,
-                guide.getDepth()
+                resolvedDecision,
+                moderation
             );
             if (pendingPerspectiveItemId != null
                 && ("NEXT".equals(request.getNavigation()) || "FINISH".equals(request.getNavigation()))) {
@@ -344,9 +357,11 @@ public class DiscussionRunBusiness {
             currentUserId()
         );
         String transcriptHash = transcriptHash(transcript);
+        GenerationLocale locale = generationLocaleResolver.resolve(run.getUserId());
         String promptVersion = properties.getRefinementPromptVersion();
         String inputHash = sha256(
-            run.getId() + "|" + guide.getSourceRevisionId() + "|" + transcriptHash + "|" + promptVersion
+            run.getId() + "|" + guide.getSourceRevisionId() + "|" + transcriptHash + "|"
+                + promptVersion + "|" + locale.value()
         );
         String perspectives = discussionRunMapper.findPersonaPerspectiveSummary(
             run.getWindowId(),
@@ -355,18 +370,21 @@ public class DiscussionRunBusiness {
         if (perspectives == null || perspectives.isBlank()) {
             perspectives = "토론에서 새 Persona 관점을 호출하지 않았습니다. 직접 정리하거나 처음 생각을 유지할 수 있습니다.";
         }
-        boolean generate = !inputHash.equals(run.getRefinementInputHash())
-            || run.getRefinementSuggestionStatus() == null;
+        DiscussionRunRefinementRecord refinement = discussionRunRefinementMapper.findByIdentity(
+            run.getId(), locale.value(), inputHash
+        );
+        boolean generate = refinement == null;
         if (generate) {
-            run.setRefinementInputHash(inputHash);
-            run.setRefinementTranscriptHash(transcriptHash);
-            run.setRefinementPromptVersion(promptVersion);
-            run.setRefinementSuggestionStatus("PENDING");
-            run.setRefinementSuggestionContent(null);
-            run.setRefinementGenerationMetadataJson(null);
-            run.setRefinementGeneratedAt(null);
+            refinement = DiscussionRunRefinementRecord.builder()
+                .runId(run.getId())
+                .generationLocale(locale.value())
+                .inputHash(inputHash)
+                .transcriptHash(transcriptHash)
+                .promptVersion(promptVersion)
+                .testData(guide.isTestData())
+                .build();
             requireChanged(
-                discussionRunMapper.claimRunRefinementSuggestion(run),
+                discussionRunRefinementMapper.insertPending(refinement),
                 "Reflection refinement suggestion could not be claimed"
             );
         }
@@ -377,23 +395,26 @@ public class DiscussionRunBusiness {
             reflection.getContent(),
             perspectives,
             inputHash,
+            locale,
+            refinement,
             generate
         );
     }
 
     private ReflectionRefinementResponse resolveRefinement(RefinementPreparation preparation) {
         if (!preparation.generate()) {
-            return refinementResponse(preparation, preparation.run());
+            return refinementResponse(preparation, preparation.refinement());
         }
         AiGenerationResult<String> generation = refinementAssistant.suggestWithMetadata(
             preparation.run().getWindowId(),
             preparation.initialContent(),
             preparation.perspectiveSummary(),
-            preparation.run().getRefinementPromptVersion(),
+            preparation.refinement().getPromptVersion(),
             preparation.guide().getDepth(),
-            preparation.guide().isTestData()
+            preparation.guide().isTestData(),
+            preparation.locale()
         );
-        DiscussionRunRecord persisted = transactionTemplate.execute(
+        DiscussionRunRefinementRecord persisted = transactionTemplate.execute(
             status -> persistRefinementGeneration(preparation, generation)
         );
         if (persisted == null) {
@@ -405,38 +426,45 @@ public class DiscussionRunBusiness {
         return refinementResponse(preparation, persisted);
     }
 
-    private DiscussionRunRecord persistRefinementGeneration(
+    private DiscussionRunRefinementRecord persistRefinementGeneration(
         RefinementPreparation preparation,
         AiGenerationResult<String> generation
     ) {
-        DiscussionRunRecord run = requireRunForUpdate(preparation.run().getId());
-        if (!preparation.inputHash().equals(run.getRefinementInputHash())
-            || !"PENDING".equals(run.getRefinementSuggestionStatus())) {
-            return run;
+        DiscussionRunRefinementRecord refinement = discussionRunRefinementMapper.findByIdentity(
+            preparation.run().getId(), preparation.locale().value(), preparation.inputHash()
+        );
+        if (refinement == null || !"PENDING".equals(refinement.getStatus())) {
+            return refinement;
         }
         boolean ready = generation.value() != null && !generation.value().isBlank();
-        run.setRefinementSuggestionStatus(ready ? "READY" : "FAILED");
-        run.setRefinementSuggestionContent(ready ? generation.value() : null);
-        run.setRefinementGenerationMetadataJson(generationMetadataJson(generation));
+        refinement.setStatus(ready ? "READY" : "FAILED");
+        refinement.setSuggestionContent(ready ? generation.value() : null);
+        refinement.setGenerationMetadataJson(generationMetadataJson(generation));
+        refinement.setLanguageValidationOutcome(
+            generation.languageValidationOutcome() == null
+                ? null : generation.languageValidationOutcome().name()
+        );
         requireChanged(
-            discussionRunMapper.finalizeRunRefinementSuggestion(run),
+            discussionRunRefinementMapper.finalize(refinement),
             "Reflection refinement result could not be finalized"
         );
-        return requireRun(run.getId());
+        return discussionRunRefinementMapper.findByIdentity(
+            preparation.run().getId(), preparation.locale().value(), preparation.inputHash()
+        );
     }
 
     private ReflectionRefinementResponse refinementResponse(
         RefinementPreparation preparation,
-        DiscussionRunRecord run
+        DiscussionRunRefinementRecord refinement
     ) {
         return ReflectionRefinementResponse.builder()
-            .runId(run.getId())
+            .runId(preparation.run().getId())
             .reflectionId(preparation.guide().getReflectionInsightId())
             .initialContent(preparation.initialContent())
             .currentContent(preparation.currentContent())
             .perspectiveSummary(preparation.perspectiveSummary())
-            .suggestionStatus(run.getRefinementSuggestionStatus())
-            .suggestedContent(run.getRefinementSuggestionContent())
+            .suggestionStatus(refinement == null ? null : refinement.getStatus())
+            .suggestedContent(refinement == null ? null : refinement.getSuggestionContent())
             .build();
     }
 
@@ -538,7 +566,8 @@ public class DiscussionRunBusiness {
         DiscussionGuideRecord guide,
         List<DiscussionGuideItemRecord> items,
         DiscussionGuideItemRecord current,
-        GuidedDiscussionTurnRequest request
+        GuidedDiscussionTurnRequest request,
+        GenerationLocale locale
     ) {
         List<Long> pendingIds = parsePendingIds(run.getPendingPerspectiveIdsJson());
         if (!current.getId().equals(run.getPendingPerspectiveItemId())
@@ -580,12 +609,13 @@ public class DiscussionRunBusiness {
                     "The guided turn needs a saved reader message"
                 );
             }
-            AiMessageResponse generated = sessionWindowBusiness.generateGuidedPersonaResponse(
+            GeneratedAiMessage generated = sessionWindowBusiness.generateGuidedPersonaResponse(
                 run.getWindowId(),
                 request.getPersonaId(),
                 structureSelection ? current.getQuestionText() : latestUserMessage.getContent(),
                 structureSelection ? null : latestUserMessage.getId(),
-                guide.getDepth()
+                guide.getDepth(),
+                locale
             );
             DebateTurnResponse debate = transactionTemplate.execute(status -> {
                 DebateTurnResponse result = structureSelection
@@ -672,34 +702,6 @@ public class DiscussionRunBusiness {
             List.of(),
             false
         );
-    }
-
-    private String directorReply(
-        DirectorDecision decision,
-        DiscussionGuideItemRecord current
-    ) {
-        String generatedReply = decision.reply();
-        if (generatedReply != null && !generatedReply.isBlank()) {
-            return withFocus(generatedReply, decision.focus());
-        }
-        String action = decision.action();
-        DiscussionGuideItemRecord target = decision.targetItem();
-        return withFocus(switch (action) {
-            case "ASK_FOLLOW_UP" -> "좋아요. 지금 답에서 가장 중요한 근거나 망설임을 한 문장만 더 구체화해 볼까요?";
-            case "MOVE_NEXT_TOPIC" -> target == null
-                ? "여기까지의 생각을 정리하고 토론을 마무리해 볼까요?"
-                : "좋아요. 다음은 “" + target.getQuestionText() + "”를 살펴보겠습니다.";
-            case "FINISH_DISCUSSION" -> "지금까지의 관점을 바탕으로 처음 Reflection을 유지하거나 다듬어 보세요.";
-            case "SUMMARIZE_TOPIC" -> "이 주제에서 확인한 핵심은 무엇인지 한 문장으로 정리해 보겠습니다.";
-            default -> null;
-        }, decision.focus());
-    }
-
-    private String withFocus(String reply, String focus) {
-        if (reply == null || focus == null || focus.isBlank()) {
-            return reply;
-        }
-        return reply + "\n\n이번 쟁점: " + focus;
     }
 
     private void updateProgress(
@@ -924,6 +926,15 @@ public class DiscussionRunBusiness {
         metadata.put("latencyMs", generation.latencyMs());
         metadata.put("outcome", generation.outcome());
         metadata.put("fallbackUsed", generation.fallbackUsed());
+        metadata.put(
+            "generationLocale",
+            generation.generationLocale() == null ? null : generation.generationLocale().value()
+        );
+        metadata.put(
+            "languageValidationOutcome",
+            generation.languageValidationOutcome() == null
+                ? null : generation.languageValidationOutcome().name()
+        );
         try {
             return objectMapper.writeValueAsString(metadata);
         } catch (JsonProcessingException exception) {
@@ -951,6 +962,8 @@ public class DiscussionRunBusiness {
         String currentContent,
         String perspectiveSummary,
         String inputHash,
+        GenerationLocale locale,
+        DiscussionRunRefinementRecord refinement,
         boolean generate
     ) {
     }

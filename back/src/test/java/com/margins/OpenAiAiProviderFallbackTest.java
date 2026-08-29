@@ -6,11 +6,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
+import com.margins.ai.GenerationLocale;
 import com.margins.ai.OpenAiAiProvider;
 import com.margins.ai.OpenAiProperties;
 import com.margins.ai.DiscussionGuideGeneration.Evidence;
 import com.margins.ai.DiscussionGuideGeneration.Request;
 import com.margins.ai.transport.OpenAiResponsesTransport;
+import com.margins.book.dto.BookKnowledgeAnalyzeRequest;
 import com.margins.message.mapper.MessageMapper;
 import com.margins.message.model.MessageRecord;
 import com.margins.persona.mapper.PersonaMapper;
@@ -32,9 +34,135 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class OpenAiAiProviderFallbackTest {
+
+    @Test
+    void disabledProviderReturnsLocaleAwareEnglishFallbacksWithNullValidation() {
+        OpenAiProperties properties = new OpenAiProperties();
+        OpenAiAiProvider provider = provider(properties);
+        AiGenerationTask windowTask = task("WINDOW_ANSWER", GenerationLocale.EN);
+        AiGenerationTask personaTask = task("PERSONA", GenerationLocale.EN);
+        List<String> deltas = new ArrayList<>();
+
+        var sync = provider.answerWindowMessageWithMetadata(
+            10L, SendMessageRequest.builder().content("Answer").build(), windowTask
+        );
+        var stream = provider.streamWindowMessageWithMetadata(
+            10L, SendMessageRequest.builder().content("Answer").build(), deltas::add, windowTask
+        );
+        var persona = provider.answerDebateMessageWithMetadata(
+            10L, DebateMessageRequest.builder().personaId(2L).content("Debate").build(), personaTask
+        );
+        Request koGuide = guideRequest();
+        var guide = provider.generateDiscussionGuideWithMetadata(new Request(
+            koGuide.windowId(), koGuide.promptVersion(), koGuide.schemaVersion(),
+            koGuide.purpose(), koGuide.audienceMode(), koGuide.targetMinutes(),
+            koGuide.disclosureMode(), koGuide.facilitationLevel(), koGuide.evidence(),
+            GenerationLocale.EN
+        ));
+        var knowledge = provider.analyzeBookKnowledgeWithMetadata(
+            BookKnowledgeAnalyzeRequest.builder()
+                .title("Dune")
+                .promptVersion("book-v1")
+                .generationLocale(GenerationLocale.EN)
+                .build()
+        );
+
+        assertOrdinaryEnglishFallback(sync);
+        assertOrdinaryEnglishFallback(stream);
+        assertOrdinaryEnglishFallback(persona);
+        assertThat(String.join("", deltas)).isEqualTo(stream.value().getContent());
+        assertThat(guide.generationLocale()).isEqualTo(GenerationLocale.EN);
+        assertThat(guide.outcome()).isEqualTo("FALLBACK");
+        assertThat(guide.fallbackUsed()).isTrue();
+        assertThat(guide.languageValidationOutcome()).isNull();
+        assertThat(guide.value().goal()).contains("reader's interpretation");
+        assertThat(knowledge.generationLocale()).isEqualTo(GenerationLocale.EN);
+        assertThat(knowledge.value().getSummary())
+            .contains("temporary Book Knowledge")
+            .doesNotContainPattern("[\\uAC00-\\uD7A3]");
+    }
+
+    @Test
+    void streamFailureBeforeFirstDeltaMakesOneRequestAndReturnsEnglishFallback() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        AtomicInteger requestCount = new AtomicInteger();
+        server.createContext("/responses", exchange -> {
+            requestCount.incrementAndGet();
+            byte[] response = "data: {\"type\":\"error\",\"error\":{\"message\":\"unavailable\"}}\n\n"
+                .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            OpenAiProperties properties = configuredProperties(server);
+            List<String> deltas = new ArrayList<>();
+            var generation = provider(properties).streamWindowMessageWithMetadata(
+                10L,
+                SendMessageRequest.builder().content("Answer").build(),
+                deltas::add,
+                task("WINDOW_ANSWER", GenerationLocale.EN)
+            );
+
+            assertThat(requestCount.get()).isEqualTo(1);
+            assertOrdinaryEnglishFallback(generation);
+            assertThat(String.join("", deltas)).isEqualTo(generation.value().getContent());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void requestsBookKnowledgeInTheExplicitTaskLocale() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server.createContext("/responses", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            String output = """
+                {"summary":"A detailed English summary for discussion and interpretation.",
+                 "themes":["growth and responsibility"],
+                 "discussionPoints":[{"id":"dp-1","question":"Which choice matters most?",
+                 "rationale":"It opens several evidence-based interpretations.",
+                 "recommendedPersonaKeys":["journalist","writer"]}],
+                 "recommendedPersonas":[],"famousQuotes":[],
+                 "keywords":["reading discussion"],"version":"book-v1"}
+                """.replace("\n", "");
+            byte[] response = ("{\"output_text\":"
+                + new ObjectMapper().writeValueAsString(output) + "}")
+                .getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            var generation = provider(configuredProperties(server)).analyzeBookKnowledgeWithMetadata(
+                BookKnowledgeAnalyzeRequest.builder()
+                    .title("Dune")
+                    .promptVersion("book-v1")
+                    .generationLocale(GenerationLocale.EN)
+                    .build()
+            );
+
+            assertThat(generation.generationLocale()).isEqualTo(GenerationLocale.EN);
+            assertThat(generation.outcome()).isEqualTo("SUCCESS");
+            assertThat(generation.value().getSummary()).startsWith("A detailed English summary");
+            assertThat(requestBody.get())
+                .contains("Respond in English.")
+                .doesNotContain("Summary should be Korean");
+        } finally {
+            server.stop(0);
+        }
+    }
 
     @Test
     void usesReaderSafePlaceholderBehaviorWhenApiKeyIsMissing() {
@@ -49,11 +177,23 @@ class OpenAiAiProviderFallbackTest {
             responsesTransport(properties)
         );
 
-        QuestionListResponse questions = provider.suggestQuestions(10L, GenerateQuestionsRequest.builder().count(2).focus("Dune").build());
-        AiMessageResponse answer = provider.answerWindowMessage(10L, SendMessageRequest.builder().content("Answer").build());
+        QuestionListResponse questions = provider.suggestQuestionsWithMetadata(
+            10L, GenerateQuestionsRequest.builder().count(2).focus("Dune").build(),
+            task("QUESTION", GenerationLocale.KO)
+        ).value();
+        AiMessageResponse answer = provider.answerWindowMessageWithMetadata(
+            10L, SendMessageRequest.builder().content("Answer").build(),
+            task("WINDOW_ANSWER", GenerationLocale.KO)
+        ).value();
         List<String> streamedDeltas = new ArrayList<>();
-        AiMessageResponse streamed = provider.streamWindowMessage(10L, SendMessageRequest.builder().content("Answer").build(), streamedDeltas::add);
-        AiMessageResponse debate = provider.answerDebateMessage(10L, DebateMessageRequest.builder().personaId(2L).content("Debate").build());
+        AiMessageResponse streamed = provider.streamWindowMessageWithMetadata(
+            10L, SendMessageRequest.builder().content("Answer").build(), streamedDeltas::add,
+            task("WINDOW_ANSWER", GenerationLocale.KO)
+        ).value();
+        AiMessageResponse debate = provider.answerDebateMessageWithMetadata(
+            10L, DebateMessageRequest.builder().personaId(2L).content("Debate").build(),
+            task("PERSONA", GenerationLocale.KO)
+        ).value();
         var guide = provider.generateDiscussionGuide(guideRequest());
         var guideMetadata = provider.generateDiscussionGuideWithMetadata(guideRequest());
 
@@ -113,10 +253,11 @@ class OpenAiAiProviderFallbackTest {
                 responsesTransport(properties)
             );
 
-            QuestionListResponse response = provider.suggestQuestions(10L, GenerateQuestionsRequest.builder()
-                .count(1)
-                .focus("Dune")
-                .build());
+            QuestionListResponse response = provider.suggestQuestionsWithMetadata(
+                10L,
+                GenerateQuestionsRequest.builder().count(1).focus("Dune").build(),
+                task("QUESTION", GenerationLocale.KO)
+            ).value();
 
             assertThat(response.getQuestions()).singleElement()
                 .extracting((question) -> question.getQuestionText())
@@ -186,15 +327,22 @@ class OpenAiAiProviderFallbackTest {
                 responsesTransport(properties)
             );
 
-            var response = provider.generateDiscussionGuide(new Request(
+            Request request = new Request(
                 10L,
                 "guide-v1",
                 "schema-v1",
+                "THOUGHT_EXPANSION",
+                "SELF_AI",
+                40,
+                "PRIVATE_CONTEXT",
+                "BEGINNER",
                 List.of(
                     new Evidence("R1", "REFLECTION", 1L, "처음 생각"),
                     new Evidence("A1", "ANSWER", 2L, "첫 답변")
-                )
-            ));
+                ),
+                GenerationLocale.KO
+            );
+            var response = provider.generateDiscussionGuide(request);
 
             assertThat(response.items()).hasSize(5);
             assertThat(response.provider()).isEqualTo("openai");
@@ -215,6 +363,16 @@ class OpenAiAiProviderFallbackTest {
                 .contains("Disclosure mode: PRIVATE_CONTEXT")
                 .contains("R1 [REFLECTION]")
                 .contains("A1 [ANSWER]");
+            provider.generateDiscussionGuide(new Request(
+                request.windowId(), request.promptVersion(), request.schemaVersion(),
+                request.purpose(), request.audienceMode(), request.targetMinutes(),
+                request.disclosureMode(), request.facilitationLevel(), request.evidence(), GenerationLocale.EN
+            ));
+            assertThat(requestBody.get())
+                .contains("Respond in English.")
+                .contains("required response language")
+                .doesNotContain("Respond in Korean.")
+                .doesNotContain("must be Korean");
         } finally {
             server.stop(0);
         }
@@ -393,7 +551,10 @@ class OpenAiAiProviderFallbackTest {
             );
 
             List<String> deltas = new ArrayList<>();
-            AiMessageResponse response = provider.streamWindowMessage(10L, SendMessageRequest.builder().content("Answer").build(), deltas::add);
+            AiMessageResponse response = provider.streamWindowMessageWithMetadata(
+                10L, SendMessageRequest.builder().content("Answer").build(), deltas::add,
+                task("WINDOW_ANSWER", GenerationLocale.EN)
+            ).value();
 
             assertThat(deltas).containsExactly("Hel", "lo");
             assertThat(response.getContent()).isEqualTo("Hello");
@@ -454,10 +615,11 @@ class OpenAiAiProviderFallbackTest {
                 responsesTransport(properties)
             );
 
-            AiMessageResponse response = provider.answerDebateMessage(10L, DebateMessageRequest.builder()
-                .personaId(2L)
-                .content("Debate")
-                .build());
+            AiMessageResponse response = provider.answerDebateMessageWithMetadata(
+                10L,
+                DebateMessageRequest.builder().personaId(2L).content("Debate").build(),
+                task("PERSONA", GenerationLocale.EN)
+            ).value();
 
             assertThat(response.getContent()).isEqualTo("Debate answer");
             assertThat(response.getAiModel()).isEqualTo(properties.getModel());
@@ -567,10 +729,14 @@ class OpenAiAiProviderFallbackTest {
                 responsesTransport(properties)
             );
 
-            AiMessageResponse response = provider.answerDebateMessage(10L, DebateMessageRequest.builder()
-                .personaId(2L)
-                .content("그렇다면 이 침묵을 어떻게 이어서 봐야 할까요?")
-                .build());
+            AiMessageResponse response = provider.answerDebateMessageWithMetadata(
+                10L,
+                DebateMessageRequest.builder()
+                    .personaId(2L)
+                    .content("그렇다면 이 침묵을 어떻게 이어서 봐야 할까요?")
+                    .build(),
+                task("PERSONA", GenerationLocale.KO)
+            ).value();
 
             assertThat(response.getContent()).isEqualTo("Context aware answer");
             assertThat(requestBody.get()).contains("AI Context Pack");
@@ -616,7 +782,10 @@ class OpenAiAiProviderFallbackTest {
             );
 
             List<String> deltas = new ArrayList<>();
-            assertThatThrownBy(() -> provider.streamWindowMessage(10L, SendMessageRequest.builder().content("Answer").build(), deltas::add))
+            assertThatThrownBy(() -> provider.streamWindowMessageWithMetadata(
+                10L, SendMessageRequest.builder().content("Answer").build(), deltas::add,
+                task("WINDOW_ANSWER", GenerationLocale.EN)
+            ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessage("OpenAI stream failed")
                 .hasMessageNotContaining("rate limit from provider");
@@ -671,19 +840,22 @@ class OpenAiAiProviderFallbackTest {
                         DebateMessageRequest.builder().personaId(1L).content("Debate").build(),
                         DebateMessageRequest.builder().personaId(2L).content("Debate").build()
                     ),
-                    new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1")
+                    new AiGenerationTask(
+                        "PERSONA", "persona-response-v1", "text-v1", GenerationLocale.EN
+                    )
                 );
             List<AiMessageResponse> responses = generation.value();
 
             assertThat(responses).hasSize(2);
             assertThat(responses).extracting(AiMessageResponse::getPersonaId).containsExactly(1L, 2L);
-            assertThat(responses).extracting(AiMessageResponse::getContent).containsExactly("Batch answer", "Missing persona answer");
-            assertThat(requestCount.get()).isEqualTo(2);
+            assertThat(responses.get(0).getContent()).isEqualTo("Batch answer");
+            assertThat(responses.get(1).getContent()).startsWith("This is a temporary discussion response.");
+            assertThat(requestCount.get()).isEqualTo(1);
             assertThat(generation.provider()).isEqualTo("openai");
             assertThat(generation.model()).isEqualTo(properties.getModel());
-            assertThat(generation.inputTokens()).isEqualTo(40);
-            assertThat(generation.cachedInputTokens()).isEqualTo(12);
-            assertThat(generation.outputTokens()).isEqualTo(8);
+            assertThat(generation.inputTokens()).isEqualTo(20);
+            assertThat(generation.cachedInputTokens()).isEqualTo(5);
+            assertThat(generation.outputTokens()).isEqualTo(4);
             assertThat(generation.outcome()).isEqualTo("FALLBACK");
             assertThat(generation.fallbackUsed()).isTrue();
         } finally {
@@ -719,8 +891,8 @@ class OpenAiAiProviderFallbackTest {
         AtomicReference<String> storedSnapshot = new AtomicReference<>();
         SessionWindowMapper windowMapper = new FakeSessionWindowMapper() {
             @Override
-            public int updateContextSnapshot(Long windowId, String contextSnapshot) {
-                storedSnapshot.set(contextSnapshot);
+            public int updateConversationSummaryKo(Long windowId, String summaryJson) {
+                storedSnapshot.set(summaryJson);
                 return 1;
             }
         };
@@ -764,10 +936,11 @@ class OpenAiAiProviderFallbackTest {
                 responsesTransport(properties)
             );
 
-            AiMessageResponse response = provider.answerWindowMessage(
+            AiMessageResponse response = provider.answerWindowMessageWithMetadata(
                 10L,
-                SendMessageRequest.builder().content("current").contextMessageId(10L).build()
-            );
+                SendMessageRequest.builder().content("current").contextMessageId(10L).build(),
+                task("WINDOW_ANSWER", GenerationLocale.KO)
+            ).value();
 
             assertThat(response.getContent()).isEqualTo("최종 답변");
             assertThat(requestCount.get()).isEqualTo(2);
@@ -808,8 +981,30 @@ class OpenAiAiProviderFallbackTest {
             10L,
             "guide-v1",
             "schema-v1",
-            List.of(new Evidence("R1", "REFLECTION", 1L, "처음 생각"))
+            "THOUGHT_EXPANSION",
+            "SELF_AI",
+            40,
+            "PRIVATE_CONTEXT",
+            "BEGINNER",
+            List.of(new Evidence("R1", "REFLECTION", 1L, "처음 생각")),
+            GenerationLocale.KO
         );
+    }
+
+    private static AiGenerationTask task(String taskType, GenerationLocale locale) {
+        return new AiGenerationTask(taskType, "test-v1", "text-v1", locale);
+    }
+
+    private static void assertOrdinaryEnglishFallback(
+        AiGenerationResult<AiMessageResponse> generation
+    ) {
+        assertThat(generation.generationLocale()).isEqualTo(GenerationLocale.EN);
+        assertThat(generation.outcome()).isEqualTo("FALLBACK");
+        assertThat(generation.fallbackUsed()).isTrue();
+        assertThat(generation.languageValidationOutcome()).isNull();
+        assertThat(generation.value().getContent())
+            .doesNotContainPattern("[\\uAC00-\\uD7A3]")
+            .contains("temporary");
     }
 
     private static OpenAiResponsesTransport responsesTransport(OpenAiProperties properties) {
@@ -827,9 +1022,15 @@ class OpenAiAiProviderFallbackTest {
         }
 
         @Override
-        public int updateReflectionSummary(Long insightId, String summary, String sourceHash, String model, String tokenUsage) {
+        public int updateConversationSummaryKo(Long windowId, String summaryJson) {
             return 1;
         }
+
+        @Override
+        public int updateConversationSummaryEn(Long windowId, String summaryJson) {
+            return 1;
+        }
+
         @Override
         public int insert(SessionWindowRecord record) {
             return 1;

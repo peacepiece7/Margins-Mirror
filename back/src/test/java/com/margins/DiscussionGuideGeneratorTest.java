@@ -13,6 +13,7 @@ import com.margins.ai.AiGenerationResult;
 import com.margins.ai.AiGenerationTask;
 import com.margins.ai.AiProvider;
 import com.margins.ai.AiTokenUsage;
+import com.margins.ai.GenerationLocale;
 import com.margins.ai.DiscussionGuideGeneration.Item;
 import com.margins.ai.DiscussionGuideGeneration.Request;
 import com.margins.ai.DiscussionGuideGeneration.Response;
@@ -47,7 +48,8 @@ class DiscussionGuideGeneratorTest {
                 "PRIVATE_CONTEXT"
             ),
             "SIMPLE",
-            false
+            false,
+            GenerationLocale.KO
         );
 
         assertThat(draft.items())
@@ -76,7 +78,8 @@ class DiscussionGuideGeneratorTest {
             sources,
             new GuideBrief("ISSUE_EXPLORATION", "SMALL_GROUP", 60, "PRIVATE_CONTEXT"),
             "STANDARD",
-            true
+            true,
+            GenerationLocale.KO
         );
 
         assertThat(draft.goal()).contains("근거");
@@ -108,7 +111,7 @@ class DiscussionGuideGeneratorTest {
         assertThat(request.getValue().audienceMode()).isEqualTo("SMALL_GROUP");
         assertThat(request.getValue().targetMinutes()).isEqualTo(60);
         assertThat(request.getValue().disclosureMode()).isEqualTo("PRIVATE_CONTEXT");
-        verify(provider, never()).suggestQuestions(any(), any());
+        verify(provider, never()).suggestQuestionsWithMetadata(any(), any(), any());
     }
 
     @Test
@@ -121,7 +124,8 @@ class DiscussionGuideGeneratorTest {
             validSources(),
             new GuideBrief("THOUGHT_EXPANSION", "SELF_AI", 30, "PRIVATE_CONTEXT"),
             "SIMPLE",
-            false
+            false,
+            GenerationLocale.KO
         ))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("brief");
@@ -157,7 +161,8 @@ class DiscussionGuideGeneratorTest {
         assertThatThrownBy(() -> generator.generate(
             20L,
             "discussion-guide-v1",
-            List.of(new SourceDraft("R1", "REFLECTION", 30L, "처음 생각"))
+            List.of(new SourceDraft("R1", "REFLECTION", 30L, "처음 생각")),
+            GenerationLocale.KO
         ))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("source alias");
@@ -176,7 +181,8 @@ class DiscussionGuideGeneratorTest {
         assertThatThrownBy(() -> generator.generate(
             20L,
             "discussion-guide-v1",
-            List.of(new SourceDraft("R1", "REFLECTION", 30L, "처음 생각"))
+            List.of(new SourceDraft("R1", "REFLECTION", 30L, "처음 생각")),
+            GenerationLocale.KO
         )).isInstanceOf(IllegalStateException.class);
     }
 
@@ -188,7 +194,8 @@ class DiscussionGuideGeneratorTest {
                 new AiGenerationTask(
                     "DISCUSSION_GUIDE",
                     "discussion-guide-v1",
-                    "discussion-guide-schema-v1"
+                    "discussion-guide-schema-v1",
+                    GenerationLocale.KO
                 ),
                 "openai",
                 "gpt-test",
@@ -203,7 +210,8 @@ class DiscussionGuideGeneratorTest {
         assertThatThrownBy(() -> generator.generate(
             20L,
             "discussion-guide-v1",
-            validSources()
+            validSources(),
+            GenerationLocale.KO
         )).isInstanceOf(IllegalStateException.class);
 
         assertThat(observed.get().failureCategory()).isEqualTo("TIMEOUT");
@@ -220,7 +228,8 @@ class DiscussionGuideGeneratorTest {
         assertThatThrownBy(() -> generator.generate(
             20L,
             "discussion-guide-v1",
-            List.of(source("A1", "REFLECTION", 1L, "근거"))
+            List.of(source("A1", "REFLECTION", 1L, "근거")),
+            GenerationLocale.KO
         )).isInstanceOf(IllegalStateException.class);
         assertThat(observed.get().failureCategory()).isEqualTo("EVIDENCE_VALIDATION");
 
@@ -239,7 +248,8 @@ class DiscussionGuideGeneratorTest {
         assertThatThrownBy(() -> generator.generate(
             20L,
             "discussion-guide-v1",
-            List.of(source("R1", "REFLECTION", 1L, "근거"))
+            List.of(source("R1", "REFLECTION", 1L, "근거")),
+            GenerationLocale.KO
         )).isInstanceOf(IllegalStateException.class);
         assertThat(observed.get().failureCategory()).isEqualTo("EVIDENCE_VALIDATION");
     }
@@ -256,7 +266,8 @@ class DiscussionGuideGeneratorTest {
         assertThatThrownBy(() -> generator.generate(
             20L,
             "discussion-guide-v1",
-            validSources()
+            validSources(),
+            GenerationLocale.KO
         )).isInstanceOf(IllegalStateException.class);
 
         assertThat(observed.get().failureCategory()).isEqualTo("SCHEMA_VALIDATION");
@@ -303,7 +314,8 @@ class DiscussionGuideGeneratorTest {
             assertThatThrownBy(() -> generator.generate(
                 20L,
                 "discussion-guide-v1",
-                invalidCase.sources()
+                invalidCase.sources(),
+                GenerationLocale.KO
             ))
                 .as(invalidCase.name())
                 .isInstanceOf(IllegalStateException.class);
@@ -319,7 +331,8 @@ class DiscussionGuideGeneratorTest {
         assertThatThrownBy(() -> generator(provider).generate(
             20L,
             "discussion-guide-v1",
-            validSources()
+            validSources(),
+            GenerationLocale.KO
         ))
             .isInstanceOf(IllegalStateException.class)
             .hasMessageContaining("no result");
@@ -427,7 +440,8 @@ class DiscussionGuideGeneratorTest {
             assertThatThrownBy(() -> generator(provider).generate(
                 20L,
                 "discussion-guide-v1",
-                validSources()
+                validSources(),
+                GenerationLocale.KO
             ))
                 .as(invalidCase.name())
                 .isInstanceOf(IllegalStateException.class);
@@ -464,7 +478,8 @@ class DiscussionGuideGeneratorTest {
         var draft = generator(provider).generate(
             20L,
             "discussion-guide-v1",
-            validSources()
+            validSources(),
+            GenerationLocale.KO
         );
 
         assertThat(draft.items())
@@ -492,12 +507,78 @@ class DiscussionGuideGeneratorTest {
         var draft = generator(provider).generate(
             20L,
             "discussion-guide-v1",
-            validSources()
+            validSources(),
+            GenerationLocale.KO
         );
 
         assertThat(draft.items()).hasSize(8);
         assertThat(draft.items()).filteredOn(item -> "OPTIONAL".equals(item.priority()))
             .hasSize(3);
+    }
+
+    @Test
+    void recordsGuideLanguageOutcomeAndFailsClosedOnOneMismatchedDisplayUnit() {
+        AiProvider provider = mock(AiProvider.class);
+        Response valid = validResponse();
+        when(provider.generateDiscussionGuide(any())).thenReturn(response(
+            "This discussion goal is clearly and entirely written in English.",
+            valid.issues(),
+            valid.items()
+        ));
+        DiscussionGuideGenerator generator = generator(provider);
+        AtomicReference<AiGenerationResult<?>> observed = observe(generator);
+
+        assertThatThrownBy(() -> generator.generate(
+            20L,
+            "discussion-guide-v1",
+            validSources(),
+            GuideBrief.defaults(),
+            "SIMPLE",
+            true,
+            GenerationLocale.KO
+        ))
+            .isInstanceOf(IllegalStateException.class)
+            .hasMessageContaining("language mismatch");
+
+        assertThat(observed.get().outcome()).isEqualTo("FAILURE");
+        assertThat(observed.get().languageValidationOutcome().name())
+            .isEqualTo("KNOWN_MISMATCH");
+    }
+
+    @Test
+    void ordinaryGuideFallbackKeepsNullableLanguageValidation() {
+        AiProvider provider = mock(AiProvider.class);
+        when(provider.generateDiscussionGuideWithMetadata(any())).thenAnswer(invocation -> {
+            Request request = invocation.getArgument(0);
+            return AiGenerationResult.completed(
+                validResponse(),
+                new AiGenerationTask(
+                    "DISCUSSION_GUIDE",
+                    request.promptVersion(),
+                    request.schemaVersion(),
+                    request.generationLocale()
+                ),
+                "placeholder",
+                "placeholder",
+                AiTokenUsage.NONE,
+                0,
+                "FALLBACK",
+                true
+            );
+        });
+        DiscussionGuideGenerator generator = generator(provider);
+        AtomicReference<AiGenerationResult<?>> observed = observe(generator);
+
+        var draft = generator.generate(
+            20L,
+            "discussion-guide-v1",
+            validSources(),
+            GenerationLocale.KO
+        );
+
+        assertThat(draft.languageValidationOutcome()).isNull();
+        assertThat(observed.get().outcome()).isEqualTo("FALLBACK");
+        assertThat(observed.get().languageValidationOutcome()).isNull();
     }
 
     private Response validResponse() {

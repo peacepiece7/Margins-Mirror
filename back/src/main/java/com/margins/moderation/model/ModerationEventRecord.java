@@ -34,6 +34,8 @@ public class ModerationEventRecord {
     private String routingOutcome;
     private boolean personaCalled;
     private String providerErrorCode;
+    private String generationLocale;
+    private String languageValidationOutcome;
     private String userFeedback;
     private boolean testData;
     private Instant createdAt;

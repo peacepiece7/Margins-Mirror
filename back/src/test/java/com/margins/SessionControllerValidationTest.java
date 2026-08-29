@@ -1,6 +1,7 @@
 package com.margins;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.asyncDispatch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -25,9 +27,11 @@ import com.margins.persona.controller.PersonaController;
 import com.margins.persona.service.PersonaService;
 import com.margins.persona.service.PersonaRecommendationService;
 import com.margins.question.controller.QuestionController;
+import com.margins.session.controller.BookReadingSessionController;
 import com.margins.session.controller.ReadingSessionController;
 import com.margins.session.controller.SessionWindowController;
 import com.margins.session.dto.AiMessageResponse;
+import com.margins.session.dto.BookReadingSessionResponse;
 import com.margins.session.dto.DebateTurnResponse;
 import com.margins.session.dto.SendMessageRequest;
 import com.margins.session.service.ReadingSessionService;
@@ -54,7 +58,7 @@ import org.springframework.web.server.ResponseStatusException;
 @WebMvcTest(
     excludeAutoConfiguration = SecurityAutoConfiguration.class,
     excludeFilters = @ComponentScan.Filter(type = FilterType.ASSIGNABLE_TYPE, classes = {SecurityConfig.class, JwtAuthenticationFilter.class}),
-    controllers = {ReadingSessionController.class, SessionWindowController.class, MessageController.class, QuestionController.class, PersonaController.class, MetricController.class}
+    controllers = {BookReadingSessionController.class, ReadingSessionController.class, SessionWindowController.class, MessageController.class, QuestionController.class, PersonaController.class, MetricController.class}
 )
 class SessionControllerValidationTest {
 
@@ -78,6 +82,36 @@ class SessionControllerValidationTest {
 
     @MockBean
     private PersonaRecommendationService personaRecommendationService;
+
+    @Test
+    void bookReadingSessionReturnsTheLightweightLocator() throws Exception {
+        when(readingSessionService.findForBook(7L)).thenReturn(BookReadingSessionResponse.builder()
+            .sessionId(11L)
+            .title("Dune reflection")
+            .build());
+
+        mockMvc.perform(get("/api/books/7/reading-session"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.sessionId").value(11))
+            .andExpect(jsonPath("$.data.title").value("Dune reflection"));
+    }
+
+    @Test
+    void bookReadingSessionReturnsSuccessfulNullWhenNoSessionExists() throws Exception {
+        mockMvc.perform(get("/api/books/7/reading-session"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    void readingSessionArchiveReturnsNoReplacementList() throws Exception {
+        mockMvc.perform(delete("/api/reading-sessions/11"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").value(nullValue()));
+    }
 
     @Test
     void readingSessionRejectsMissingTitle() throws Exception {
@@ -241,8 +275,11 @@ class SessionControllerValidationTest {
 
     @Test
     void streamedMessageEmitsErrorEventAfterStreamOpens() throws Exception {
-        when(sessionWindowService.streamMessage(eq(1L), any(SendMessageRequest.class), any()))
-            .thenThrow(new IllegalStateException("AI provider unavailable"));
+        doAnswer(invocation -> {
+            Consumer<String> deltaConsumer = invocation.getArgument(2);
+            deltaConsumer.accept("opposite-language delta");
+            throw new ApiException(ApiErrorCode.STREAM_MESSAGE_FAILED, "AI response language mismatch");
+        }).when(sessionWindowService).streamMessage(eq(1L), any(SendMessageRequest.class), any());
 
         MvcResult streamingResult = mockMvc.perform(post("/api/session-windows/1/messages/stream")
                 .accept(MediaType.TEXT_EVENT_STREAM)
@@ -259,11 +296,14 @@ class SessionControllerValidationTest {
         assertThat(stream).contains(
             "event: message.start",
             "\"clientCorrelationId\":\"client-2\"",
+            "event: message.delta",
+            "opposite-language delta",
             "event: message.error",
             "\"code\":\"STREAM_MESSAGE_FAILED\""
         );
-        assertThat(stream).doesNotContain("AI provider unavailable", "\"message\"");
+        assertThat(stream).doesNotContain("AI response language mismatch", "\"message\"", "event: message.done");
         assertThat(stream.indexOf("event: message.start")).isLessThan(stream.indexOf("event: message.error"));
+        assertThat(stream.indexOf("event: message.delta")).isLessThan(stream.indexOf("event: message.error"));
     }
 
     @Test

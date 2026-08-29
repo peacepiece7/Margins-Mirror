@@ -1,5 +1,6 @@
 package com.margins.book.dto;
 
+import com.margins.ai.GenerationLocale;
 import lombok.Builder;
 import lombok.Value;
 
@@ -13,4 +14,5 @@ public class BookKnowledgeAnalyzeRequest {
     String description;
     String language;
     String promptVersion;
+    GenerationLocale generationLocale;
 }

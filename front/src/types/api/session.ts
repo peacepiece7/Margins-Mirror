@@ -4,6 +4,11 @@ export interface CreateReadingSessionResponse {
   title: string;
 }
 
+export interface BookReadingSessionResponse {
+  sessionId: number;
+  title: string;
+}
+
 export interface CreateSessionWindowResponse {
   windowId: number;
   sessionId: number;
@@ -154,32 +159,6 @@ export interface ReadingSessionStats {
   messageCount: number;
   personaResponseCount: number;
   personaCount: number;
-}
-
-export interface ReadingSessionSummary {
-  sessionId: number;
-  bookId: number;
-  bookTitle: string;
-  bookAuthor?: string | null;
-  title: string;
-  windowCount: number;
-  questionCount: number;
-  answeredQuestionCount: number;
-  highlightCount: number;
-  messageCount: number;
-  tags: SessionTag[];
-}
-
-export interface ReadingSessionListResponse {
-  sessions: ReadingSessionSummary[];
-}
-
-export interface ReadingLibraryStatsResponse {
-  sessionCount: number;
-  distinctBookCount: number;
-  answeredQuestionCount: number;
-  highlightCount: number;
-  messageCount: number;
 }
 
 export interface SessionSearchResult {

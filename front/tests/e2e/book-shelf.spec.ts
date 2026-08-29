@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 test.setTimeout(60000);
 
 const backendUrl = process.env.MARGINS_BACKEND_URL || 'http://localhost:8080';
-const e2eUsername = process.env.MARGINS_E2E_USERNAME || 'demo_reader';
+const e2eUsername = process.env.MARGINS_E2E_USERNAME || 'peacepiece';
 const e2ePassword = process.env.MARGINS_E2E_PASSWORD || 'reader';
 
 async function login(page: Page) {
@@ -47,7 +47,7 @@ test.beforeEach(async ({ request }) => {
 });
 
 test('filters, sorts, and keeps the selected book visible across shelf views', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/login');
   await login(page);
   await expect(page).toHaveURL(/\/book\/discover$/);
 

@@ -62,6 +62,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
+import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.test.context.TestPropertySource;
@@ -112,11 +113,13 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             "TRUNCATE TABLE ai_generation_events",
             "TRUNCATE TABLE moderation_events",
             "TRUNCATE TABLE moderation_daily_aggregates",
+            "TRUNCATE TABLE discussion_run_refinements",
             "TRUNCATE TABLE discussion_runs",
             "TRUNCATE TABLE discussion_guide_items",
             "TRUNCATE TABLE discussion_guides",
             "TRUNCATE TABLE messages",
             "TRUNCATE TABLE reflection_interview_answer_revisions",
+            "TRUNCATE TABLE reflection_summaries",
             "TRUNCATE TABLE session_insights",
             "TRUNCATE TABLE questions",
             "TRUNCATE TABLE reflection_interviews",
@@ -145,13 +148,13 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             """);
         jdbc.update("""
             INSERT INTO personas (
-              name, display_name, system_prompt, tone, is_active, is_test_data
+              name, display_name, system_prompt, tone, created_by_user_id, is_active, is_test_data
             ) VALUES (
               'integration-reader', '통합 관점', '책의 근거로 다른 관점을 제시한다.',
-              '차분함', TRUE, TRUE
+              '차분함', 1, TRUE, TRUE
             )
             """);
-        TestSecurityContextSupport.loginAs(1L, "demo_reader");
+        TestSecurityContextSupport.loginAs(1L, "peacepiece");
     }
 
     @AfterEach
@@ -164,8 +167,8 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         CompletedLoop loop = completeLoop();
 
         var refinement = service.complete(loop.runId(), null);
-        assertThat(refinement.getSuggestedContent()).isNotBlank();
-        assertThat(refinement.getSuggestionStatus()).isEqualTo("READY");
+        assertThat(refinement.getSuggestedContent()).isNull();
+        assertThat(refinement.getSuggestionStatus()).isEqualTo("FAILED");
         assertThat(service.complete(loop.runId(), null).getSuggestedContent())
             .isEqualTo(refinement.getSuggestedContent());
         assertThat(service.refinement(loop.runId()).getSuggestedContent())
@@ -181,20 +184,26 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         )).isEqualTo(1);
         assertThat(jdbc.queryForMap(
             """
-            SELECT refinement_suggestion_status,
-                   CHAR_LENGTH(refinement_input_hash) AS input_hash_length,
-                   CHAR_LENGTH(refinement_transcript_hash) AS transcript_hash_length,
-                   JSON_UNQUOTE(
-                     JSON_EXTRACT(refinement_generation_metadata_json, '$.taskType')
-                   ) AS task_type
-            FROM discussion_runs
-            WHERE id=?
+            SELECT generation_locale, status, CHAR_LENGTH(input_hash) AS input_hash_length,
+                   CHAR_LENGTH(transcript_hash) AS transcript_hash_length
+            FROM discussion_run_refinements
+            WHERE run_id=?
             """,
             loop.runId()
-        )).containsEntry("refinement_suggestion_status", "READY")
+        )).containsEntry("generation_locale", "en")
+            .containsEntry("status", "FAILED")
             .containsEntry("input_hash_length", 64L)
-            .containsEntry("transcript_hash_length", 64L)
-            .containsEntry("task_type", "REFLECTION_REFINEMENT");
+            .containsEntry("transcript_hash_length", 64L);
+        assertThat(jdbc.queryForMap(
+            """
+            SELECT status, suggestion_content, generation_metadata_json
+            FROM discussion_run_refinements
+            WHERE run_id=? AND generation_locale='en'
+            """,
+            loop.runId()
+        )).containsEntry("status", "FAILED")
+            .containsEntry("suggestion_content", null)
+            .doesNotContainEntry("generation_metadata_json", null);
         assertThat(jdbc.queryForList(
             "SELECT DISTINCT task_type FROM ai_generation_events",
             String.class
@@ -240,6 +249,13 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
                 );
             });
 
+        jdbc.update("""
+            INSERT INTO reflection_summaries (
+              reflection_insight_id, generation_locale, source_hash, summary, model,
+              language_validation_outcome, is_test_data
+            ) VALUES (?, 'en', REPEAT('s', 64), 'cached reflection summary', 'test-model', 'UNKNOWN', TRUE)
+            """, loop.reflectionId());
+
         Instant now = Instant.parse("2026-08-01T00:00:00Z");
         jdbc.update("""
             UPDATE users
@@ -261,9 +277,44 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             Integer.class
         )).isZero();
         assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM discussion_run_refinements WHERE run_id=?",
+            Integer.class,
+            loop.runId()
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM reflection_summaries WHERE reflection_insight_id=?",
+            Integer.class,
+            loop.reflectionId()
+        )).isZero();
+        assertThat(jdbc.queryForObject(
             "SELECT COUNT(*) FROM ai_generation_events WHERE is_test_data=TRUE",
             Integer.class
         )).isGreaterThan(0);
+    }
+
+    @Test
+    void refinementCacheIdentityIsSeparatedByPreferredLocale() {
+        CompletedLoop loop = completeLoop();
+
+        var english = service.complete(loop.runId(), null);
+        jdbc.update("UPDATE users SET preferred_locale='ko' WHERE id=1");
+        var korean = service.refinement(loop.runId());
+
+        assertThat(english.getSuggestedContent()).isNull();
+        assertThat(korean.getSuggestedContent()).isNull();
+        assertThat(english.getSuggestionStatus()).isEqualTo("FAILED");
+        assertThat(korean.getSuggestionStatus()).isEqualTo("FAILED");
+        assertThat(aiProvider.refinementCalls()).isEqualTo(2);
+        assertThat(jdbc.queryForList(
+            "SELECT generation_locale FROM discussion_run_refinements WHERE run_id=? ORDER BY generation_locale",
+            String.class,
+            loop.runId()
+        )).containsExactly("en", "ko");
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM discussion_run_refinements WHERE run_id=? AND status='FAILED' AND suggestion_content IS NULL",
+            Integer.class,
+            loop.runId()
+        )).isEqualTo(2);
     }
 
     @Test
@@ -403,7 +454,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         try {
             CompletableFuture<?> first = CompletableFuture.supplyAsync(
                 () -> {
-                    TestSecurityContextSupport.loginAs(1L, "demo_reader");
+                    TestSecurityContextSupport.loginAs(1L, "peacepiece");
                     try {
                         return service.turn(run.getRunId(), GuidedDiscussionTurnRequest.builder()
                             .personaId(personaId)
@@ -425,7 +476,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             }
             CompletableFuture<?> second = CompletableFuture.supplyAsync(
                 () -> {
-                    TestSecurityContextSupport.loginAs(1L, "demo_reader");
+                    TestSecurityContextSupport.loginAs(1L, "peacepiece");
                     try {
                         return service.turn(run.getRunId(), GuidedDiscussionTurnRequest.builder()
                             .personaId(personaId)
@@ -524,6 +575,61 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Test
+    void refinementFallbackDoesNotReadOrOverwriteLegacySingleSlot() {
+        CompletedLoop loop = completeLoop();
+        jdbc.update(
+            """
+            UPDATE discussion_runs
+            SET refinement_suggestion_status='READY',
+                refinement_input_hash=REPEAT('l', 64),
+                refinement_transcript_hash=REPEAT('t', 64),
+                refinement_prompt_version='legacy-refinement',
+                refinement_suggestion_content='legacy suggestion',
+                refinement_generation_metadata_json='{}',
+                refinement_generated_at=CURRENT_TIMESTAMP(6)
+            WHERE id=?
+            """,
+            loop.runId()
+        );
+
+        var failed = service.complete(loop.runId(), null);
+
+        assertThat(failed.getSuggestionStatus()).isEqualTo("FAILED");
+        assertThat(failed.getSuggestedContent()).isNull();
+        assertThat(jdbc.queryForMap(
+            """
+            SELECT refinement_suggestion_status, refinement_input_hash,
+                   refinement_transcript_hash, refinement_prompt_version,
+                   refinement_suggestion_content, refinement_generation_metadata_json
+            FROM discussion_runs
+            WHERE id=?
+            """,
+            loop.runId()
+        )).containsEntry("refinement_suggestion_status", "READY")
+            .containsEntry("refinement_input_hash", "l".repeat(64))
+            .containsEntry("refinement_transcript_hash", "t".repeat(64))
+            .containsEntry("refinement_prompt_version", "legacy-refinement")
+            .containsEntry("refinement_suggestion_content", "legacy suggestion")
+            .containsEntry("refinement_generation_metadata_json", "{}");
+    }
+
+    @Test
+    void migration054RejectsBlankReadyRefinementContent() {
+        CompletedLoop loop = completeLoop();
+
+        assertThatThrownBy(() -> jdbc.update(
+            """
+            INSERT INTO discussion_run_refinements (
+              run_id, generation_locale, input_hash, transcript_hash, prompt_version,
+              status, suggestion_content, is_test_data, generated_at
+            ) VALUES (?, 'en', REPEAT('b', 64), REPEAT('t', 64), 'blank-check',
+                      'READY', '   ', TRUE, CURRENT_TIMESTAMP(6))
+            """,
+            loop.runId()
+        )).isInstanceOf(DataAccessException.class);
+    }
+
+    @Test
     void reusesFailedRefinementWithoutFakeSuggestionAndStillAllowsKeep() {
         CompletedLoop loop = completeLoop();
         aiProvider.failRefinement();
@@ -538,11 +644,12 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(jdbc.queryForObject(
             """
             SELECT COUNT(*)
-            FROM discussion_runs
-            WHERE id=?
-              AND refinement_suggestion_status='FAILED'
-              AND refinement_suggestion_content IS NULL
-              AND refinement_generation_metadata_json IS NOT NULL
+            FROM discussion_run_refinements
+            WHERE run_id=?
+              AND generation_locale='en'
+              AND status='FAILED'
+              AND suggestion_content IS NULL
+              AND generation_metadata_json IS NOT NULL
             """,
             Integer.class,
             loop.runId()
@@ -560,7 +667,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         CompletedLoop loop = completeLoop();
         var first = service.complete(loop.runId(), null);
         String firstInputHash = jdbc.queryForObject(
-            "SELECT refinement_input_hash FROM discussion_runs WHERE id=?",
+            "SELECT input_hash FROM discussion_run_refinements WHERE run_id=? AND generation_locale='en' ORDER BY id LIMIT 1",
             String.class,
             loop.runId()
         );
@@ -582,13 +689,13 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
 
         var regenerated = service.refinement(loop.runId());
         String nextInputHash = jdbc.queryForObject(
-            "SELECT refinement_input_hash FROM discussion_runs WHERE id=?",
+            "SELECT input_hash FROM discussion_run_refinements WHERE run_id=? AND generation_locale='en' ORDER BY id DESC LIMIT 1",
             String.class,
             loop.runId()
         );
 
-        assertThat(regenerated.getSuggestionStatus()).isEqualTo("READY");
-        assertThat(regenerated.getSuggestedContent()).isEqualTo(first.getSuggestedContent());
+        assertThat(regenerated.getSuggestionStatus()).isEqualTo("FAILED");
+        assertThat(regenerated.getSuggestedContent()).isNull();
         assertThat(nextInputHash).isNotEqualTo(firstInputHash);
         assertThat(aiProvider.refinementCalls()).isEqualTo(2);
         assertThat(service.refinement(loop.runId()).getSuggestedContent())
@@ -603,12 +710,10 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
 
         jdbc.update(
             """
-            UPDATE discussion_runs
-            SET refinement_suggestion_status='PENDING',
-                refinement_suggestion_content=NULL,
-                refinement_generation_metadata_json=NULL,
-                refinement_generated_at=NULL
-            WHERE id=?
+            UPDATE discussion_run_refinements
+            SET status='PENDING', suggestion_content=NULL,
+                generation_metadata_json=NULL, generated_at=NULL
+            WHERE run_id=? AND generation_locale='en'
             """,
             loop.runId()
         );
@@ -803,7 +908,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
               title_normalized, author_normalized, lookup_key_type, lookup_key,
               title, author, summary, themes_json, discussion_points_json,
               recommended_personas_json, famous_quotes_json, keywords_json,
-              prompt_version, status, fallback_used, is_test_data, generated_at
+              prompt_version, generation_locale, status, fallback_used, is_test_data, generated_at
             ) VALUES (
               'integration reflection book', 'test author',
               'title_author', 'integration reflection book|test author',
@@ -813,7 +918,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
                 'recommendedPersonaKeys', JSON_ARRAY()
               )),
               JSON_ARRAY(), JSON_ARRAY(), JSON_ARRAY(),
-              'book-knowledge-v1', 'ready', TRUE, TRUE,
+              'book-knowledge-v1', 'en', 'ready', TRUE, TRUE,
               CURRENT_TIMESTAMP - INTERVAL 45 DAY
             )
             """,
@@ -1171,7 +1276,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
                     assertThat(exception.getCode()).isEqualTo(ApiErrorCode.COMMON_NOT_FOUND)
                 );
         } finally {
-            TestSecurityContextSupport.loginAs(1L, "demo_reader");
+            TestSecurityContextSupport.loginAs(1L, "peacepiece");
         }
     }
 
@@ -1398,7 +1503,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         RegenerateDiscussionGuideRequest request
     ) {
         return CompletableFuture.supplyAsync(() -> {
-            TestSecurityContextSupport.loginAs(1L, "demo_reader");
+            TestSecurityContextSupport.loginAs(1L, "peacepiece");
             try {
                 return service.regenerateGuide(guideId, request);
             } catch (ApiException exception) {
@@ -1486,14 +1591,15 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         private final AtomicReference<CountDownLatch> personaRelease = new AtomicReference<>();
 
         @Override
-        public QuestionListResponse suggestQuestions(
+        public AiGenerationResult<QuestionListResponse> suggestQuestionsWithMetadata(
             Long windowId,
-            GenerateQuestionsRequest request
+            GenerateQuestionsRequest request,
+            AiGenerationTask task
         ) {
             assertThat(TransactionSynchronizationManager.isActualTransactionActive())
                 .as("Interview provider call must run outside a DB transaction")
                 .isFalse();
-            return super.suggestQuestions(windowId, request);
+            return super.suggestQuestionsWithMetadata(windowId, request, task);
         }
 
         @Override
@@ -1561,21 +1667,23 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         }
 
         @Override
-        public AiMessageResponse answerWindowMessage(
+        public AiGenerationResult<AiMessageResponse> answerWindowMessageWithMetadata(
             Long windowId,
-            SendMessageRequest request
+            SendMessageRequest request,
+            AiGenerationTask task
         ) {
             String content = request.getContent();
             if (content != null && content.contains("[DISCUSSION_DIRECTOR]")) {
-                return AiMessageResponse.builder()
+                return AiGenerationResult.completed(AiMessageResponse.builder()
                     .windowId(windowId)
                     .role("assistant")
                     .content("{\"action\":\"CALL_PERSPECTIVE\",\"reply\":\"답을 반영했습니다.\",\"focus\":\"현재 쟁점\",\"candidatePersonaIds\":[1]}")
                     .streamingReady(true)
                     .aiModel("placeholder")
-                    .build();
+                    .build(), task, "placeholder", "placeholder", AiTokenUsage.NONE, 0,
+                    "FALLBACK", true);
             }
-            if (content != null && content.contains("아래 현재 Reflection과 토론에서 만난 관점")) {
+            if (content != null && content.contains("Compare the current Reflection with the perspective")) {
                 assertThat(TransactionSynchronizationManager.isActualTransactionActive())
                     .as("Refinement provider call must run outside a DB transaction")
                     .isFalse();
@@ -1584,13 +1692,14 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
                     throw new IllegalStateException("refinement provider unavailable");
                 }
             }
-            return super.answerWindowMessage(windowId, request);
+            return super.answerWindowMessageWithMetadata(windowId, request, task);
         }
 
         @Override
-        public AiMessageResponse answerDebateMessage(
+        public AiGenerationResult<AiMessageResponse> answerDebateMessageWithMetadata(
             Long windowId,
-            DebateMessageRequest request
+            DebateMessageRequest request,
+            AiGenerationTask task
         ) {
             personaCalls.incrementAndGet();
             CountDownLatch started = personaStarted.get();
@@ -1609,18 +1718,10 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             if (personaFailure.getAndSet(false)) {
                 throw new IllegalStateException("persona provider unavailable");
             }
-            return super.answerDebateMessage(windowId, request);
-        }
-
-        @Override
-        public AiGenerationResult<AiMessageResponse> answerDebateMessageWithMetadata(
-            Long windowId,
-            DebateMessageRequest request,
-            AiGenerationTask task
-        ) {
             if (personaConfiguredFallback.getAndSet(false)) {
-                personaCalls.incrementAndGet();
-                AiMessageResponse response = super.answerDebateMessage(windowId, request);
+                AiMessageResponse response = super
+                    .answerDebateMessageWithMetadata(windowId, request, task)
+                    .value();
                 return AiGenerationResult.completed(
                     response,
                     task,
@@ -1632,7 +1733,8 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
                     true
                 );
             }
-            return super.answerDebateMessageWithMetadata(windowId, request, task);
+            return super.answerDebateMessageWithMetadata(windowId, request, task)
+                .withOutcome("SUCCESS", false);
         }
 
         void failRefinement() {

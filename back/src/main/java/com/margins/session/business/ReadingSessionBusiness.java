@@ -15,6 +15,7 @@ import com.margins.question.model.QuestionRecord;
 import com.margins.reflectionloop.ReflectionLoopProperties;
 import com.margins.reflectionloop.business.ReflectionBusiness;
 import com.margins.reflectionloop.model.dto.request.SaveReflectionRequest;
+import com.margins.session.dto.BookReadingSessionResponse;
 import com.margins.session.dto.CreateReadingSessionRequest;
 import com.margins.session.dto.CreateReadingSessionResponse;
 import com.margins.session.dto.CreateReviewCommentRequest;
@@ -23,11 +24,8 @@ import com.margins.session.dto.CreateSessionTagRequest;
 import com.margins.session.dto.CreateSessionHighlightRequest;
 import com.margins.session.dto.PublicReviewDto;
 import com.margins.session.dto.PublicReviewListResponse;
-import com.margins.session.dto.ReadingLibraryStatsResponse;
 import com.margins.session.dto.ReadingSessionNextActionDto;
-import com.margins.session.dto.ReadingSessionListResponse;
 import com.margins.session.dto.ReadingSessionStatsDto;
-import com.margins.session.dto.ReadingSessionSummaryDto;
 import com.margins.session.dto.ReadingSessionTimelineResponse;
 import com.margins.session.dto.ReviewCommentDto;
 import com.margins.session.dto.ReviewCommentListResponse;
@@ -59,10 +57,7 @@ import com.margins.session.model.SessionSearchResultRecord;
 import com.margins.session.model.SessionTagRecord;
 import com.margins.session.model.SessionWindowRecord;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
-import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -105,7 +100,7 @@ public class ReadingSessionBusiness {
     }
 
     @Autowired
-    void configureSessionWindowPersonaMapper(SessionWindowPersonaMapper mapper) {
+    public void configureSessionWindowPersonaMapper(SessionWindowPersonaMapper mapper) {
         this.sessionWindowPersonaMapper = mapper;
     }
 
@@ -170,32 +165,15 @@ public class ReadingSessionBusiness {
         return toTimeline(readingSessionMapper.findByIdAndUserId(sessionId, currentUserId()));
     }
 
-    /** 세션별 태그 조회를 피하도록 태그를 일괄 로드해 간단한 library 카드를 반환한다. */
-    public ReadingSessionListResponse findSummaries() {
-        List<ReadingSessionRecord> records = readingSessionMapper.findSummariesByUserId(currentUserId());
-        Map<Long, List<SessionTagDto>> tagsBySessionId = tagsBySessionId(records);
-
-        return ReadingSessionListResponse.builder()
-            .sessions(records
-                .stream()
-                .map((record) -> toSummaryDto(record, tagsBySessionId.getOrDefault(record.getId(), List.of())))
-                .toList())
-            .build();
-    }
-
-    /** 중복 카운터를 저장하지 않고 현재 요약에서 대시보드 통계를 계산한다. */
-    public ReadingLibraryStatsResponse findLibraryStats() {
-        List<ReadingSessionSummaryDto> summaries = readingSessionMapper.findSummariesByUserId(currentUserId())
-            .stream()
-            .map(this::toSummaryStatsDto)
-            .toList();
-        int sessionCount = summaries.size();
-        return ReadingLibraryStatsResponse.builder()
-            .sessionCount(sessionCount)
-            .distinctBookCount((int) summaries.stream().map(ReadingSessionSummaryDto::getBookId).distinct().count())
-            .answeredQuestionCount(summaries.stream().mapToInt((summary) -> defaultInt(summary.getAnsweredQuestionCount())).sum())
-            .highlightCount(summaries.stream().mapToInt((summary) -> defaultInt(summary.getHighlightCount())).sum())
-            .messageCount(summaries.stream().mapToInt((summary) -> defaultInt(summary.getMessageCount())).sum())
+    /** 접근 가능한 책의 최신 세션을 식별자와 표시 제목으로만 투영한다. */
+    public BookReadingSessionResponse findForBook(Long bookId) {
+        ReadingSessionRecord session = readingSessionMapper.findFirstByBookIdAndUserId(bookId, currentUserId());
+        if (session == null) {
+            return null;
+        }
+        return BookReadingSessionResponse.builder()
+            .sessionId(session.getId())
+            .title(session.getTitle())
             .build();
     }
 
@@ -271,9 +249,8 @@ public class ReadingSessionBusiness {
 
 
     /** 감사용 연결 레코드는 보존하면서 사용자 목록에서 세션을 보관 처리한다. */
-    public ReadingSessionListResponse archive(Long sessionId) {
+    public void archive(Long sessionId) {
         requireUpdated(readingSessionMapper.softDelete(sessionId, currentUserId()));
-        return findSummaries();
     }
 
     /** 독자에게 보이는 세션 제목을 바꾸고 수정된 timeline을 반환한다. */
@@ -746,61 +723,6 @@ public class ReadingSessionBusiness {
             .personaResponseCount((int) personaResponses)
             .personaCount((int) personas)
             .build();
-    }
-
-    /** 이미 일괄 로드한 태그를 붙여 요약 레코드를 사이드바 카드로 매핑한다. */
-    private ReadingSessionSummaryDto toSummaryDto(ReadingSessionRecord record, List<SessionTagDto> tags) {
-        return ReadingSessionSummaryDto.builder()
-            .sessionId(record.getId())
-            .bookId(record.getBookId())
-            .bookTitle(record.getBookTitle())
-            .bookAuthor(record.getBookAuthor())
-            .title(record.getTitle())
-
-            .windowCount(record.getWindowCount())
-            .questionCount(record.getQuestionCount())
-            .answeredQuestionCount(record.getAnsweredQuestionCount())
-            .highlightCount(record.getHighlightCount())
-            .messageCount(record.getMessageCount())
-            .tags(tags)
-            .build();
-    }
-
-    /** library 집계 계산에 쓰는 통계 DTO 형태로 레코드를 매핑한다. */
-    private ReadingSessionSummaryDto toSummaryStatsDto(ReadingSessionRecord record) {
-        return ReadingSessionSummaryDto.builder()
-            .sessionId(record.getId())
-            .bookId(record.getBookId())
-
-            .answeredQuestionCount(record.getAnsweredQuestionCount())
-            .highlightCount(record.getHighlightCount())
-            .messageCount(record.getMessageCount())
-            .build();
-    }
-
-    /** 세션 목록의 태그를 일괄 로드하고 세션 식별자별로 묶는다. */
-    private Map<Long, List<SessionTagDto>> tagsBySessionId(List<ReadingSessionRecord> records) {
-        if (records.isEmpty()) {
-            return Map.of();
-        }
-
-        List<Long> sessionIds = records.stream()
-            .map(ReadingSessionRecord::getId)
-            .toList();
-        Set<Long> sessionIdSet = Set.copyOf(sessionIds);
-        return sessionTagMapper.findBySessionIds(sessionIds, currentUserId())
-            .stream()
-            .filter((tag) -> sessionIdSet.contains(tag.getSessionId()))
-            .map(this::toTagDto)
-            .collect(Collectors.groupingBy(
-                SessionTagDto::getSessionId,
-                java.util.LinkedHashMap::new,
-                Collectors.toList()
-            ));
-    }
-
-    private int defaultInt(Integer value) {
-        return value == null ? 0 : value;
     }
 
     /** 리뷰/takeaway 행에서 쓰는 현재 기본값으로 인사이트 유형을 정규화한다. */

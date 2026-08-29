@@ -33,16 +33,16 @@ class AccountManagementTest {
     void profileRequestOnlyAcceptsMutableDisplayName() {
         assertThat(AccountController.ProfileRequest.class.getRecordComponents())
             .extracting(component -> component.getName())
-            .containsExactly("displayName");
+            .containsExactly("displayName", "preferredLocale");
     }
 
     @Test
     void profileUpdateChangesDisplayNameWithoutChangingLoginIdentityOrSession() {
         AccountMapper accountMapper = mock(AccountMapper.class);
         RefreshTokenService refreshTokens = mock(RefreshTokenService.class);
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         when(accountMapper.findUserById(user.getId())).thenReturn(Optional.of(user));
-        when(accountMapper.updateDisplayName(user.getId(), "Reader Name")).thenReturn(1);
+        when(accountMapper.updateProfile(user.getId(), "Reader Name", "en")).thenReturn(1);
         AccountBusiness business = new AccountBusiness(
             accountMapper,
             mock(AccountChallengeService.class),
@@ -52,17 +52,37 @@ class AccountManagementTest {
             mock(PrivacyConsentService.class)
         );
 
-        AccountBusiness.ProfileResult result = business.updateProfile(user.getId(), " Reader Name ");
+        AccountBusiness.ProfileResult result = business.updateProfile(user.getId(), " Reader Name ", "en");
 
-        verify(accountMapper).updateDisplayName(user.getId(), "Reader Name");
+        verify(accountMapper).updateProfile(user.getId(), "Reader Name", "en");
         verifyNoInteractions(refreshTokens);
         assertThat(result.account().username()).isEqualTo(user.getUsername());
     }
 
     @Test
+    void legacyProfileUpdatePreservesTheStoredLocale() {
+        AccountMapper accountMapper = mock(AccountMapper.class);
+        UserRecord user = TestAuthSupport.peacepieceUser();
+        when(accountMapper.findUserById(user.getId())).thenReturn(Optional.of(user));
+        when(accountMapper.updateProfile(user.getId(), "Reader Name", null)).thenReturn(1);
+        AccountBusiness business = new AccountBusiness(
+            accountMapper,
+            mock(AccountChallengeService.class),
+            mock(RefreshTokenService.class),
+            mock(PasswordEncoder.class),
+            mock(Environment.class),
+            mock(PrivacyConsentService.class)
+        );
+
+        business.updateProfile(user.getId(), "Reader Name", null);
+
+        verify(accountMapper).updateProfile(user.getId(), "Reader Name", null);
+    }
+
+    @Test
     void accessTokenCarriesCredentialsVersion() {
         JwtTokenService service = tokenService();
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
 
         AuthPrincipal principal = service.validate(service.createAccessToken(user)).orElseThrow();
 
@@ -84,7 +104,7 @@ class AccountManagementTest {
         AccountChallengeService challenges = mock(AccountChallengeService.class);
         RefreshTokenService refreshTokens = mock(RefreshTokenService.class);
         PrivacyConsentService privacy = mock(PrivacyConsentService.class);
-        UserRecord user = TestAuthSupport.demo_readerUser();
+        UserRecord user = TestAuthSupport.peacepieceUser();
         when(accountMapper.findUserById(user.getId())).thenReturn(Optional.of(user));
         when(accountMapper.resign(
             org.mockito.ArgumentMatchers.eq(user.getId()),

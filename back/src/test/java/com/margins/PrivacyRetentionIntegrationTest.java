@@ -23,6 +23,7 @@ class PrivacyRetentionIntegrationTest extends AbstractMySqlIntegrationTest {
         jdbc.update("DELETE FROM pending_google_registrations");
         jdbc.update("DELETE FROM auth_email_verifications");
         jdbc.update("DELETE FROM auth_email_verification_rate_limits");
+        jdbc.update("DELETE FROM contact_inquiries");
         jdbc.update("DELETE FROM refresh_tokens");
         jdbc.update("DELETE FROM account_lifecycle_events");
         jdbc.update("DELETE FROM anonymous_exit_surveys");
@@ -41,6 +42,8 @@ class PrivacyRetentionIntegrationTest extends AbstractMySqlIntegrationTest {
         insertEmailVerification("future@example.com", now.minus(1, ChronoUnit.DAYS).plusSeconds(1));
         insertEmailRateLimit("due-rate", now);
         insertEmailRateLimit("future-rate", now.plusSeconds(1));
+        insertContactInquiry("due-contact@example.com", now);
+        insertContactInquiry("future-contact@example.com", now.plusSeconds(1));
         insertRefreshToken(userId, "due-refresh", now.minus(7, ChronoUnit.DAYS));
         insertRefreshToken(userId, "future-refresh", now.minus(7, ChronoUnit.DAYS).plusSeconds(1));
         jdbc.update("UPDATE users SET failed_login_count=3, locked_until=? WHERE id=?",
@@ -58,6 +61,7 @@ class PrivacyRetentionIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(result.googleRegistrations()).isEqualTo(1);
         assertThat(result.emailVerifications()).isEqualTo(1);
         assertThat(result.emailVerificationRateLimits()).isEqualTo(1);
+        assertThat(result.contactInquiries()).isEqualTo(1);
         assertThat(result.refreshTokens()).isEqualTo(1);
         assertThat(result.releasedLoginLocks()).isEqualTo(1);
         assertThat(result.lifecycleEvents()).isEqualTo(1);
@@ -67,6 +71,7 @@ class PrivacyRetentionIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(count("pending_google_registrations")).isEqualTo(1);
         assertThat(count("auth_email_verifications")).isEqualTo(1);
         assertThat(count("auth_email_verification_rate_limits")).isEqualTo(1);
+        assertThat(count("contact_inquiries")).isEqualTo(1);
         assertThat(count("refresh_tokens")).isEqualTo(1);
         assertThat(count("account_lifecycle_events")).isEqualTo(1);
         assertThat(count("anonymous_exit_surveys")).isEqualTo(1);
@@ -112,6 +117,14 @@ class PrivacyRetentionIntegrationTest extends AbstractMySqlIntegrationTest {
               (scope_type,scope_hash,retention_after,is_test_data)
             VALUES('EMAIL',SHA2(?,256),?,TRUE)
             """, hashSeed, retentionAfter);
+    }
+
+    private void insertContactInquiry(String email, Instant deleteAfter) {
+        jdbc.update("""
+            INSERT INTO contact_inquiries
+              (email,category,subject,message,status,delete_after,is_test_data,created_at)
+            VALUES(?,'OTHER','Retention test','Retention test','PENDING_DELIVERY',?,TRUE,?)
+            """, email, deleteAfter, deleteAfter.minus(365, ChronoUnit.DAYS));
     }
 
     private void insertRefreshToken(Long userId, String token, Instant expiresAt) {

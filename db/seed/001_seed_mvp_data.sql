@@ -1,6 +1,6 @@
 -- 목적: test user, book, session, persona, message를 포함한 deterministic local/E2E MVP data를 재구성한다.
 INSERT INTO users (id, username, display_name, email, email_verified, password_hash, auth_provider, is_test_data)
-VALUES (1, 'demo_reader', 'demo_reader', 'demo_reader@test.margins.local', TRUE, '$2b$12$x0GhNoH36hSY1OcS4EdDd.Nc8sm8B3mvPfBPr6aOFspYF2nqYtAhy', 'local', TRUE)
+VALUES (1, 'peacepiece', 'peacepiece', 'peacepiece@test.margins.local', TRUE, '$2b$12$x0GhNoH36hSY1OcS4EdDd.Nc8sm8B3mvPfBPr6aOFspYF2nqYtAhy', 'local', TRUE)
 ON DUPLICATE KEY UPDATE
   username = VALUES(username),
   display_name = VALUES(display_name),
@@ -14,7 +14,7 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO user_memberships (user_id, tier, granted_at, expires_at)
 SELECT id, 'PREMIUM', CURRENT_TIMESTAMP, NULL
 FROM users
-WHERE username = 'demo_reader' AND deleted_at IS NULL
+WHERE username = 'peacepiece' AND deleted_at IS NULL
 ON DUPLICATE KEY UPDATE
   tier = 'PREMIUM',
   granted_at = CURRENT_TIMESTAMP,
@@ -47,7 +47,7 @@ CROSS JOIN (
   UNION ALL SELECT 'OPENAI_OVERSEAS_TRANSFER'
   UNION ALL SELECT 'AGE_OVER_14'
 ) required
-WHERE u.username IN ('demo_reader', 'account_tester')
+WHERE u.username IN ('peacepiece', 'account_tester')
   AND u.is_test_data = TRUE
   AND NOT EXISTS (
     SELECT 1

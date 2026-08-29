@@ -32,10 +32,11 @@ public class AccountBusiness {
     }
 
     @Transactional
-    public ProfileResult updateProfile(Long userId, String displayName) {
+    public ProfileResult updateProfile(Long userId, String displayName, String preferredLocale) {
         activeUser(userId);
         String normalizedDisplayName = required(displayName, "display name");
-        if (accountMapper.updateDisplayName(userId, normalizedDisplayName) != 1) {
+        String normalizedLocale = preferredLocale == null ? null : normalizeLocale(preferredLocale);
+        if (accountMapper.updateProfile(userId, normalizedDisplayName, normalizedLocale) != 1) {
             throw conflict("account state changed");
         }
         return new ProfileResult(AccountView.from(activeUser(userId)));
@@ -120,11 +121,14 @@ public class AccountBusiness {
     }
 
     public record AccountView(Long userId, String username, String displayName, String email,
-        String authProvider, String accountStatus) {
+        String authProvider, String accountStatus, String preferredLocale) {
         static AccountView from(UserRecord user) {
             return new AccountView(user.getId(), user.getUsername(), user.getDisplayName(), user.getEmail(),
-                user.getAuthProvider(), user.getAccountStatus());
+                user.getAuthProvider(), user.getAccountStatus(), normalizeLocale(user.getPreferredLocale()));
         }
+    }
+    private static String normalizeLocale(String preferredLocale) {
+        return "ko".equals(preferredLocale) ? "ko" : "en";
     }
     public record ProfileResult(AccountView account) {}
     public record ExitSurvey(String reason, String gender, String genderText, String ageBand,

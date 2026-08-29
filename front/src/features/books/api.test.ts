@@ -14,6 +14,14 @@ vi.mock('@/lib/api-client', () => ({
 describe('booksApi', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('loads the lightweight reading-session locator for one book', async () => {
+    vi.mocked(getJson).mockResolvedValue({ sessionId: 11, title: 'Dune reflection' });
+
+    await booksApi.readingSession(7);
+
+    expect(getJson).toHaveBeenCalledWith('/api/books/7/reading-session');
+  });
+
   it('serializes non-default shelf filters', async () => {
     vi.mocked(getJson).mockResolvedValue({ books: [] });
 
@@ -63,6 +71,7 @@ describe('booksApi', () => {
     vi.mocked(postJson).mockResolvedValue({
       discussionPoints: [],
       famousQuotes: [],
+      generationLocale: 'en',
       keywords: [],
       knowledgeId: 1,
       recommendedPersonas: [],

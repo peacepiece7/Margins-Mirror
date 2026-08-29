@@ -27,6 +27,8 @@ public class AiGenerationEventRecord {
     private String outcome;
     private boolean fallbackUsed;
     private String failureCategory;
+    private String generationLocale;
+    private String languageValidationOutcome;
     private boolean testData;
     private Instant createdAt;
 }

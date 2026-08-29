@@ -1,9 +1,10 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AuthBoundary } from '../features/auth/components/AuthBoundary';
+import { PublicLandingPage } from '../features/landing/components/PublicLandingPage';
 import { authApi } from '../features/auth/api';
 import * as authSessionService from '../features/auth/session';
 import { I18nProvider } from '@/lib/i18n';
@@ -47,7 +48,14 @@ vi.mock('../features/memory-cards/components/MemoryCardApp', () => ({
 
 function LocationProbe() {
   const location = useLocation();
-  return <div data-testid="location-probe">{location.pathname}</div>;
+  return (
+    <>
+      <div data-testid="location-probe">{location.pathname}</div>
+      <Link data-testid="route-root-probe" to="/">
+        Root
+      </Link>
+    </>
+  );
 }
 
 function renderGate(
@@ -71,11 +79,14 @@ function renderGate(
                   authenticated={({ logout, session }) => (
                     <AuthenticatedAppShell onLogout={logout} session={session} />
                   )}
+                  publicRoot={<PublicLandingPage />}
                 />
               }
             >
               <Route index element={<Navigate replace to="/book/library" />} />
+              <Route path="login" element={<Navigate replace to="/book/library" />} />
               <Route path="account" element={<div data-testid="mock-account-page">Account</div>} />
+              <Route path="contact" element={<div data-testid="mock-contact-page">Contact</div>} />
               <Route
                 path="book/library"
                 element={<div data-testid="mock-library-page">Library</div>}
@@ -107,31 +118,86 @@ describe('authenticated route composition', () => {
     window.sessionStorage.clear();
   });
 
-  it('renders the promotion main page on root before login', async () => {
+  it('renders the standalone public landing on root before login', async () => {
     vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
     vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
     vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
     vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
     renderGate('/');
 
-    const promotionPage = await screen.findByTestId('main-promotion-page');
-    expect(promotionPage).toHaveTextContent('Turn reading into a record of thought');
-    expect(promotionPage).toHaveTextContent('Discover books and build your library');
-    expect(promotionPage).toHaveTextContent('Read deeper with AI questions');
-    expect(promotionPage).toHaveTextContent('Keep reflections and reviews');
-    expect(promotionPage).toHaveTextContent('Multi-perspective persona debate');
-    expect(promotionPage.querySelectorAll('h1')).toHaveLength(1);
-    expect(screen.getByTestId('main-promotion-login')).toHaveTextContent('Login');
-    expect(screen.getByTestId('main-promotion-signup')).toHaveTextContent('Sign up');
+    const landingPage = await screen.findByTestId('public-landing-page');
+    expect(landingPage).toHaveTextContent('Record your thinking');
+    expect(landingPage).toHaveTextContent('One book. Six records.');
+    expect(landingPage.querySelectorAll('h1')).toHaveLength(1);
+    expect(screen.getByTestId('landing-login')).toHaveAttribute('href', '/login');
+    expect(screen.getByTestId('landing-signup')).toHaveAttribute('href', '/login?mode=register');
+    expect(screen.queryByTestId('login-form')).not.toBeInTheDocument();
+  });
+
+  it('renders the existing authentication form on the separate login route', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
+    vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
+    vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
+    vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
+    renderGate('/login');
+
     expect(screen.getByTestId('login-form')).toBeVisible();
     expect(screen.getByTestId('google-login-submit')).toHaveClass('bg-white', 'text-stone-800');
     expect(screen.getByTestId('google-login-submit').querySelector('svg')).toBeInTheDocument();
-    expect(screen.getByRole('tablist')).toHaveClass('min-h-11');
+    expect(screen.getByRole('tablist')).toHaveClass('min-h-11', 'gap-1');
     expect(screen.getByTestId('auth-mode-login')).toHaveClass(
       'data-[state=active]:bg-[var(--margins-control)]',
+      'data-[state=active]:hover:text-[var(--margins-paper)]',
     );
     expect(screen.getByTestId('login-username-input')).toHaveClass('text-base', 'md:text-sm');
     expect(screen.getByTestId('login-password-input')).toHaveClass('text-base', 'md:text-sm');
+    expect(screen.getByTestId('login-fields-grid')).toHaveClass('gap-1');
+    expect(document.querySelector('label[for="login-username"]')).toHaveTextContent('Username');
+    expect(document.querySelector('label[for="login-password"]')).toHaveTextContent('Password');
+    expect(screen.getByTestId('auth-home-link')).toHaveAttribute('href', '/');
+    expect(screen.getByTestId('auth-page')).toHaveClass('blueprint-auth-page', 'max-w-md');
+    expect(screen.queryByTestId('public-landing-page')).not.toBeInTheDocument();
+  });
+
+  it('selects registration from the canonical login query', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
+    vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
+    vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
+    vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
+    renderGate('/login?mode=register');
+
+    expect(await screen.findByTestId('register-email-input')).toBeVisible();
+    expect(screen.getByTestId('auth-mode-register')).toHaveAttribute('data-state', 'active');
+    expect(screen.getByTestId('auth-page')).toHaveClass('max-w-3xl');
+    expect(screen.getByTestId('register-fields-grid')).toHaveClass('gap-y-1', 'md:grid-cols-2');
+    expect(document.querySelector('label[for="register-username"]')).toHaveTextContent('Username');
+    expect(document.querySelector('label[for="register-display-name"]')).toHaveTextContent(
+      'Display name',
+    );
+    expect(document.querySelector('label[for="register-email"]')).toHaveTextContent('Email');
+    expect(document.querySelector('label[for="register-email-code"]')).toHaveTextContent(
+      'Verification code',
+    );
+    expect(document.querySelector('label[for="register-password"]')).toHaveTextContent('Password');
+    expect(document.querySelector('label[for="register-password-confirm"]')).toHaveTextContent(
+      'Confirm password',
+    );
+  });
+
+  it('resets to login after leaving the registration query and returning from the public root', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
+    vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
+    vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
+    vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
+    renderGate('/login?mode=register');
+
+    expect(await screen.findByTestId('register-email-input')).toBeVisible();
+    fireEvent.click(screen.getByTestId('route-root-probe'));
+    expect(await screen.findByTestId('public-landing-page')).toBeVisible();
+    fireEvent.click(screen.getByTestId('landing-login'));
+
+    expect(await screen.findByTestId('login-username-input')).toBeVisible();
+    expect(screen.queryByTestId('register-email-input')).not.toBeInTheDocument();
   });
 
   it('remains render-safe when registration fields unregister and remount', async () => {
@@ -139,7 +205,7 @@ describe('authenticated route composition', () => {
     vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
     vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
     vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
-    renderGate('/');
+    renderGate('/login');
 
     await screen.findByTestId('login-form');
     fireEvent.click(screen.getByTestId('auth-mode-register'));
@@ -158,7 +224,7 @@ describe('authenticated route composition', () => {
     vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
     vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
     vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
-    renderGate('/');
+    renderGate('/login');
     await screen.findByTestId('login-form');
     fireEvent.click(screen.getByTestId('auth-mode-register'));
 
@@ -169,7 +235,7 @@ describe('authenticated route composition', () => {
     expect(screen.getByTestId('register-email-code-confirm-submit')).toHaveClass('h-11', 'md:h-8');
   });
 
-  it('redirects a signed-out account route to the main page', async () => {
+  it('redirects a signed-out account route to the login page', async () => {
     vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
     vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
     vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
@@ -177,13 +243,13 @@ describe('authenticated route composition', () => {
     renderGate('/account');
 
     await waitFor(() => {
-      expect(screen.getByTestId('location-probe')).toHaveTextContent('/');
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/login');
     });
     expect(screen.queryByTestId('mock-account-page')).not.toBeInTheDocument();
-    expect(await screen.findByTestId('main-promotion-page')).toBeVisible();
+    expect(await screen.findByTestId('login-form')).toBeVisible();
   });
 
-  it('redirects any signed-out protected route to the root auth surface', async () => {
+  it('redirects any signed-out protected route to the canonical login surface', async () => {
     vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
     vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
     vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
@@ -191,9 +257,9 @@ describe('authenticated route composition', () => {
     renderGate('/book/library');
 
     await waitFor(() => {
-      expect(screen.getByTestId('location-probe')).toHaveTextContent('/');
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/login');
     });
-    expect(await screen.findByTestId('main-promotion-page')).toBeVisible();
+    expect(await screen.findByTestId('login-form')).toBeVisible();
     expect(screen.queryByTestId('mock-library-page')).not.toBeInTheDocument();
   });
 
@@ -203,7 +269,7 @@ describe('authenticated route composition', () => {
     vi.mocked(authSessionService.readRefreshSessionHint).mockReturnValue(false);
     vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
     vi.mocked(authApi.login).mockRejectedValue(new Error('Invalid username or password'));
-    renderGate('/');
+    renderGate('/login');
     fireEvent.change(await screen.findByTestId('login-username-input'), {
       target: { value: 'reader' },
     });
@@ -228,7 +294,7 @@ describe('authenticated route composition', () => {
       email: 'reader@example.com',
       available: false,
     });
-    renderGate('/');
+    renderGate('/login');
     await screen.findByTestId('login-form');
     fireEvent.click(screen.getByTestId('auth-mode-register'));
 
@@ -257,7 +323,7 @@ describe('authenticated route composition', () => {
       resendAfterSeconds: 60,
       devVerificationCode: '123456',
     });
-    renderGate('/');
+    renderGate('/login');
     await screen.findByTestId('login-form');
     fireEvent.click(screen.getByTestId('auth-mode-register'));
     fireEvent.change(screen.getByTestId('register-email-input'), {
@@ -300,7 +366,7 @@ describe('authenticated route composition', () => {
     vi.mocked(authApi.createRegistrationIntent)
       .mockRejectedValueOnce(new Error('intent failed'))
       .mockResolvedValue(undefined);
-    renderGate('/');
+    renderGate('/login');
     await screen.findByTestId('login-form');
     fireEvent.click(screen.getByTestId('auth-mode-register'));
 
@@ -404,6 +470,23 @@ describe('authenticated route composition', () => {
     expect(screen.queryByTestId('main-auth-home-page')).not.toBeInTheDocument();
   });
 
+  it('redirects authenticated login to the Library route', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue({
+      userId: 1,
+      username: 'reader',
+      displayName: 'Reader One',
+      authMode: 'password',
+      accessToken: 'token',
+      accessTokenExpiresInSeconds: 3600,
+      membershipTier: 'PREMIUM',
+    });
+    vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
+    renderGate('/login');
+
+    expect(await screen.findByTestId('mock-library-page')).toHaveTextContent('Library');
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/book/library');
+  });
+
   it('clears account, memory-card, and reading caches on logout', async () => {
     const session = {
       userId: 1,
@@ -433,7 +516,7 @@ describe('authenticated route composition', () => {
 
     await waitFor(() => expect(authApi.logout).toHaveBeenCalledTimes(1));
     expect(screen.getByTestId('location-probe')).toHaveTextContent('/');
-    expect(await screen.findByTestId('main-promotion-page')).toBeVisible();
+    expect(await screen.findByTestId('public-landing-page')).toBeVisible();
     expect(queryClient.getQueryData([...protectedQueryRoots.account, 'detail'])).toBeUndefined();
     expect(
       queryClient.getQueryData([...protectedQueryRoots.memoryCards, 'groups']),
@@ -478,6 +561,7 @@ describe('authenticated route composition', () => {
     ).toBeUndefined();
     expect(queryClient.getQueryData(bookKeys.list())).toBeUndefined();
     expect(await screen.findByTestId('login-form')).toBeVisible();
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/login');
   });
 
   it('clears prior-user protected caches during signed-out bootstrap', async () => {
@@ -497,7 +581,7 @@ describe('authenticated route composition', () => {
     });
     renderGate('/', queryClient);
 
-    await screen.findByTestId('login-form');
+    await screen.findByTestId('public-landing-page');
 
     expect(queryClient.getQueryData([...protectedQueryRoots.account, 'detail'])).toBeUndefined();
     expect(
@@ -523,6 +607,24 @@ describe('authenticated route composition', () => {
 
     expect(await screen.findByTestId('mock-library-page')).toBeVisible();
     expect(screen.getByTestId('location-probe')).toHaveTextContent('/book/library');
+  });
+
+  it('opens contact from authenticated navigation', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue({
+      userId: 1,
+      username: 'reader',
+      displayName: 'Reader One',
+      authMode: 'password',
+      accessToken: 'token',
+      accessTokenExpiresInSeconds: 3600,
+    });
+    vi.mocked(authSessionService.onAuthSessionExpired).mockReturnValue(() => undefined);
+    renderGate('/book/library');
+
+    fireEvent.click(await screen.findByTestId('nav-contact'));
+
+    expect(await screen.findByTestId('mock-contact-page')).toBeVisible();
+    expect(screen.getByTestId('location-probe')).toHaveTextContent('/contact');
   });
 
   it('hides and redirects Memory Card for a free member', async () => {
@@ -621,7 +723,7 @@ describe('authenticated route composition', () => {
     renderGate('/auth/callback?error=AUTH_GOOGLE_LINK_REQUIRED');
 
     await waitFor(() => {
-      expect(screen.getByTestId('location-probe')).toHaveTextContent('/');
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/login');
     });
     expect(
       await screen.findByText(

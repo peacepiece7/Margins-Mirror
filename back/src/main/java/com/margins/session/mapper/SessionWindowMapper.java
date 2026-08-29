@@ -77,8 +77,6 @@ public interface SessionWindowMapper {
           , source_answer.content AS sourceQuestionAnswer
           , reflection.id AS reflectionInsightId
           , reflection.content AS reflectionContent
-          , reflection.summary AS reflectionSummary
-          , reflection.summary_source_hash AS reflectionSummarySourceHash
           , sw.is_test_data AS testData
         FROM session_windows sw
         INNER JOIN reading_sessions rs ON rs.id = sw.session_id
@@ -142,23 +140,53 @@ public interface SessionWindowMapper {
     );
 
     @Update("""
-        UPDATE session_insights
-        SET summary = #{summary},
-            summary_source_hash = #{sourceHash},
-            summary_model = #{model},
-            summary_token_usage = #{tokenUsage},
-            summarized_at = CURRENT_TIMESTAMP,
-            summary_status = 'ready'
-        WHERE id = #{insightId}
+        UPDATE session_windows
+        SET context_snapshot = JSON_SET(
+          COALESCE(context_snapshot, JSON_OBJECT()),
+          '$.conversationSummaries',
+          JSON_SET(
+            CASE
+              WHEN JSON_TYPE(JSON_EXTRACT(context_snapshot, '$.conversationSummaries')) = 'OBJECT'
+                THEN JSON_EXTRACT(context_snapshot, '$.conversationSummaries')
+              ELSE JSON_OBJECT()
+            END,
+            '$.ko',
+            CAST(#{summaryJson} AS JSON)
+          )
+        ),
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{windowId}
           AND deleted_at IS NULL
         """)
-    int updateReflectionSummary(
-        @Param("insightId") Long insightId,
-        @Param("summary") String summary,
-        @Param("sourceHash") String sourceHash,
-        @Param("model") String model,
-        @Param("tokenUsage") String tokenUsage
+    int updateConversationSummaryKo(
+        @Param("windowId") Long windowId,
+        @Param("summaryJson") String summaryJson
     );
+
+    @Update("""
+        UPDATE session_windows
+        SET context_snapshot = JSON_SET(
+          COALESCE(context_snapshot, JSON_OBJECT()),
+          '$.conversationSummaries',
+          JSON_SET(
+            CASE
+              WHEN JSON_TYPE(JSON_EXTRACT(context_snapshot, '$.conversationSummaries')) = 'OBJECT'
+                THEN JSON_EXTRACT(context_snapshot, '$.conversationSummaries')
+              ELSE JSON_OBJECT()
+            END,
+            '$.en',
+            CAST(#{summaryJson} AS JSON)
+          )
+        ),
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{windowId}
+          AND deleted_at IS NULL
+        """)
+    int updateConversationSummaryEn(
+        @Param("windowId") Long windowId,
+        @Param("summaryJson") String summaryJson
+    );
+
 
     @Update("""
         UPDATE session_windows

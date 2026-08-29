@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { SubmitHandler, useForm, useWatch } from 'react-hook-form';
-import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { apiErrorMessage, apiErrorTranslationKey } from '@/lib/api-error-i18n';
 import { ApiRequestError } from '@/lib/api-client';
 import { useI18n } from '@/lib/i18n';
@@ -18,7 +19,6 @@ import { authApi } from '../api';
 import * as authSessionService from '../session';
 import { AuthShell } from './AuthShell';
 import { AuthenticatedQueryProvider } from './AuthenticatedQueryProvider';
-import { LanguageToggle } from './LanguageToggle';
 import { LoginForm } from './LoginForm';
 import { RegistrationForm } from './RegistrationForm';
 import type { AuthFormValues } from './auth-form';
@@ -30,9 +30,10 @@ function isSupersededRefresh(error: unknown): boolean {
 
 type AuthBoundaryProps = {
   authenticated: (context: { logout: () => Promise<void>; session: LoginResponse }) => ReactNode;
+  publicRoot: ReactNode;
 };
 
-export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
+export function AuthBoundary({ authenticated, publicRoot }: AuthBoundaryProps) {
   const { locale, setLocale, t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
@@ -66,6 +67,7 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
       displayName: '',
       email: '',
       emailVerificationCode: '',
+      preferredLocale: locale,
       password: '',
       confirmPassword: '',
       privacyPolicyAccepted: false,
@@ -73,6 +75,10 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
       ageOver14Confirmed: false,
     },
   });
+
+  useEffect(() => {
+    if (authSession?.preferredLocale) setLocale(authSession.preferredLocale);
+  }, [authSession?.preferredLocale, setLocale]);
   const {
     handleSubmit,
     getValues,
@@ -128,8 +134,6 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
   );
   const registrationConsentsAccepted =
     emailVerificationConfirmed && privacyPolicyAccepted && aiTransferAccepted && ageOver14Confirmed;
-  const isMainRoute = location.pathname === '/';
-
   useEffect(() => {
     let cancelled = false;
     function finishBootstrap() {
@@ -151,7 +155,7 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
         const callbackError = params.get('error');
         if (callbackError) {
           setError(t(apiErrorTranslationKey(callbackError, 'loginFailed')));
-          navigate('/', { replace: true });
+          navigate('/login', { replace: true });
           finishBootstrap();
           return;
         }
@@ -174,7 +178,7 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
               return;
             }
             setError(t('loginFailed'));
-            navigate('/', { replace: true });
+            navigate('/login', { replace: true });
             finishBootstrap();
             return;
           }
@@ -222,6 +226,12 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
   useEffect(() => {
     return authSessionService.onAuthSessionChanged(setAuthSession);
   }, []);
+
+  useEffect(() => {
+    if (location.pathname !== '/login') return;
+    const requestedMode = new URLSearchParams(location.search).get('mode');
+    setAuthMode(requestedMode === 'register' ? 'register' : 'login');
+  }, [location.pathname, location.search]);
 
   useEffect(() => {
     return authSessionService.onAuthSessionExpired(() => {
@@ -303,8 +313,10 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
               displayName: values.displayName.trim(),
               email: values.email.trim(),
               emailVerificationCode: values.emailVerificationCode.trim(),
+              preferredLocale: values.preferredLocale,
             });
       authSessionService.writeAuthSession(result);
+      if (result.preferredLocale) setLocale(result.preferredLocale);
       if (authMode === 'register') {
         window.location.replace('/');
         return;
@@ -516,64 +528,16 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
     );
   }
 
-  if (location.pathname !== '/') {
-    return <Navigate replace to="/" />;
+  if (location.pathname === '/') {
+    return publicRoot;
+  }
+
+  if (location.pathname !== '/login') {
+    return <Navigate replace to="/login" />;
   }
 
   return (
-    <AuthShell promotion={isMainRoute}>
-      {isMainRoute && (
-        <section className="blueprint-login-intro grid gap-6">
-          <div>
-            <h1 className="text-balance font-display text-[clamp(1.75rem,8vw,3rem)] font-semibold leading-tight tracking-normal">
-              {t('mainPromotionTitle')}
-            </h1>
-            <p className="mt-4 max-w-2xl text-base leading-7 text-stone-600">
-              {t('mainPromotionSubtitle')}
-            </p>
-          </div>
-          <ol className="grid gap-3 text-sm text-stone-700">
-            <MainFeature
-              detail={t('mainPromotionFeatureDiscoverDetail')}
-              marker="01"
-              title={t('mainPromotionFeatureDiscover')}
-            />
-            <MainFeature
-              detail={t('mainPromotionFeaturePromptsDetail')}
-              marker="02"
-              title={t('mainPromotionFeaturePrompts')}
-            />
-            <MainFeature
-              detail={t('mainPromotionFeatureRecordsDetail')}
-              marker="03"
-              title={t('mainPromotionFeatureRecords')}
-            />
-            <MainFeature
-              detail={t('mainPromotionFeatureDebateDetail')}
-              marker="04"
-              title={t('mainPromotionFeatureDebate')}
-            />
-          </ol>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              className="rounded bg-stone-950 px-4 py-2 text-sm font-semibold text-white"
-              onClick={() => setAuthMode('login')}
-              type="button"
-              {...testAttr('main-promotion-login')}
-            >
-              {t('mainPromotionCtaLogin')}
-            </Button>
-            <Button
-              className="rounded border border-stone-300 bg-white px-4 py-2 text-sm font-semibold text-stone-800"
-              onClick={() => setAuthMode('register')}
-              type="button"
-              {...testAttr('main-promotion-signup')}
-            >
-              {t('mainPromotionCtaSignup')}
-            </Button>
-          </div>
-        </section>
-      )}
+    <AuthShell wide={authMode === 'register'}>
       <Form {...form}>
         <form
           className="blueprint-auth-card grid gap-5 rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_24px_80px_rgba(23,23,23,0.10)] sm:p-6"
@@ -582,15 +546,11 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
         >
           <div>
             <div className="flex items-start justify-between gap-3">
-              {isMainRoute ? (
-                <p className="font-display text-4xl font-semibold tracking-normal sm:text-5xl">
+              <h1 className="font-display text-4xl font-semibold tracking-normal sm:text-5xl">
+                <Link to="/" {...testAttr('auth-home-link')}>
                   Margins
-                </p>
-              ) : (
-                <h1 className="font-display text-4xl font-semibold tracking-normal sm:text-5xl">
-                  Margins
-                </h1>
-              )}
+                </Link>
+              </h1>
               <LanguageToggle locale={locale} setLocale={setLocale} label={t('language')} />
             </div>
             <p className="mt-3 text-sm leading-6 text-stone-600">{t('loginSubtitle')}</p>
@@ -611,7 +571,7 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
             <TabsList className="grid h-auto min-h-11 w-full grid-cols-2 rounded border border-border bg-background p-1">
               {(['login', 'register'] as const).map((mode) => (
                 <TabsTrigger
-                  className="min-h-9 rounded px-3 py-2 text-sm font-semibold data-[state=active]:bg-[var(--margins-control)] data-[state=active]:text-[var(--margins-paper)]"
+                  className="min-h-9 rounded px-3 py-2 text-sm font-semibold data-[state=active]:bg-[var(--margins-control)] data-[state=active]:text-[var(--margins-paper)] data-[state=active]:hover:bg-[var(--margins-control-hover)] data-[state=active]:hover:text-[var(--margins-paper)] data-[state=active]:focus-visible:text-[var(--margins-paper)]"
                   disabled={registrationIntentLoading}
                   key={mode}
                   onClick={() => {
@@ -691,20 +651,6 @@ export function AuthBoundary({ authenticated }: AuthBoundaryProps) {
         </form>
       </Form>
     </AuthShell>
-  );
-}
-
-function MainFeature({ detail, marker, title }: { detail: string; marker: string; title: string }) {
-  return (
-    <li className="grid grid-cols-[2.5rem_minmax(0,1fr)] items-start gap-3">
-      <span className="grid h-9 w-9 place-items-center rounded border border-stone-300 bg-white text-xs font-semibold text-stone-500">
-        {marker}
-      </span>
-      <span>
-        <strong className="block font-semibold text-stone-900">{title}</strong>
-        <span className="mt-1 block leading-6">{detail}</span>
-      </span>
-    </li>
   );
 }
 

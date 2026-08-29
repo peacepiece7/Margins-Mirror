@@ -19,6 +19,8 @@ import com.margins.persona.model.PersonaRecord;
 import com.margins.session.mapper.ReadingSessionMapper;
 import com.margins.session.mapper.SessionTagMapper;
 import com.margins.session.mapper.SessionWindowMapper;
+import com.margins.session.mapper.SessionWindowPersonaMapper;
+import com.margins.session.model.ReadingSessionRecord;
 import com.margins.session.model.SessionTagRecord;
 import com.margins.testsupport.AbstractMySqlIntegrationTest;
 import com.margins.testsupport.IntegrationFixtureSupport;
@@ -48,6 +50,9 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
 
     @Autowired
     private SessionWindowMapper sessionWindowMapper;
+
+    @Autowired
+    private SessionWindowPersonaMapper sessionWindowPersonaMapper;
 
     @Autowired
     private SessionTagMapper sessionTagMapper;
@@ -119,15 +124,23 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
         }
 
         @Test
-        void insertAssignsGeneratedIdAndFindActiveReturnsPersistedPersona() {
-            PersonaRecord inserted = samplePersona("literary-critic", "Literary Critic");
+        void insertAssignsGeneratedIdAndFindActiveForUserReturnsPersistedPersona() {
+            PersonaRecord inserted = PersonaRecord.builder()
+                .name("literary-critic")
+                .displayName("Literary Critic")
+                .description("Integration persona")
+                .systemPrompt("Read as a literary critic.")
+                .tone("measured")
+                .createdByUserId(USER_ID)
+                .active(true)
+                .build();
 
             int rows = personaMapper.insert(inserted);
 
             assertThat(rows).isEqualTo(1);
             assertThat(inserted.getId()).isPositive();
 
-            List<PersonaRecord> active = personaMapper.findActive();
+            List<PersonaRecord> active = personaMapper.findActiveForUser(USER_ID);
             assertThat(active).hasSize(1);
             assertThat(active.getFirst())
                 .extracting(PersonaRecord::getName, PersonaRecord::getDisplayName, PersonaRecord::getSystemPrompt)
@@ -135,18 +148,19 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
         }
 
         @Test
-        void findActiveByIdReturnsMatchingActivePersona() {
+        void findActiveByIdForUserReturnsMatchingOwnedPersona() {
             PersonaRecord inserted = PersonaRecord.builder()
                 .name("historian")
                 .displayName("Historian")
                 .description("Integration persona")
                 .systemPrompt("Read as a historian.")
                 .tone("measured")
+                .createdByUserId(USER_ID)
                 .active(true)
                 .build();
             personaMapper.insert(inserted);
 
-            PersonaRecord found = personaMapper.findActiveById(inserted.getId());
+            PersonaRecord found = personaMapper.findActiveByIdForUser(inserted.getId(), USER_ID);
 
             assertThat(found).isNotNull();
             assertThat(found.getName()).isEqualTo("historian");
@@ -282,6 +296,67 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
     }
 
     @Nested
+    class SessionWindowPersonaMapperTests {
+
+        private SessionGraph graph;
+
+        @BeforeEach
+        void resetAndSeed() throws Exception {
+            IntegrationFixtureSupport.resetSessionGraph(dataSource);
+            graph = IntegrationFixtureSupport.seedSessionGraph(bookMapper, readingSessionMapper, sessionWindowMapper);
+        }
+
+        @Test
+        void findPersonaIdsReturnsPersistedSelectionInSelectionOrder() throws Exception {
+            PersonaRecord first = samplePersona("first", "First");
+            PersonaRecord second = samplePersona("second", "Second");
+            personaMapper.insert(first);
+            personaMapper.insert(second);
+            IntegrationSchemaSupport.executeSql(
+                dataSource,
+                "INSERT INTO session_window_personas (window_id, persona_id, selection_order) VALUES ("
+                    + graph.windowId() + ", " + second.getId() + ", 0), ("
+                    + graph.windowId() + ", " + first.getId() + ", 1)"
+            );
+
+            assertThat(sessionWindowPersonaMapper.findPersonaIds(graph.windowId()))
+                .containsExactly(second.getId(), first.getId());
+        }
+    }
+
+    @Nested
+    class ReadingSessionMapperTests {
+
+        private SessionGraph graph;
+
+        @BeforeEach
+        void resetAndSeed() throws Exception {
+            IntegrationFixtureSupport.resetSessionGraph(dataSource);
+            graph = IntegrationFixtureSupport.seedSessionGraph(bookMapper, readingSessionMapper, sessionWindowMapper);
+        }
+
+        @Test
+        void findFirstByBookReturnsTheLatestOwnedSessionLocator() {
+            ReadingSessionRecord latest = ReadingSessionRecord.builder()
+                .userId(graph.userId())
+                .bookId(graph.bookId())
+                .title("Latest reflection")
+                .testData(true)
+                .build();
+            readingSessionMapper.insert(latest);
+
+            ReadingSessionRecord found = readingSessionMapper.findFirstByBookIdAndUserId(
+                graph.bookId(),
+                graph.userId()
+            );
+
+            assertThat(found.getId()).isEqualTo(latest.getId());
+            assertThat(found.getTitle()).isEqualTo("Latest reflection");
+            assertThat(readingSessionMapper.findFirstByBookIdAndUserId(graph.bookId(), 999L)).isNull();
+        }
+    }
+
+    @Nested
     class SessionTagMapperTests {
 
         private SessionGraph graph;
@@ -303,26 +378,6 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
             assertThat(tags)
                 .extracting(SessionTagRecord::getLabel)
                 .containsExactly("archive", "theme-memory");
-        }
-
-        @Test
-        void findBySessionIdsReturnsTagsForRequestedSessionsOnly() {
-            sessionTagMapper.insert(buildTag(graph, "selected"));
-
-            SessionGraph otherGraph = IntegrationFixtureSupport.seedSessionGraph(
-                bookMapper,
-                readingSessionMapper,
-                sessionWindowMapper
-            );
-            sessionTagMapper.insert(buildTag(otherGraph, "other"));
-
-            List<SessionTagRecord> tags = sessionTagMapper.findBySessionIds(
-                List.of(graph.sessionId()),
-                graph.userId()
-            );
-
-            assertThat(tags).hasSize(1);
-            assertThat(tags.getFirst().getLabel()).isEqualTo("selected");
         }
 
         @Test
@@ -461,15 +516,15 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
             messageMapper.insert(user);
             sessionWindowMapper.updateContextSnapshot(
                 graph.windowId(),
-                "{\"conversationSummary\":{\"content\":\"Old summary\",\"lastMessageId\":"
-                    + user.getId() + "},\"topic\":\"Keep me\"}"
+                "{\"conversationSummaries\":{\"en\":{\"content\":\"Old summary\",\"lastMessageId\":"
+                    + user.getId() + "}},\"topic\":\"Keep me\"}"
             );
 
             int updatedRows = messageMapper.invalidateConversationSummary(graph.windowId(), user.getId());
             String snapshot = sessionWindowMapper.findContextById(graph.windowId()).getWindowContextSnapshot();
 
             assertThat(updatedRows).isEqualTo(1);
-            assertThat(snapshot).doesNotContain("conversationSummary");
+            assertThat(snapshot).doesNotContain("Old summary");
             assertThat(snapshot).contains("Keep me");
         }
     }

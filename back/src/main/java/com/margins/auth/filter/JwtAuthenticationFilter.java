@@ -94,6 +94,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String path = request.getRequestURI();
         return path.startsWith("/api/privacy/")
             || path.equals("/api/auth/logout")
+            || ("POST".equals(request.getMethod()) && path.equals("/api/contact-inquiries"))
             || isConsentPendingAccountAllowed(request.getMethod(), path);
     }
 

@@ -22,10 +22,10 @@ import type {
   SaveReflectionInput,
 } from '@/types/api/reflection-loop';
 import type {
+  BookReadingSessionResponse,
   CreateSessionWindowResponse,
   Question,
   QuestionListResponse,
-  ReadingSessionListResponse,
   ReadingSessionTimelineResponse,
 } from '@/types/api/session';
 
@@ -43,8 +43,8 @@ export const reflectionsApi = {
   books(): Promise<BookListResponse> {
     return getJson('/api/books');
   },
-  sessions(): Promise<ReadingSessionListResponse> {
-    return getJson('/api/reading-sessions');
+  readingSession(bookId: number): Promise<BookReadingSessionResponse | null> {
+    return getJson(`/api/books/${bookId}/reading-session`);
   },
 
   timeline(sessionId: number): Promise<ReadingSessionTimelineResponse | null> {

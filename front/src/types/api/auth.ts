@@ -7,6 +7,7 @@ export interface LoginResponse {
   accessTokenExpiresInSeconds: number;
   consentRequired?: boolean;
   membershipTier?: 'FREE' | 'PREMIUM';
+  preferredLocale?: 'ko' | 'en';
 }
 
 export interface RegisterRequest {
@@ -16,6 +17,7 @@ export interface RegisterRequest {
   displayName: string;
   email: string;
   emailVerificationCode: string;
+  preferredLocale: 'ko' | 'en';
 }
 
 export interface EmailAvailabilityResponse {

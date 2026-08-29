@@ -15,7 +15,12 @@ export const personaQueryOptions = {
 };
 
 export const debateSessionQueryOptions = {
-  sessions: () => queryOptions({ queryKey: sessionKeys.list(), queryFn: debatesApi.sessions }),
+  book: (bookId: number) =>
+    queryOptions({
+      queryKey: sessionKeys.book(bookId),
+      queryFn: () => debatesApi.readingSession(bookId),
+      enabled: Number.isSafeInteger(bookId) && bookId > 0,
+    }),
   timeline: (sessionId: number) =>
     queryOptions({
       queryKey: sessionKeys.timeline(sessionId),
@@ -33,13 +38,13 @@ export function usePersonaRecommendationsQuery(bookId: number) {
 }
 
 export function useDebateTimelineForBook(bookId: number) {
-  const sessions = useQuery(debateSessionQueryOptions.sessions());
-  const sessionId = sessions.data?.sessions.find((session) => session.bookId === bookId)?.sessionId;
+  const session = useQuery(debateSessionQueryOptions.book(bookId));
+  const sessionId = session.data?.sessionId;
   const timeline = useQuery({
     ...debateSessionQueryOptions.timeline(sessionId ?? 0),
     enabled: Boolean(sessionId),
   });
-  return { sessionId, sessions, timeline };
+  return { sessionId, sessions: session, timeline };
 }
 
 export function useCreateDebateRoomMutation(bookId: number) {
@@ -54,10 +59,7 @@ export function useCreateDebateRoomMutation(bookId: number) {
       topic: string;
       personaIds: number[];
     }) => {
-      const sessionId =
-        existingSessionId ??
-        (await debatesApi.sessions()).sessions.find((session) => session.bookId === bookId)
-          ?.sessionId;
+      const sessionId = existingSessionId ?? (await debatesApi.readingSession(bookId))?.sessionId;
       if (!sessionId) {
         throw new Error('Reading session is not available yet');
       }
@@ -69,10 +71,8 @@ export function useCreateDebateRoomMutation(bookId: number) {
       );
       return { sessionId, windowId: window.windowId, personaIds: window.personaIds };
     },
-    onSuccess: async ({ sessionId }) => {
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.lists() });
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
-    },
+    onSuccess: ({ sessionId }) =>
+      queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
   });
 }
 

@@ -13,19 +13,18 @@ export function AuthFormField({
   const { formState, getFieldState } = useFormContext<AuthFormValues>();
   const error = getFieldState(name, formState).error?.message;
 
-  if (!children && !error) return null;
   return (
     <div>
       {children}
-      {error && (
-        <p
-          className="mt-1 text-xs leading-5 text-red-700"
-          id={errorTestId}
-          {...testAttr(errorTestId)}
-        >
-          {error}
-        </p>
-      )}
+      <p
+        aria-hidden={error ? undefined : true}
+        aria-live={error ? 'polite' : undefined}
+        className="mt-1 min-h-5 text-xs leading-5 text-red-700"
+        id={errorTestId}
+        {...testAttr(errorTestId)}
+      >
+        {error}
+      </p>
     </div>
   );
 }

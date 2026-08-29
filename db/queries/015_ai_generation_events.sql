@@ -31,6 +31,8 @@ windowed_events AS (
     e.model,
     e.prompt_version,
     e.schema_version,
+    COALESCE(e.generation_locale, 'UNSCOPED') AS generation_locale,
+    COALESCE(e.language_validation_outcome, 'NOT_RECORDED') AS language_validation_outcome,
     e.input_tokens,
     e.cached_input_tokens,
     e.output_tokens,
@@ -50,17 +52,20 @@ ranked_events AS (
     we.*,
     ROW_NUMBER() OVER (
       PARTITION BY
-        window_label, task_type, depth, provider, model, prompt_version, schema_version
+        window_label, task_type, depth, provider, model, prompt_version, schema_version,
+        generation_locale, language_validation_outcome
       ORDER BY output_tokens, id
     ) AS output_rank,
     ROW_NUMBER() OVER (
       PARTITION BY
-        window_label, task_type, depth, provider, model, prompt_version, schema_version
+        window_label, task_type, depth, provider, model, prompt_version, schema_version,
+        generation_locale, language_validation_outcome
       ORDER BY latency_ms, id
     ) AS latency_rank,
     COUNT(*) OVER (
       PARTITION BY
-        window_label, task_type, depth, provider, model, prompt_version, schema_version
+        window_label, task_type, depth, provider, model, prompt_version, schema_version,
+        generation_locale, language_validation_outcome
     ) AS task_call_count,
     ROW_NUMBER() OVER (
       PARTITION BY window_label
@@ -95,6 +100,8 @@ task_daily_totals AS (
     model,
     prompt_version,
     schema_version,
+    generation_locale,
+    language_validation_outcome,
     DATE(created_at) AS event_date,
     SUM(total_tokens) AS total_tokens
   FROM windowed_events
@@ -106,6 +113,8 @@ task_daily_totals AS (
     model,
     prompt_version,
     schema_version,
+    generation_locale,
+    language_validation_outcome,
     DATE(created_at)
 ),
 task_daily_peaks AS (
@@ -117,6 +126,8 @@ task_daily_peaks AS (
     model,
     prompt_version,
     schema_version,
+    generation_locale,
+    language_validation_outcome,
     MAX(total_tokens) AS daily_peak_total_tokens
   FROM task_daily_totals
   GROUP BY
@@ -126,7 +137,9 @@ task_daily_peaks AS (
     provider,
     model,
     prompt_version,
-    schema_version
+    schema_version,
+    generation_locale,
+    language_validation_outcome
 ),
 window_metrics AS (
   SELECT
@@ -139,6 +152,8 @@ window_metrics AS (
     NULL AS model,
     NULL AS prompt_version,
     NULL AS schema_version,
+    NULL AS generation_locale,
+    NULL AS language_validation_outcome,
     COUNT(r.id) AS call_count,
     COALESCE(SUM(r.input_tokens), 0) AS input_tokens,
     COALESCE(SUM(r.cached_input_tokens), 0) AS cached_input_tokens,
@@ -177,6 +192,8 @@ task_metrics AS (
     r.model,
     r.prompt_version,
     r.schema_version,
+    r.generation_locale,
+    r.language_validation_outcome,
     MAX(r.task_call_count) AS call_count,
     SUM(r.input_tokens) AS input_tokens,
     SUM(r.cached_input_tokens) AS cached_input_tokens,
@@ -208,6 +225,8 @@ task_metrics AS (
    AND tdp.model = r.model
    AND tdp.prompt_version = r.prompt_version
    AND tdp.schema_version = r.schema_version
+   AND tdp.generation_locale = r.generation_locale
+   AND tdp.language_validation_outcome = r.language_validation_outcome
   GROUP BY
     r.window_label,
     r.window_days,
@@ -216,7 +235,9 @@ task_metrics AS (
     r.provider,
     r.model,
     r.prompt_version,
-    r.schema_version
+    r.schema_version,
+    r.generation_locale,
+    r.language_validation_outcome
 ),
 snapshot_rows AS (
   SELECT * FROM window_metrics
@@ -224,7 +245,7 @@ snapshot_rows AS (
   SELECT * FROM task_metrics
 )
 SELECT JSON_OBJECT(
-  'snapshotSchemaVersion', 'ai-generation-cost-snapshot-v1',
+  'snapshotSchemaVersion', 'ai-generation-cost-snapshot-v2',
   'windowLabel', window_label,
   'windowDays', window_days,
   'scope', row_scope,
@@ -234,6 +255,8 @@ SELECT JSON_OBJECT(
   'model', model,
   'promptVersion', prompt_version,
   'schemaVersion', schema_version,
+  'generationLocale', generation_locale,
+  'languageValidationOutcome', language_validation_outcome,
   'callCount', call_count,
   'inputTokens', input_tokens,
   'cachedInputTokens', cached_input_tokens,

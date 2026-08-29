@@ -5,7 +5,7 @@ import java.time.Instant;
 
 public final class TestAuthSupport {
 
-  public static final String TEST_USERNAME = "demo_reader";
+  public static final String TEST_USERNAME = "peacepiece";
   public static final String TEST_PASSWORD = "reader";
   public static final String TEST_PASSWORD_HASH =
       "$2b$12$x0GhNoH36hSY1OcS4EdDd.Nc8sm8B3mvPfBPr6aOFspYF2nqYtAhy";
@@ -13,12 +13,12 @@ public final class TestAuthSupport {
   private TestAuthSupport() {
   }
 
-  public static UserRecord demo_readerUser() {
+  public static UserRecord peacepieceUser() {
     return UserRecord.builder()
         .id(1L)
         .username(TEST_USERNAME)
         .displayName(TEST_USERNAME)
-        .email("demo_reader@test.margins.local")
+        .email("peacepiece@test.margins.local")
         .emailVerified(true)
         .passwordHash(TEST_PASSWORD_HASH)
         .authProvider("local")

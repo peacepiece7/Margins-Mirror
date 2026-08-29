@@ -46,24 +46,6 @@ public interface SessionTagMapper {
         @Param("userId") Long userId
     );
 
-    @Select("""
-        <script>
-        SELECT id, session_id, user_id, label, is_test_data
-        FROM session_tags
-        WHERE user_id = #{userId}
-          AND deleted_at IS NULL
-          AND session_id IN
-          <foreach collection="sessionIds" item="sessionId" open="(" separator="," close=")">
-            #{sessionId}
-          </foreach>
-        ORDER BY session_id ASC, label ASC, id ASC
-        </script>
-        """)
-    List<SessionTagRecord> findBySessionIds(
-        @Param("sessionIds") List<Long> sessionIds,
-        @Param("userId") Long userId
-    );
-
     @Update("""
         UPDATE session_tags
         SET deleted_at = CURRENT_TIMESTAMP

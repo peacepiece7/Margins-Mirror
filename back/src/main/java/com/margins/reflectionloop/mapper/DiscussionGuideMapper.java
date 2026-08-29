@@ -18,6 +18,7 @@ public interface DiscussionGuideMapper {
                depth, purpose, facilitation_level, audience_mode, target_minutes, disclosure_mode,
                goal, issues_json, status, prompt_version, model, token_usage_json,
                generation_metadata_json, guide_version, source_guide_id, origin, is_current,
+               generation_locale, language_validation_outcome,
                current_interview_id, archived_at,
                is_test_data, created_at, updated_at
         FROM discussion_guides
@@ -35,6 +36,7 @@ public interface DiscussionGuideMapper {
                depth, purpose, facilitation_level, audience_mode, target_minutes, disclosure_mode,
                goal, issues_json, status, prompt_version, model, token_usage_json,
                generation_metadata_json, guide_version, source_guide_id, origin, is_current,
+               generation_locale, language_validation_outcome,
                current_interview_id, archived_at,
                is_test_data, created_at, updated_at
         FROM discussion_guides
@@ -52,6 +54,7 @@ public interface DiscussionGuideMapper {
                dg.target_minutes, dg.disclosure_mode, dg.goal, dg.issues_json, dg.status,
                dg.prompt_version, dg.model, dg.token_usage_json, dg.generation_metadata_json,
                dg.guide_version, dg.source_guide_id, dg.origin, dg.is_current,
+               dg.generation_locale, dg.language_validation_outcome,
                dg.current_interview_id, dg.archived_at,
                EXISTS (
                  SELECT 1
@@ -88,13 +91,15 @@ public interface DiscussionGuideMapper {
           depth, purpose, facilitation_level, audience_mode, target_minutes, disclosure_mode,
           goal, issues_json, status, prompt_version, model, token_usage_json,
           generation_metadata_json, guide_version, source_guide_id, origin, is_current,
+          generation_locale, language_validation_outcome,
           archived_at, is_test_data
         ) VALUES (
           #{reflectionInsightId}, #{sourceRevisionId}, #{interviewId}, #{sessionId}, #{userId},
           #{depth}, #{purpose}, #{facilitationLevel}, #{audienceMode}, #{targetMinutes}, #{disclosureMode},
           #{goal}, CAST(#{issuesJson} AS JSON), #{status}, #{promptVersion},
           #{model}, #{tokenUsageJson}, CAST(#{generationMetadataJson} AS JSON),
-          #{guideVersion}, #{sourceGuideId}, #{origin}, #{isCurrent}, #{archivedAt}, #{testData}
+          #{guideVersion}, #{sourceGuideId}, #{origin}, #{isCurrent},
+          #{generationLocale}, #{languageValidationOutcome}, #{archivedAt}, #{testData}
         )
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")

@@ -4,6 +4,7 @@ export interface ConsentRequest {
   ageOver14Confirmed: boolean;
   privacyPolicyVersion: string;
   aiTransferVersion: string;
+  preferredLocale?: 'ko' | 'en';
 }
 
 export interface PrivacyRequirementsResponse {

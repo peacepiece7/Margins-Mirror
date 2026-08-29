@@ -2,6 +2,7 @@ package com.margins.session.service;
 
 import com.margins.session.business.ReadingSessionBusiness;
 
+import com.margins.session.dto.BookReadingSessionResponse;
 import com.margins.session.dto.CreateReadingSessionRequest;
 import com.margins.session.dto.CreateReadingSessionResponse;
 import com.margins.session.dto.CreateReviewCommentRequest;
@@ -9,8 +10,6 @@ import com.margins.session.dto.CreateSessionHighlightRequest;
 import com.margins.session.dto.CreateSessionInsightRequest;
 import com.margins.session.dto.CreateSessionTagRequest;
 import com.margins.session.dto.PublicReviewListResponse;
-import com.margins.session.dto.ReadingLibraryStatsResponse;
-import com.margins.session.dto.ReadingSessionListResponse;
 import com.margins.session.dto.ReadingSessionTimelineResponse;
 import com.margins.session.dto.ReviewCommentListResponse;
 import com.margins.session.dto.SessionSearchResponse;
@@ -60,16 +59,10 @@ public class ReadingSessionService {
         return readingSessionBusiness.findTimeline(sessionId);
     }
 
-    /** 사이드바와 목록 화면에 쓸 간단한 library 요약을 읽는다. */
+    /** 책별 최신 독서 세션의 식별자와 표시 제목만 읽는다. */
     @Transactional(readOnly = true)
-    public ReadingSessionListResponse findSummaries() {
-        return readingSessionBusiness.findSummaries();
-    }
-
-    /** 세션 요약에서 계산한 library 통계를 읽는다. */
-    @Transactional(readOnly = true)
-    public ReadingLibraryStatsResponse findLibraryStats() {
-        return readingSessionBusiness.findLibraryStats();
+    public BookReadingSessionResponse findForBook(Long bookId) {
+        return readingSessionBusiness.findForBook(bookId);
     }
 
     /** 읽기 전용 매퍼 경로로 세션 기억을 검색한다. */
@@ -111,8 +104,8 @@ public class ReadingSessionService {
 
     /** 사용자 목록에서 세션을 보관 처리한다. */
     @Transactional
-    public ReadingSessionListResponse archive(Long sessionId) {
-        return readingSessionBusiness.archive(sessionId);
+    public void archive(Long sessionId) {
+        readingSessionBusiness.archive(sessionId);
     }
 
     /** 세션 이름을 바꾸고 timeline을 반환한다. */

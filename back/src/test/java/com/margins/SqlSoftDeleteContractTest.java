@@ -10,21 +10,19 @@ import org.junit.jupiter.api.Test;
 class SqlSoftDeleteContractTest {
 
     @Test
-    void sessionSummaryAggregatesIgnoreArchivedWindowRecords() throws IOException {
+    void bookSessionLocatorReadsOnlyActiveOwnedSessionMetadata() throws IOException {
         String mapper = ContractTextSupport.readNormalized(
             Path.of("src/main/java/com/margins/session/mapper/ReadingSessionMapper.java")
         );
 
         assertThat(mapper)
-            .contains("FROM session_windows qsw")
-            .contains("WHERE qsw.id = q.window_id")
-            .contains("AND qsw.deleted_at IS NULL")
-            .contains("FROM session_windows qmw")
-            .contains("WHERE qmw.id = qm.window_id")
-            .contains("AND qmw.deleted_at IS NULL")
-            .contains("FROM session_windows msw")
-            .contains("WHERE msw.id = m.window_id")
-            .contains("AND msw.deleted_at IS NULL");
+            .contains("SELECT rs.id, rs.title")
+            .contains("INNER JOIN books b ON b.id = rs.book_id")
+            .contains("WHERE rs.book_id = #{bookId} AND rs.user_id = #{userId}")
+            .contains("AND rs.deleted_at IS NULL AND b.deleted_at IS NULL")
+            .contains("ORDER BY rs.updated_at DESC, rs.id DESC")
+            .doesNotContain("COUNT(DISTINCT")
+            .doesNotContain("findSummariesByUserId");
     }
 
     @Test
