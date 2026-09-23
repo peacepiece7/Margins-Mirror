@@ -162,6 +162,7 @@ export interface ReadingSessionStats {
 }
 
 export interface SessionSearchResult {
+  bookId: number;
   sessionId: number;
   sourceId: number;
   resultType: string;

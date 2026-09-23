@@ -1,0 +1,62 @@
+{
+  "expo": {
+    "name": "Margins",
+    "slug": "margins-mobile",
+    "version": "0.1.0",
+    "orientation": "default",
+    "icon": "./assets/images/icon.png",
+    "scheme": "margins",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "associatedDomains": ["applinks:margins.cloud"],
+      "icon": "./assets/images/icon.png",
+      "bundleIdentifier": "cloud.margins.mobile",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "cloud.margins.mobile",
+      "adaptiveIcon": {
+        "backgroundColor": "#F7F4EE",
+        "foregroundImage": "./assets/images/icon.png"
+      },
+      "predictiveBackGestureEnabled": true,
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "category": ["BROWSABLE", "DEFAULT"],
+          "data": [
+            {
+              "scheme": "https",
+              "host": "margins.cloud",
+              "pathPrefix": "/oauth"
+            }
+          ]
+        }
+      ]
+    },
+    "web": {
+      "output": "static",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#030303",
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 260,
+          "resizeMode": "contain"
+        }
+      ],
+      "expo-secure-store",
+      "expo-localization",
+      "expo-sharing"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
+  }
+}

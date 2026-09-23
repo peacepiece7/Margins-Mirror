@@ -9,7 +9,8 @@ import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { isTurnstileConfigured, TurnstileWidget } from '@/components/ui/turnstile-widget';
-import { apiErrorMessage } from '@/lib/api-error-i18n';
+import { apiErrorTranslationKey } from '@/lib/api-error-i18n';
+import { ApiRequestError } from '@/lib/api-client';
 import { readAuthSession } from '@/lib/auth-session';
 import { useI18n, type TranslationKey } from '@/lib/i18n';
 import { contactCategories, type ContactCategory } from '@/types/api/contact';
@@ -34,11 +35,14 @@ const categoryLabels: Record<ContactCategory, TranslationKey> = {
   OTHER: 'contactCategoryOther',
 };
 
+type ContactFeedback =
+  { kind: 'success'; inquiryId: number } | { kind: 'error'; messageKey: TranslationKey };
+
 export function ContactPage() {
   const { locale, setLocale, t } = useI18n();
   const [botChallengeToken, setBotChallengeToken] = useState<string>();
   const [botChallengeResetSignal, setBotChallengeResetSignal] = useState(0);
-  const [feedback, setFeedback] = useState<{ kind: 'success' | 'error'; message: string }>();
+  const [feedback, setFeedback] = useState<ContactFeedback>();
   const {
     formState: { errors, isSubmitting },
     getValues,
@@ -67,7 +71,7 @@ export function ContactPage() {
   async function submit(values: ContactFormValues) {
     setFeedback(undefined);
     if (isTurnstileConfigured() && !botChallengeToken) {
-      setFeedback({ kind: 'error', message: t('contactBotChallengeRequired') });
+      setFeedback({ kind: 'error', messageKey: 'contactBotChallengeRequired' });
       return;
     }
 
@@ -85,9 +89,15 @@ export function ContactPage() {
         subject: '',
         message: '',
       });
-      setFeedback({ kind: 'success', message: `${t('contactSuccess')} #${result.inquiryId}` });
+      setFeedback({ kind: 'success', inquiryId: result.inquiryId });
     } catch (error) {
-      setFeedback({ kind: 'error', message: apiErrorMessage(error, t, 'contactSubmitFailed') });
+      setFeedback({
+        kind: 'error',
+        messageKey: apiErrorTranslationKey(
+          error instanceof ApiRequestError ? error.code : undefined,
+          'contactSubmitFailed',
+        ),
+      });
     } finally {
       if (isTurnstileConfigured()) {
         setBotChallengeToken(undefined);
@@ -97,6 +107,12 @@ export function ContactPage() {
   }
 
   const nextLocale = locale === 'en' ? 'ko' : 'en';
+  const feedbackMessage =
+    feedback?.kind === 'success'
+      ? `${t('contactSuccess')} #${feedback.inquiryId}`
+      : feedback?.kind === 'error'
+        ? t(feedback.messageKey)
+        : undefined;
 
   return (
     <main
@@ -149,6 +165,7 @@ export function ContactPage() {
           <NativeSelect
             aria-describedby={errors.category ? 'contact-category-error' : undefined}
             aria-invalid={Boolean(errors.category)}
+            className="h-11 md:h-8"
             id="contact-category"
             {...register('category', { required: t('contactCategoryRequired') })}
             {...testAttr('contact-category-select')}
@@ -231,7 +248,7 @@ export function ContactPage() {
             variant={feedback.kind === 'error' ? 'destructive' : 'success'}
             {...testAttr(`contact-${feedback.kind}`)}
           >
-            <AlertDescription>{feedback.message}</AlertDescription>
+            <AlertDescription>{feedbackMessage}</AlertDescription>
           </Alert>
         )}
 
@@ -265,7 +282,7 @@ function ContactField({
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
       {error && (
-        <p className="text-xs leading-5 text-red-700" id={`${htmlFor}-error`} role="alert">
+        <p className="text-xs leading-5 text-destructive" id={`${htmlFor}-error`} role="alert">
           {error}
         </p>
       )}

@@ -59,7 +59,8 @@ describe('ConsentPage', () => {
       </I18nProvider>,
     );
 
-    expect(await screen.findByRole('heading', { name: 'Required consent' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'Terms and privacy' })).toBeVisible();
+    expect(screen.getByRole('link', { name: 'Service Terms' })).toHaveAttribute('href', '/terms');
     screen.getAllByRole('checkbox').forEach((checkbox) => fireEvent.click(checkbox));
     fireEvent.click(screen.getByRole('button', { name: 'Agree and continue' }));
 

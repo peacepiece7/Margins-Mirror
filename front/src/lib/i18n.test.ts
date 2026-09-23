@@ -18,11 +18,12 @@ describe('translation catalog', () => {
 
   it('keeps English product copy available', () => {
     expect(translationCatalog.en.loginSubtitle).toContain('private reading archive');
+    expect(translationCatalog.en.registerSubtitle).toContain('Create an account');
     expect(translationCatalog.en.deleteConfirm).toBe('Delete this item?');
     expect(translationCatalog.en.pageBookSearch).toBe('Discover');
     expect(translationCatalog.en.username).toBe('Username');
     expect(translationCatalog.en.password).toBe('Password');
-    expect(translationCatalog.en.logout).toBe('Logout');
+    expect(translationCatalog.en.logout).toBe('Sign out');
     expect(translationCatalog.en.bookSourceGoogleBooks).toBe('Google Books');
     expect(translationCatalog.ko.bookSourceGoogleBooks).toBe('Google 도서');
   });
@@ -81,17 +82,28 @@ describe('translation catalog', () => {
     expect(translationCatalog.en.accountTitle).toBe('Account');
     expect(translationCatalog.en.accountAuthProviderLocal).toBe('Email and password');
     expect(translationCatalog.en.recoveryActionRestore).toBe('Restore account');
+    expect(translationCatalog.en.recoveryTitle).toBe('Restore your account');
     expect(translationCatalog.ko.accountTitle).toBe('회원정보');
     expect(translationCatalog.ko.accountAuthProviderLocal).toBe('이메일과 비밀번호');
     expect(translationCatalog.ko.recoveryActionRestore).toBe('계정 복구');
+    expect(translationCatalog.ko.recoveryTitle).toBe('탈퇴한 계정 복구');
   });
 
   it('translates privacy, required consent, and AI transfer notices', () => {
     expect(translationCatalog.en.privacyPolicyTitle).toBe('Privacy Policy');
-    expect(translationCatalog.en.consentTitle).toBe('Required consent');
+    expect(translationCatalog.en.consentTitle).toBe('Terms and privacy');
     expect(translationCatalog.en.aiActionDebate).toBe('Persona debate');
     expect(translationCatalog.ko.privacyPolicyTitle).toBe('개인정보처리방침');
-    expect(translationCatalog.ko.consentTitle).toBe('필수 동의 확인');
+    expect(translationCatalog.ko.consentTitle).toBe('약관 및 개인정보 동의');
     expect(translationCatalog.ko.aiActionDebate).toBe('페르소나 토론');
+  });
+
+  it('uses conventional authentication and account copy in both locales', () => {
+    expect(translationCatalog.en.authLoginHeadline).toBe('Sign in to Margins');
+    expect(translationCatalog.en.authRegisterHeadline).toBe('Sign up for Margins');
+    expect(translationCatalog.en.accountDangerTitle).toBe('Close account');
+    expect(translationCatalog.ko.authLoginHeadline).toBe('Margins에 로그인');
+    expect(translationCatalog.ko.authRegisterHeadline).toBe('Margins 회원가입');
+    expect(translationCatalog.ko.accountDangerTitle).toBe('회원 탈퇴');
   });
 });

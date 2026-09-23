@@ -1,6 +1,7 @@
 package com.margins;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -9,8 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.margins.auth.controller.AuthController;
+import com.margins.auth.business.AuthBusiness.AuthSession;
 import com.margins.auth.dto.EmailVerificationResponse;
+import com.margins.auth.dto.LoginRequest;
+import com.margins.auth.dto.LoginResponse;
 import com.margins.auth.service.AuthService;
+import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.security.servlet.SecurityAutoConfiguration;
@@ -103,5 +108,37 @@ class AuthControllerValidationTest {
         verify(authService).issueEmailVerificationCode(
             "reader@example.com", "challenge-token", "127.0.0.1");
         verifyNoInteractions(privacyConsentService);
+    }
+
+    @Test
+    void webLoginKeepsRefreshTokenOutOfResponseAndWritesCookie() throws Exception {
+        when(authService.login(any(LoginRequest.class))).thenReturn(new AuthSession(
+            LoginResponse.builder()
+                .userId(1L)
+                .username("peacepiece")
+                .displayName("Peace Piece")
+                .authMode("local-jwt")
+                .accessToken("access-token")
+                .accessTokenExpiresInSeconds(900L)
+                .membershipTier("FREE")
+                .preferredLocale("en")
+                .build(),
+            "web-refresh-token"
+        ));
+        when(authJwtProperties.getRefreshTtlSeconds()).thenReturn(604800L);
+
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"username\":\"peacepiece\",\"password\":\"reader\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.data.accessToken").value("access-token"))
+            .andExpect(jsonPath("$.data.refreshToken").doesNotExist())
+            .andExpect(jsonPath("$.data.refreshTokenExpiresInSeconds").doesNotExist());
+
+        verify(authCookieSupport).writeRefreshCookie(
+            any(),
+            eq("web-refresh-token"),
+            eq(Duration.ofSeconds(604800L))
+        );
     }
 }

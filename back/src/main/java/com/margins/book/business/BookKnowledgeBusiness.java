@@ -79,9 +79,44 @@ public class BookKnowledgeBusiness {
         return toDto(resolved);
     }
 
-    public BookKnowledgeDto regenerate(Long bookId) {
+    public RegenerationRequest requestRegeneration(Long bookId) {
         BookRecord book = findOwnedBook(bookId);
-        return toDto(refresh(book, generationLocaleResolver.resolve(book.getUserId())));
+        RefreshAttempt attempt = beginRefresh(
+            book,
+            generationLocaleResolver.resolve(book.getUserId())
+        );
+        return new RegenerationRequest(toDto(attempt.resolved()), attempt.work());
+    }
+
+    public void completeRegeneration(RegenerationWork work) {
+        if (bookKnowledgeMapper.renewGenerationClaim(
+            work.claimed().getId(),
+            work.claimToken(),
+            work.locale().value()
+        ) <= 0) {
+            log.info("Queued Book Knowledge generation skipped. outcome=CLAIM_CHANGED");
+            return;
+        }
+        finishRefresh(work);
+    }
+
+    public void rejectRegeneration(RegenerationWork work) {
+        log.warn("Book Knowledge generation scheduling failed. outcome=FAILURE");
+        clearRegenerationClaim(work, "Background generation could not be scheduled");
+    }
+
+    public void failRegeneration(RegenerationWork work) {
+        log.warn("Book Knowledge background generation failed. outcome=FAILURE");
+        clearRegenerationClaim(work, "Background generation failed");
+    }
+
+    private void clearRegenerationClaim(RegenerationWork work, String failureReason) {
+        bookKnowledgeMapper.failGeneration(
+            work.claimed().getId(),
+            work.claimToken(),
+            work.locale().value(),
+            failureReason
+        );
     }
 
     public ResolvedKnowledge ensureKnowledge(BookRecord book, GenerationLocale locale) {
@@ -135,6 +170,14 @@ public class BookKnowledgeBusiness {
     }
 
     private ResolvedKnowledge refresh(BookRecord book, GenerationLocale locale) {
+        RefreshAttempt attempt = beginRefresh(book, locale);
+        if (attempt.work() == null) {
+            return attempt.resolved();
+        }
+        return finishRefresh(attempt.work());
+    }
+
+    private RefreshAttempt beginRefresh(BookRecord book, GenerationLocale locale) {
         Identity identity = identity(book);
         String claimToken = UUID.randomUUID().toString();
         log.info(
@@ -150,7 +193,7 @@ public class BookKnowledgeBusiness {
                 identity.type()
             );
             if (concurrent != null) {
-                return concurrent.withRefreshPending(true);
+                return new RefreshAttempt(concurrent.withRefreshPending(true), null);
             }
             throw new ApiException(
                 ApiErrorCode.COMMON_CONFLICT,
@@ -158,6 +201,29 @@ public class BookKnowledgeBusiness {
             );
         }
 
+        ResolvedKnowledge accepted = findReusableForBook(book, locale);
+        if (accepted == null) {
+            accepted = new ResolvedKnowledge(
+                claimed,
+                true,
+                claimed.isFallbackUsed(),
+                true
+            );
+        } else {
+            accepted = accepted.withRefreshPending(true);
+        }
+        return new RefreshAttempt(
+            accepted,
+            new RegenerationWork(book, claimed, claimToken, locale)
+        );
+    }
+
+    private ResolvedKnowledge finishRefresh(RegenerationWork work) {
+        BookRecord book = work.book();
+        BookKnowledgeRecord claimed = work.claimed();
+        String claimToken = work.claimToken();
+        GenerationLocale locale = work.locale();
+        Identity identity = identity(book);
         AiGenerationResult<BookKnowledgeDto> generation;
         try {
             generation = aiProvider.analyzeBookKnowledgeWithMetadata(analyzeRequest(book, locale));
@@ -672,6 +738,26 @@ public class BookKnowledgeBusiness {
     }
 
     private record Identity(String type, String key) {
+    }
+
+    private record RefreshAttempt(
+        ResolvedKnowledge resolved,
+        RegenerationWork work
+    ) {
+    }
+
+    public record RegenerationRequest(
+        BookKnowledgeDto knowledge,
+        RegenerationWork work
+    ) {
+    }
+
+    public record RegenerationWork(
+        BookRecord book,
+        BookKnowledgeRecord claimed,
+        String claimToken,
+        GenerationLocale locale
+    ) {
     }
 
     public record ResolvedKnowledge(

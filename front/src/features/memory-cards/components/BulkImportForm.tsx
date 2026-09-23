@@ -77,9 +77,10 @@ export function BulkImportForm({
           <p className="mt-1 text-sm text-stone-600">{labels.description}</p>
         </div>
         <Button
-          className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-stone-900"
+          className="min-h-11 px-3 py-2"
           onClick={onDownloadTemplate}
           type="button"
+          variant="outline"
           {...testAttr('memory-card-template-download')}
         >
           {labels.templateDownload}
@@ -114,7 +115,7 @@ export function BulkImportForm({
       )}
       {cardsCount > maxUploadSize && (
         <p
-          className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          className="rounded border border-warning-border bg-warning-surface px-3 py-2 text-sm text-warning-ink"
           {...testAttr('memory-card-upload-limit-notice')}
         >
           {labels.limitNotice}
@@ -146,17 +147,19 @@ export function BulkImportForm({
       </fieldset>
       <div className="flex flex-wrap gap-2">
         <Button
-          className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium"
+          className="min-h-11 px-3 py-2"
           onClick={() => void onValidate()}
           type="button"
+          variant="outline"
         >
           {labels.validate}
         </Button>
         <Button
-          className="min-h-11 rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="min-h-11 px-3 py-2"
           disabled={loading || form.formState.isSubmitting}
           loading={loading || form.formState.isSubmitting}
           type="submit"
+          variant="default"
           {...testAttr('memory-card-upload-submit')}
         >
           {labels.save}

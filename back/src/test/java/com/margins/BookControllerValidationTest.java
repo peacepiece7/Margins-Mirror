@@ -1,11 +1,15 @@
 package com.margins;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.margins.book.controller.BookController;
+import com.margins.book.dto.BookKnowledgeDto;
 import com.margins.book.service.BookService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -96,5 +100,25 @@ class BookControllerValidationTest {
             .andExpect(status().isBadRequest());
 
         verifyNoInteractions(bookService);
+    }
+
+    @Test
+    void regenerateAcceptsBackgroundKnowledgeWork() throws Exception {
+        when(bookService.regenerateBookKnowledge(52L)).thenReturn(
+            BookKnowledgeDto.builder()
+                .knowledgeId(10L)
+                .title("Accepted")
+                .generationLocale("ko")
+                .status("ready")
+                .refreshPending(true)
+                .build()
+        );
+
+        mockMvc.perform(post("/api/books/52/knowledge/regenerate"))
+            .andExpect(status().isAccepted())
+            .andExpect(jsonPath("$.data.knowledgeId").value(10))
+            .andExpect(jsonPath("$.data.refreshPending").value(true));
+
+        verify(bookService).regenerateBookKnowledge(52L);
     }
 }

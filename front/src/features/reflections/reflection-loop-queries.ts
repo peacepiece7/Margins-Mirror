@@ -133,20 +133,28 @@ export function mergeGuidedDiscussionMessages(
   return { ...timeline, messages: [...timeline.messages, ...appended] };
 }
 
-export function useSavePrimaryReflectionMutation(sessionId?: number, reflectionId?: number) {
+export function useSavePrimaryReflectionMutation(
+  bookId: number,
+  sessionId?: number,
+  reflectionId?: number,
+) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: SaveReflectionInput) => {
-      if (!sessionId) throw new Error('독서 세션을 준비하고 있습니다.');
+    mutationFn: async (input: SaveReflectionInput) => {
+      const activeSessionId =
+        sessionId ?? (await reflectionsApi.ensureReadingSession(bookId)).sessionId;
       return reflectionId
         ? reflectionsApi.updateReflection(reflectionId, input)
-        : reflectionsApi.createReflection(sessionId, input);
+        : reflectionsApi.createReflection(activeSessionId, input);
     },
     onSuccess: async (reflection) => {
       queryClient.setQueryData(reflectionLoopKeys.reflection(reflection.reflectionId), reflection);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.reflections() }),
         queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(reflection.sessionId) }),
+        ...(!sessionId
+          ? [queryClient.invalidateQueries({ queryKey: sessionKeys.book(bookId) })]
+          : []),
         queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() }),
       ]);
     },

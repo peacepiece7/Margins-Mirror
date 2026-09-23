@@ -14,7 +14,7 @@ export function BookDetailRoute() {
 
   return (
     <ReadingWorkspacePanelLayout>
-      <div className="grid gap-5">
+      <div className="web-book-detail-workspace grid gap-5">
         <BookDetailsPanel bookId={bookId} />
         <QuestionPanel bookId={bookId} />
         <DebateEntryPanel bookId={bookId} />

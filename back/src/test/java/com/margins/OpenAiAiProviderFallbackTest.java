@@ -134,7 +134,7 @@ class OpenAiAiProviderFallbackTest {
                  "recommendedPersonas":[],"famousQuotes":[],
                  "keywords":["reading discussion"],"version":"book-v1"}
                 """.replace("\n", "");
-            byte[] response = ("{\"output_text\":"
+            byte[] response = ("{\"status\":\"completed\",\"output_text\":"
                 + new ObjectMapper().writeValueAsString(output) + "}")
                 .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -145,7 +145,9 @@ class OpenAiAiProviderFallbackTest {
         server.start();
 
         try {
-            var generation = provider(configuredProperties(server)).analyzeBookKnowledgeWithMetadata(
+            OpenAiProperties properties = configuredProperties(server);
+            properties.setMaxOutputTokens(321);
+            var generation = provider(properties).analyzeBookKnowledgeWithMetadata(
                 BookKnowledgeAnalyzeRequest.builder()
                     .title("Dune")
                     .promptVersion("book-v1")
@@ -158,7 +160,69 @@ class OpenAiAiProviderFallbackTest {
             assertThat(generation.value().getSummary()).startsWith("A detailed English summary");
             assertThat(requestBody.get())
                 .contains("Respond in English.")
+                .contains("\"max_output_tokens\":2000")
+                .doesNotContain("\"max_output_tokens\":321")
+                .contains("\"type\":\"json_schema\"")
+                .contains("\"name\":\"book_knowledge\"")
+                .contains("\"strict\":true")
+                .contains("\"discussionPoints\"")
+                .contains("\"recommendedPersonaKeys\"")
                 .doesNotContain("Summary should be Korean");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void incompleteBookKnowledgeResponseFallsBackBeforeParsingTruncatedJson() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server.createContext("/responses", exchange -> {
+            requestBody.set(new String(
+                exchange.getRequestBody().readAllBytes(),
+                StandardCharsets.UTF_8
+            ));
+            String truncated = "{\"summary\":\"A long response\",\"themes\":[\"growth\"],"
+                + "\"discussionPoints\":[{\"id\":\"dp-1\"}";
+            byte[] response = new ObjectMapper().writeValueAsBytes(java.util.Map.of(
+                "status",
+                "incomplete",
+                "incomplete_details",
+                java.util.Map.of("reason", "max_output_tokens"),
+                "output_text",
+                truncated,
+                "usage",
+                java.util.Map.of(
+                    "input_tokens", 100,
+                    "input_tokens_details", java.util.Map.of("cached_tokens", 20),
+                    "output_tokens", 2000,
+                    "total_tokens", 2100
+                )
+            ));
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            OpenAiProperties properties = configuredProperties(server);
+            var generation = provider(properties).analyzeBookKnowledgeWithMetadata(
+                BookKnowledgeAnalyzeRequest.builder()
+                    .title("Dune")
+                    .promptVersion("book-v1")
+                    .generationLocale(GenerationLocale.EN)
+                    .build()
+            );
+
+            assertThat(generation.outcome()).isEqualTo("FALLBACK");
+            assertThat(generation.fallbackUsed()).isTrue();
+            assertThat(generation.outputTokens()).isEqualTo(2000);
+            assertThat(generation.value().getSummary()).contains("temporary Book Knowledge");
+            assertThat(requestBody.get())
+                .contains("\"max_output_tokens\":2000")
+                .contains("\"type\":\"json_schema\"");
         } finally {
             server.stop(0);
         }
@@ -202,6 +266,7 @@ class OpenAiAiProviderFallbackTest {
             .extracting((question) -> question.getQuestionText())
             .allSatisfy((questionText) -> assertThat(questionText)
                 .containsAnyOf("어떤 장면", "어떤 구절")
+                .doesNotContain("Dune")
                 .doesNotContain("OpenAI")
                 .doesNotContain("integration"));
         assertThat(answer.getAiModel()).isEqualTo("placeholder");

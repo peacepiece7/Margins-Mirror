@@ -110,7 +110,7 @@ export function RecoveryForm() {
             {...form.register('email', { required: t('emailRequired') })}
           />
           {form.formState.errors.email?.message && (
-            <p className="text-xs leading-5 text-red-700" id="recovery-email-error">
+            <p className="text-xs leading-5 text-destructive" id="recovery-email-error">
               {form.formState.errors.email.message}
             </p>
           )}
@@ -142,7 +142,7 @@ export function RecoveryForm() {
                 })}
               />
               {form.formState.errors.code?.message && (
-                <p className="text-xs leading-5 text-red-700" id="recovery-code-error">
+                <p className="text-xs leading-5 text-destructive" id="recovery-code-error">
                   {form.formState.errors.code.message}
                 </p>
               )}

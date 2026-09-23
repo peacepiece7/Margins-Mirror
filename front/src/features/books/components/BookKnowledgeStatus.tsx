@@ -42,7 +42,7 @@ export function BookKnowledgeStatus({
     return (
       <Alert
         aria-live="polite"
-        className="grid gap-3 rounded border border-amber-300 bg-amber-50 p-4"
+        className="grid gap-3 p-4"
         variant="warning"
         {...testAttr('book-knowledge-status')}
       >
@@ -99,7 +99,7 @@ export function BookKnowledgeStatus({
           <p className="break-words text-sm leading-6 text-stone-600">{knowledge.summary}</p>
         ) : null}
         {needsRefresh ? (
-          <div className="flex flex-col gap-3 rounded bg-amber-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-3 rounded bg-warning-surface p-3 sm:flex-row sm:items-center sm:justify-between">
             <p className="text-sm leading-6 text-stone-700">{t('bookKnowledgeStaleDescription')}</p>
             <Button
               className="min-h-11 shrink-0"

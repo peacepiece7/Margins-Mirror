@@ -32,10 +32,11 @@ export function ReviewPage({
           {t('reviewListTitle')}
         </h2>
         <Button
-          className="rounded bg-stone-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="px-4 py-2"
           disabled={!selectedBook || loading}
           onClick={onWrite}
           type="button"
+          variant="default"
           {...testAttr('review-write')}
         >
           {t('startReview')}
@@ -51,10 +52,11 @@ export function ReviewPage({
         ).map(([value, label]) => (
           <Button
             aria-pressed={filter === value}
-            className={`rounded border px-3 py-2 text-sm font-medium ${filter === value ? 'border-stone-950 bg-stone-950 text-white' : 'border-stone-300 bg-white text-stone-700'}`}
+            className="px-3 py-2"
             key={value}
             onClick={() => onFilterChange(value)}
             type="button"
+            variant={filter === value ? 'default' : 'outline'}
             {...testAttr(`review-filter-${value}`)}
           >
             {label}
@@ -108,23 +110,25 @@ export function ReviewPage({
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    className="rounded border border-stone-300 px-3 py-1.5 text-xs font-medium"
+                    className="px-3 py-1.5 text-xs"
                     onClick={() =>
                       isQuestionAnswer && insight.questionId
                         ? onEditAnswer(insight.questionId)
                         : onEditReview(insight.insightId)
                     }
                     type="button"
+                    variant="outline"
                     {...testAttr(isQuestionAnswer ? 'question-answer-edit' : 'reflection-edit')}
                   >
                     {t('edit')}
                   </Button>
                   {isQuestionAnswer && insight.questionId && (
                     <Button
-                      className="rounded bg-stone-950 px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+                      className="px-3 py-1.5 text-xs"
                       disabled={loading}
                       onClick={() => onDiscussAnswer(insight.questionId as number)}
                       type="button"
+                      variant="default"
                       {...testAttr('question-answer-debate')}
                     >
                       {t('questionDebate')}

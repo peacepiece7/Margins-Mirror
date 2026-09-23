@@ -9,6 +9,7 @@ import lombok.Data;
 public class MemoryCardGroupRecord {
     Long id;
     Long userId;
+    Long bookId;
     String title;
     String description;
     String sourceLabel;

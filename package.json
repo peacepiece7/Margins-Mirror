@@ -4,6 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
+    "audit:public": "node scripts/audit-public-snapshot.mjs",
     "local:doctor": "node scripts/local.mjs doctor",
     "local:install": "node scripts/local.mjs install",
     "local:db:up": "node scripts/local.mjs db-up --apply-schema",
@@ -12,8 +13,10 @@
     "quality": "node scripts/local.mjs quality",
     "test:back": "node scripts/local.mjs back-test",
     "test:front": "npm --prefix front run test:unit",
+    "test:mobile": "npm --prefix mobile test",
+    "quality:mobile": "npm --prefix mobile run quality",
     "test:back:integration": "node scripts/local.mjs back-test-integration",
     "test:e2e": "node scripts/e2e.mjs",
-    "test": "npm run test:back && npm run test:front"
+    "test": "npm run test:back && npm run test:front && npm run test:mobile"
   }
 }

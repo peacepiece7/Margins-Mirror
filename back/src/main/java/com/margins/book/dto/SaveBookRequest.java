@@ -40,4 +40,6 @@ public class SaveBookRequest {
     @Size(max = 16)
     String language;
     Integer pageCount;
+    @Size(max = 40)
+    String readingStatus;
 }

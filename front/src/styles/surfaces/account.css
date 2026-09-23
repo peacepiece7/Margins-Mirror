@@ -1,0 +1,228 @@
+/* Account owns its section index, forms and truthful account summaries. */
+
+.blueprint-account-workspace .blueprint-workspace-frame {
+  width: min(100%, 90rem);
+}
+
+.web-account-layout {
+  grid-template-columns: 11rem minmax(0, 1fr) 17rem;
+  align-items: start;
+  min-width: 0;
+  padding-top: 1rem;
+  padding-bottom: 2rem;
+}
+
+.web-account-index,
+.web-account-summary {
+  position: sticky;
+  top: 4.5rem;
+  min-width: 0;
+  border: 1px solid #ded8cc;
+  background: #f8f5ee;
+}
+
+.web-account-index {
+  padding: 1rem 0.75rem;
+  border-right: 0;
+}
+
+.web-account-index h2,
+.web-account-summary h2 {
+  margin-top: 0.2rem;
+  font-family: var(--font-display);
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.web-account-index nav {
+  display: grid;
+  gap: 0.15rem;
+  margin-top: 0.9rem;
+}
+
+.web-account-index a {
+  min-height: 2.35rem;
+  padding: 0.55rem 0.6rem;
+  border-left: 2px solid transparent;
+  color: #716a61;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.web-account-index a:hover,
+.web-account-index a:focus-visible {
+  border-left-color: #b6813d;
+  background: #f2e5d1;
+  color: #2a251f;
+}
+
+.web-account-index a.is-danger {
+  color: #9f3131;
+}
+
+.web-account-main {
+  display: grid;
+  gap: 1rem;
+  min-width: 0;
+  padding: 0 1rem;
+}
+
+.web-account-section,
+.web-account-danger {
+  scroll-margin-top: 5rem;
+  border-radius: 0;
+  background: #fcfbf8;
+  box-shadow: none;
+}
+
+.web-account-language-section {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(10rem, 14rem);
+  align-items: end;
+  gap: 1rem;
+  margin-top: 0.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid #ded8cc;
+  scroll-margin-top: 5rem;
+}
+
+.web-account-summary {
+  display: grid;
+  border-left: 0;
+}
+
+.web-account-summary > section {
+  display: grid;
+  gap: 0.65rem;
+  padding: 1rem;
+  border-bottom: 1px solid #ded8cc;
+  scroll-margin-top: 5rem;
+}
+
+.web-account-summary > section:last-child {
+  border-bottom: 0;
+}
+
+.web-account-summary p,
+.web-account-consent-list {
+  color: #716a61;
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.web-account-membership-badge {
+  width: fit-content;
+  padding: 0.3rem 0.55rem;
+  border: 1px solid #c6a875;
+  color: #765624;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.web-account-consent-list {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.web-account-consent-list > div {
+  display: grid;
+  gap: 0.1rem;
+  padding-top: 0.4rem;
+  border-top: 1px solid #e3ddd2;
+}
+
+.web-account-consent-list dd {
+  color: #5e4a2f;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+}
+
+.web-account-support-link {
+  color: #6f542e;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (max-width: 1100px) {
+  .web-account-layout {
+    grid-template-columns: 10rem minmax(0, 1fr);
+  }
+
+  .web-account-index {
+    grid-row: 1 / span 2;
+  }
+
+  .web-account-summary {
+    position: static;
+    grid-row: 1;
+    grid-column: 2;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-left: 1px solid #ded8cc;
+  }
+
+  .web-account-summary > section {
+    border-right: 1px solid #ded8cc;
+    border-bottom: 0;
+  }
+
+  .web-account-summary > section:last-child {
+    border-right: 0;
+  }
+
+  .web-account-main {
+    grid-row: 2;
+    grid-column: 2;
+    padding-top: 1rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .web-account-layout {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0;
+  }
+
+  .web-account-index {
+    position: static;
+    grid-row: 1;
+    grid-column: 1;
+    border-width: 0 0 1px;
+  }
+
+  .web-account-index nav {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .web-account-index a {
+    flex: 0 0 auto;
+    border-bottom: 2px solid transparent;
+    border-left: 0;
+  }
+
+  .web-account-summary {
+    grid-row: 2;
+    grid-column: 1;
+    grid-template-columns: minmax(0, 1fr);
+    border-width: 0 0 1px;
+  }
+
+  .web-account-summary > section {
+    border-right: 0;
+    border-bottom: 1px solid #ded8cc;
+  }
+
+  .web-account-main {
+    grid-row: 3;
+    grid-column: 1;
+    padding: 0.75rem;
+  }
+
+  .web-account-language-section {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

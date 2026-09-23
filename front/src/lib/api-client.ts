@@ -379,12 +379,12 @@ export function authJson<T>(config: AxiosRequestConfig): Promise<T> {
   return requestAuthJson<T>(config);
 }
 
-export function getJson<T>(url: string): Promise<T> {
-  return requestJson<T>({ url, method: 'GET' });
+export function getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>({ url, method: 'GET', signal });
 }
 
-export function postJson<T>(url: string, data: unknown): Promise<T> {
-  return requestJson<T>({ url, method: 'POST', data });
+export function postJson<T>(url: string, data: unknown, signal?: AbortSignal): Promise<T> {
+  return requestJson<T>({ url, method: 'POST', data, signal });
 }
 
 export function patchJson<T>(url: string, data: unknown): Promise<T> {

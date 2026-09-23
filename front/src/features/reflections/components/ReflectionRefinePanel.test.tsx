@@ -110,7 +110,7 @@ describe('ReflectionRefinePanel', () => {
     await waitFor(() => expect(screen.getByLabelText('최종 Reflection 본문')).toBeDisabled());
     expect(screen.getByLabelText('대화 뒤 변화')).toBeDisabled();
     expect(screen.getByTestId('reflection-keep-original')).toHaveTextContent('선택 저장 중…');
-    expect(screen.getByTestId('reflection-save-refinement')).toHaveTextContent('새 revision 저장');
+    expect(screen.getByTestId('reflection-save-refinement')).toHaveTextContent('새 수정본 저장');
   });
 
   it('keeps direct edit and keep actions available when the AI suggestion failed', async () => {

@@ -1,4 +1,5 @@
 import {
+  infiniteQueryOptions,
   queryOptions,
   useInfiniteQuery,
   useMutation,
@@ -15,9 +16,23 @@ import type { BookShelfQuery } from './types';
 
 export const bookQueryOptions = {
   list: (query: BookShelfQuery = {}) =>
-    queryOptions({
+    infiniteQueryOptions({
       queryKey: bookKeys.list(query),
-      queryFn: () => booksApi.books(query),
+      queryFn: ({ pageParam }) => booksApi.books(query, pageParam || undefined),
+      initialPageParam: '',
+      getNextPageParam: (lastPage) => lastPage.nextCursor,
+      gcTime: 0,
+      refetchOnReconnect: false,
+      refetchOnWindowFocus: false,
+    }),
+  detail: (bookId: number) =>
+    queryOptions({
+      queryKey: bookKeys.detail(bookId),
+      queryFn: () =>
+        booksApi
+          .savedBooks()
+          .then((response) => response.books.find((book) => book.bookId === bookId)),
+      enabled: Number.isSafeInteger(bookId) && bookId > 0,
     }),
   knowledge: (bookId: number, preferredLocale: 'ko' | 'en') =>
     queryOptions({
@@ -35,7 +50,7 @@ export const bookQueryOptions = {
 };
 
 export function useBooksQuery(query: BookShelfQuery = {}) {
-  return useQuery(bookQueryOptions.list(query));
+  return useInfiniteQuery(bookQueryOptions.list(query));
 }
 
 export function useBookSearchInfiniteQuery(query: string, limit = 5, enabled = true) {
@@ -74,11 +89,7 @@ export function useBookSearchCommand() {
 }
 
 export function useBookQuery(bookId: number) {
-  const books = useBooksQuery();
-  return {
-    ...books,
-    data: books.data?.books.find((book) => book.bookId === bookId),
-  };
+  return useQuery(bookQueryOptions.detail(bookId));
 }
 
 export function useBookKnowledgeQuery(bookId: number) {
@@ -103,7 +114,7 @@ export function useBookSessionQuery(bookId: number) {
 function useInvalidateBooks() {
   const queryClient = useQueryClient();
   return async (bookId?: number) => {
-    await queryClient.invalidateQueries({ queryKey: bookKeys.lists() });
+    await queryClient.resetQueries({ queryKey: bookKeys.lists() });
     if (bookId) await queryClient.invalidateQueries({ queryKey: bookKeys.detail(bookId) });
   };
 }
@@ -155,7 +166,7 @@ export function useDeleteBookMutation() {
     onSuccess: async (bookId) => {
       queryClient.removeQueries({ queryKey: bookKeys.detail(bookId) });
       queryClient.removeQueries({ queryKey: sessionKeys.book(bookId) });
-      await queryClient.invalidateQueries({ queryKey: bookKeys.lists() });
+      await queryClient.resetQueries({ queryKey: bookKeys.lists() });
     },
   });
 }

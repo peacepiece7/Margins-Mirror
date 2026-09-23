@@ -1,5 +1,6 @@
 package com.margins.session.mapper;
 
+import com.margins.session.model.SessionWindowPersonaSelection;
 import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -25,4 +26,22 @@ public interface SessionWindowPersonaMapper {
         ORDER BY selection_order ASC
         """)
     List<Long> findPersonaIds(@Param("windowId") Long windowId);
+
+    @Select("""
+        <script>
+        SELECT
+          window_id AS windowId,
+          persona_id AS personaId,
+          selection_order AS selectionOrder
+        FROM session_window_personas
+        WHERE window_id IN
+        <foreach collection='windowIds' item='windowId' open='(' separator=',' close=')'>
+          #{windowId}
+        </foreach>
+        ORDER BY window_id ASC, selection_order ASC
+        </script>
+        """)
+    List<SessionWindowPersonaSelection> findByWindowIds(
+        @Param("windowIds") List<Long> windowIds
+    );
 }

@@ -11,7 +11,7 @@ import { useI18n } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 import type { ReflectionVisibility } from '@/types/api/reflection-loop';
 
-import { useEnsureReflectionSessionMutation, useReflectionSessionForBook } from '../queries';
+import { useReflectionSessionForBook } from '../queries';
 import {
   useSessionReflectionQuery,
   useSavePrimaryReflectionMutation,
@@ -26,10 +26,7 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
   const { t } = useI18n();
   const { sessionId, sessions } = useReflectionSessionForBook(bookId);
   const reflection = useSessionReflectionQuery(sessionId);
-  const ensureSession = useEnsureReflectionSessionMutation(bookId);
-  const ensureSessionPending = ensureSession.isPending;
-  const ensureSessionMutation = ensureSession.mutate;
-  const save = useSavePrimaryReflectionMutation(sessionId, reflection.data?.reflectionId);
+  const save = useSavePrimaryReflectionMutation(bookId, sessionId, reflection.data?.reflectionId);
   const startInterview = useStartReflectionInterviewMutation();
   const [content, setContent] = useState('');
   const [visibility, setVisibility] = useState<ReflectionVisibility>('PRIVATE');
@@ -37,12 +34,6 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
     content: string;
     visibility: ReflectionVisibility;
   }>({ content: '', visibility: 'PRIVATE' });
-
-  useEffect(() => {
-    if (!sessions.isLoading && !sessionId && !ensureSessionPending) {
-      ensureSessionMutation(undefined);
-    }
-  }, [ensureSessionMutation, ensureSessionPending, sessionId, sessions.isLoading]);
 
   const persistedContent = reflection.data?.currentRevision.content ?? '';
   const persistedVisibility = reflection.data?.visibility ?? 'PRIVATE';
@@ -75,17 +66,17 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
   const runCompleted = reflection.data?.runStatus === 'COMPLETED';
   const workflowTarget = runId
     ? {
-        label: runCompleted ? 'Reflection 다듬기' : '토론 이어가기',
+        label: runCompleted ? t('reflectionRefineResume') : t('reflectionDiscussionResume'),
         path: `/book/${bookId}/reflection/${runCompleted ? 'refine' : 'discuss'}/${runId}`,
       }
     : guideId
       ? {
-          label: '현재 발제안 보기',
+          label: t('reflectionGuideViewCurrent'),
           path: `/book/${bookId}/reflection/guide/${guideId}`,
         }
       : interviewId
         ? {
-            label: '인터뷰 이어가기',
+            label: t('reflectionInterviewResume'),
             path: `/book/${bookId}/reflection/interview`,
           }
         : null;
@@ -93,32 +84,30 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
   const isDirty =
     normalizedContent !== persistedContent.trim() || visibility !== persistedVisibility;
   const pending =
-    sessions.isLoading ||
-    reflection.isFetching ||
-    ensureSession.isPending ||
-    save.isPending ||
-    startInterview.isPending;
+    sessions.isLoading || reflection.isFetching || save.isPending || startInterview.isPending;
   const missingReflection =
     reflection.error instanceof ApiRequestError && reflection.error.status === 404;
   const loadError = sessions.error ?? (missingReflection ? null : reflection.error);
-  const operationError = loadError ?? save.error ?? startInterview.error ?? ensureSession.error;
+  const operationError = loadError ?? save.error ?? startInterview.error;
   const editorStatus = save.isPending
-    ? '변경 사항을 저장하고 있습니다.'
+    ? t('reflectionEditorSaving')
     : isDirty
-      ? '저장되지 않은 변경 사항이 있습니다. 인터뷰 전에 먼저 저장해 주세요.'
+      ? t('reflectionEditorUnsaved')
       : savedReflectionId
-        ? '모든 변경 사항이 저장되었습니다.'
-        : '첫 생각을 적고 저장해 주세요.';
+        ? t('reflectionEditorSaved')
+        : t('reflectionEditorStart');
 
   return (
-    <section className="grid gap-5" {...testAttr('reflection-loop-page')}>
+    <section
+      className="web-reflection-page web-reflection-compose grid gap-5"
+      {...testAttr('reflection-loop-page')}
+    >
       <ReflectionLoopProgress active="reflect" bookId={bookId} />
       <header className="grid gap-2">
         <p className="text-xs font-semibold tracking-[0.18em] text-stone-500">REFLECT / MVP2</p>
-        <h2 className="text-2xl font-semibold tracking-tight">지금의 생각을 먼저 남겨보세요</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">{t('reflectionComposeTitle')}</h2>
         <p className="max-w-3xl text-sm leading-6 text-stone-600">
-          완성된 리뷰일 필요는 없습니다. 짧고 미완성인 생각도 저장한 뒤 질문과 토론을 거치며 직접
-          다듬을 수 있습니다.
+          {t('reflectionComposeDescription')}
         </p>
       </header>
 
@@ -141,9 +130,9 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
       ) : null}
 
       {missingReflection ? (
-        <Alert className="border-amber-300 bg-amber-50" role="status">
-          <AlertTitle>Reflection을 아직 작성하지 않았어</AlertTitle>
-          <AlertDescription>지금의 생각을 먼저 적어 저장해줘.</AlertDescription>
+        <Alert role="status" variant="warning">
+          <AlertTitle>{t('reflectionComposeMissingTitle')}</AlertTitle>
+          <AlertDescription>{t('reflectionComposeMissingDescription')}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -170,11 +159,11 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
       >
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="font-semibold">Primary Reflection</h3>
-            <p className="text-sm text-stone-500">reading session마다 하나의 기록을 이어갑니다.</p>
+            <h3 className="font-semibold">{t('reflectionPrimaryTitle')}</h3>
+            <p className="text-sm text-stone-500">{t('reflectionPrimaryDescription')}</p>
           </div>
           <NativeSelect
-            aria-label="현재 Reflection 공개 범위"
+            aria-label={t('reflectionVisibilityLabel')}
             className="sm:w-44"
             onChange={(event) => {
               if (save.isError) save.reset();
@@ -182,30 +171,35 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
             }}
             value={visibility}
           >
-            <option value="PRIVATE">나만 보기</option>
-            <option value="PUBLIC">현재 글 공개</option>
+            <option value="PRIVATE">{t('reflectionVisibilityPrivate')}</option>
+            <option value="PUBLIC">{t('reflectionVisibilityPublic')}</option>
           </NativeSelect>
         </div>
         <Textarea
-          aria-label="Reflection 본문"
+          aria-label={t('reflectionBodyLabel')}
           className="min-h-64 resize-y bg-stone-50 text-base leading-7"
           maxLength={20000}
           onChange={(event) => {
             if (save.isError) save.reset();
             setContent(event.target.value);
           }}
-          placeholder="이 책을 읽고 지금 가장 남은 생각은 무엇인가요?"
+          placeholder={t('reflectionBodyPlaceholder')}
           value={content}
           {...testAttr('primary-reflection-content')}
         />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
           <div className="grid gap-1">
             <span className="text-xs text-stone-500">
-              {normalizedContent.length.toLocaleString()} / 20,000자
+              {t('reflectionCharacterLimit').replace(
+                '{count}',
+                normalizedContent.length.toLocaleString(),
+              )}
             </span>
             <span
               aria-live="polite"
-              className={isDirty ? 'text-xs font-medium text-amber-800' : 'text-xs text-stone-500'}
+              className={
+                isDirty ? 'text-xs font-medium text-warning-ink' : 'text-xs text-stone-500'
+              }
               id="reflection-save-status"
               {...testAttr('reflection-save-status')}
             >
@@ -231,30 +225,39 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
               {...testAttr('reflection-start-interview')}
             >
               {startInterview.isPending
-                ? '인터뷰 준비 중…'
+                ? t('reflectionInterviewPreparing')
                 : workflowTarget
                   ? workflowTarget.label
-                  : '인터뷰 시작'}
+                  : t('reflectionInterviewStart')}
             </Button>
             <Button
               disabled={pending || !normalizedContent || (Boolean(savedReflectionId) && !isDirty)}
               type="submit"
               {...testAttr('primary-reflection-save')}
             >
-              {save.isPending ? '저장 중…' : savedReflectionId ? '새 revision 저장' : '생각 저장'}
+              {save.isPending
+                ? t('reflectionSavePending')
+                : savedReflectionId
+                  ? t('reflectionSaveRevision')
+                  : t('reflectionSaveInitial')}
             </Button>
           </div>
         </div>
       </form>
 
       {reflection.data?.revisions.length ? (
-        <section className="rounded border border-stone-300 bg-white p-4 sm:p-6">
+        <section className="web-reflection-revisions rounded border border-stone-300 bg-white p-4 sm:p-6">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h3 className="font-semibold">Revision history</h3>
-              <p className="text-sm text-stone-500">이력은 나에게만 보이며 수정되지 않습니다.</p>
+              <h3 className="font-semibold">{t('reflectionRevisionHistoryTitle')}</h3>
+              <p className="text-sm text-stone-500">{t('reflectionRevisionHistoryDescription')}</p>
             </div>
-            <Badge variant="outline">{reflection.data.revisions.length}개</Badge>
+            <Badge variant="outline">
+              {t('reflectionRevisionCount').replace(
+                '{count}',
+                String(reflection.data.revisions.length),
+              )}
+            </Badge>
           </div>
           <ol className="mt-4 grid gap-2">
             {reflection.data.revisions.map((revision, index) => (
@@ -264,7 +267,8 @@ export function ReflectionLoopPanel({ bookId }: { bookId: number }) {
                 key={revision.revisionId}
               >
                 <span className="text-xs font-semibold text-stone-500">
-                  v{revision.version} · {index === 0 ? '현재' : revision.revisionSource}
+                  v{revision.version} ·{' '}
+                  {index === 0 ? t('reflectionGuideCurrent') : revision.revisionSource}
                 </span>
                 <p className="line-clamp-2 whitespace-pre-wrap text-sm leading-6">
                   {revision.content}

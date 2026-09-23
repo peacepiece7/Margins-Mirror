@@ -10,6 +10,7 @@ import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.DataSourceUtils;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 테스트 데이터 초기화를 실제 JDBC로 수행하는 실행기다.
@@ -28,6 +29,7 @@ public class JdbcTestDataResetExecutor implements TestDataResetExecutor {
     private String authSeedScriptPath;
 
     @Override
+    @Transactional
     public void resetTestData() {
         Connection connection = DataSourceUtils.getConnection(dataSource);
         try {
@@ -49,6 +51,21 @@ public class JdbcTestDataResetExecutor implements TestDataResetExecutor {
         try (Statement statement = connection.createStatement()) {
             statement.execute("SET FOREIGN_KEY_CHECKS = 0");
             try {
+                statement.executeUpdate("UPDATE catalog_search_entries SET generation=generation WHERE is_test_data=TRUE");
+                statement.executeUpdate("UPDATE catalog_storage_budget SET used_bytes=used_bytes WHERE id=1");
+                statement.executeUpdate("UPDATE books SET catalog_book_id=NULL WHERE catalog_book_id IN (SELECT id FROM catalog_books WHERE is_test_data=TRUE)");
+                statement.executeUpdate("UPDATE books SET cover_image_url=NULL WHERE cover_image_url IN (SELECT CONCAT('/api/catalog/covers/',id,'/',LOWER(HEX(sha256))) FROM catalog_cover_assets WHERE is_test_data=TRUE)");
+                statement.executeUpdate("UPDATE catalog_books SET cover_asset_id=NULL WHERE cover_asset_id IN (SELECT id FROM catalog_cover_assets WHERE is_test_data=TRUE)");
+                statement.executeUpdate("DELETE FROM catalog_crawl_jobs WHERE is_test_data=TRUE");
+                statement.executeUpdate("DELETE FROM catalog_search_snapshot_items WHERE is_test_data=TRUE");
+                statement.executeUpdate("DELETE FROM catalog_search_hits WHERE is_test_data=TRUE");
+                statement.executeUpdate("DELETE FROM catalog_search_source_runs WHERE is_test_data=TRUE");
+                statement.executeUpdate("DELETE FROM catalog_search_snapshots WHERE is_test_data=TRUE");
+                statement.executeUpdate("DELETE FROM catalog_search_entries WHERE is_test_data=TRUE");
+                statement.executeUpdate("UPDATE catalog_storage_budget SET used_bytes=used_bytes-(SELECT COALESCE(SUM(OCTET_LENGTH(image_bytes)),0) FROM catalog_cover_assets WHERE is_test_data=TRUE) WHERE id=1");
+                statement.executeUpdate("DELETE FROM catalog_cover_assets WHERE is_test_data=TRUE");
+                statement.executeUpdate("DELETE FROM catalog_book_sources WHERE is_test_data=TRUE");
+                statement.executeUpdate("DELETE FROM catalog_books WHERE is_test_data=TRUE");
                 statement.executeUpdate("DELETE FROM contact_inquiries WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM ai_generation_events WHERE is_test_data = TRUE");
                 statement.executeUpdate("DELETE FROM moderation_events WHERE is_test_data = TRUE");

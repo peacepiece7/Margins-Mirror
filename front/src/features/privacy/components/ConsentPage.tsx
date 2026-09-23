@@ -59,7 +59,7 @@ export function ConsentPage() {
 
   return (
     <main
-      className="margins-page-gutter mx-auto grid min-h-screen max-w-xl content-center gap-6 py-10"
+      className="consent-dark-shell margins-page-gutter grid min-h-screen content-center gap-6 py-10"
       data-consent-page
     >
       <div>
@@ -81,11 +81,15 @@ export function ConsentPage() {
           {t('consentAge')}
         </ConsentLine>
       </fieldset>
-      {error && <p className="text-sm text-red-700">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
       <Button disabled={saving || !privacy || !ai || !age} onClick={() => void submit()}>
         {t('consentContinue')}
       </Button>
       <p className="text-sm text-stone-600">
+        <a className="underline" href="/terms">
+          {t('termsTitle')}
+        </a>
+        {' · '}
         {t('consentDeclinePrefix')}{' '}
         <a className="underline" href="/account">
           {t('consentAccountLink')}

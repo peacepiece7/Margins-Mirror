@@ -40,17 +40,19 @@ export function ReviewEditorPage({
           </h2>
           <div className="flex flex-wrap gap-2">
             <Button
-              className="rounded border border-stone-300 px-4 py-2 text-sm font-medium"
+              className="px-4 py-2"
               onClick={onCancel}
               type="button"
+              variant="outline"
               {...testAttr('reflection-cancel')}
             >
               {t('workbenchCancel')}
             </Button>
             <Button
-              className="rounded bg-stone-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="px-4 py-2"
               disabled={loading || !markdownToPlainText(content)}
               type="submit"
+              variant="default"
               {...testAttr('reflection-submit')}
             >
               {isEditing ? t('saveEdit') : t('saveRecord')}

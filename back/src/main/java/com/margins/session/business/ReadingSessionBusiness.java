@@ -56,7 +56,10 @@ import com.margins.session.model.SessionInsightRecord;
 import com.margins.session.model.SessionSearchResultRecord;
 import com.margins.session.model.SessionTagRecord;
 import com.margins.session.model.SessionWindowRecord;
+import com.margins.session.model.SessionWindowPersonaSelection;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -113,39 +116,57 @@ public class ReadingSessionBusiness {
         this.reflectionLoopProperties = reflectionLoopProperties;
     }
 
-    /** 책 저장 이후 commit된 이벤트에서 호출되어 기존 session을 먼저 선택하거나 만든다. */
+    /**
+     * 책 저장 이벤트와 명시적 활성화 요청이 공유하는 멱등 session ensure다.
+     * 서비스 transaction 안에서 소유 book row를 먼저 잠가 동시 insert를 직렬화한다.
+     */
     public ReadingSessionRecord ensureForBook(Long bookId, Long userId) {
-        ReadingSessionRecord existing = readingSessionMapper.findFirstByBookIdAndUserId(bookId, userId);
+        Boolean testData = readingSessionMapper.lockActiveBookTestData(bookId, userId);
+        if (testData == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book not found");
+        }
+        ReadingSessionRecord existing = readingSessionMapper.findCurrentByBookIdAndUserId(bookId, userId);
         if (existing != null) {
             return existing;
         }
-        if (readingSessionMapper.countActiveBookById(bookId, userId) <= 0) {
-            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book not found");
+        existing = readingSessionMapper.findLatestCreatedByBookIdAndUserId(bookId, userId);
+        if (existing != null) {
+            requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(bookId, userId, existing.getId()));
+            return existing;
         }
         ReadingSessionRecord record = ReadingSessionRecord.builder()
             .userId(userId)
             .bookId(bookId)
             .title("Book " + bookId + " reflection")
-            .testData(readingSessionMapper.findBookTestData(bookId, userId))
+            .testData(testData)
             .build();
         requireInserted(readingSessionMapper.insert(record), "Reading session could not be saved");
+        requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(bookId, userId, record.getId()));
         return record;
+    }
+
+    /** 현재 사용자 소유 책의 session locator만 만들거나 재사용한다. */
+    public BookReadingSessionResponse ensureForBook(Long bookId) {
+        return toBookReadingSessionResponse(ensureForBook(bookId, currentUserId()));
     }
 
     /** 현재 사용자가 소유한 책에 대해서만 수동 세션을 만든다. */
     public CreateReadingSessionResponse create(CreateReadingSessionRequest request) {
-        if (readingSessionMapper.countActiveBookById(request.getBookId(), currentUserId()) <= 0) {
+        long userId = currentUserId();
+        Boolean testData = readingSessionMapper.lockActiveBookTestData(request.getBookId(), userId);
+        if (testData == null) {
             throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book not found");
         }
 
         ReadingSessionRecord record = ReadingSessionRecord.builder()
-            .userId(currentUserId())
+            .userId(userId)
             .bookId(request.getBookId())
             .title(request.getTitle())
-            .testData(true)
+            .testData(testData)
             .build();
 
         requireInserted(readingSessionMapper.insert(record), "Reading session could not be saved");
+        requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(request.getBookId(), userId, record.getId()));
 
         return CreateReadingSessionResponse.builder()
             .sessionId(record.getId())
@@ -162,15 +183,23 @@ public class ReadingSessionBusiness {
 
     /** 매퍼에서 현재 사용자 소유권을 강제하며 세션 timeline 하나를 복원한다. */
     public ReadingSessionTimelineResponse findTimeline(Long sessionId) {
-        return toTimeline(readingSessionMapper.findByIdAndUserId(sessionId, currentUserId()));
+        return toTimeline(requireSession(sessionId));
     }
 
-    /** 접근 가능한 책의 최신 세션을 식별자와 표시 제목으로만 투영한다. */
+    /** 접근 가능한 책의 현재 세션을 식별자와 표시 제목으로만 투영한다. */
     public BookReadingSessionResponse findForBook(Long bookId) {
-        ReadingSessionRecord session = readingSessionMapper.findFirstByBookIdAndUserId(bookId, currentUserId());
+        long userId = currentUserId();
+        ReadingSessionRecord session = readingSessionMapper.findCurrentByBookIdAndUserId(bookId, userId);
+        if (session == null) {
+            session = readingSessionMapper.findLatestCreatedByBookIdAndUserId(bookId, userId);
+        }
         if (session == null) {
             return null;
         }
+        return toBookReadingSessionResponse(session);
+    }
+
+    private BookReadingSessionResponse toBookReadingSessionResponse(ReadingSessionRecord session) {
         return BookReadingSessionResponse.builder()
             .sessionId(session.getId())
             .title(session.getTitle())
@@ -250,7 +279,27 @@ public class ReadingSessionBusiness {
 
     /** 감사용 연결 레코드는 보존하면서 사용자 목록에서 세션을 보관 처리한다. */
     public void archive(Long sessionId) {
-        requireUpdated(readingSessionMapper.softDelete(sessionId, currentUserId()));
+        long userId = currentUserId();
+        ReadingSessionRecord session = readingSessionMapper.lockByIdAndUserId(sessionId, userId);
+        if (session == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Reading session not found");
+        }
+        ReadingSessionRecord current = readingSessionMapper.findCurrentByBookIdAndUserId(session.getBookId(), userId);
+        if (current == null) {
+            current = readingSessionMapper.findLatestCreatedByBookIdAndUserId(session.getBookId(), userId);
+        }
+        requireUpdated(readingSessionMapper.softDelete(sessionId, userId));
+        if (current != null && current.getId().equals(sessionId)) {
+            ReadingSessionRecord replacement = readingSessionMapper.findLatestCreatedByBookIdAndUserId(
+                session.getBookId(),
+                userId
+            );
+            requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(
+                session.getBookId(),
+                userId,
+                replacement == null ? null : replacement.getId()
+            ));
+        }
     }
 
     /** 독자에게 보이는 세션 제목을 바꾸고 수정된 timeline을 반환한다. */
@@ -479,9 +528,14 @@ public class ReadingSessionBusiness {
             return null;
         }
 
-        List<SessionWindowTimelineDto> windows = sessionWindowMapper.findBySessionId(session.getId())
+        List<SessionWindowRecord> windowRecords = sessionWindowMapper.findBySessionId(session.getId());
+        Map<Long, List<Long>> personaIdsByWindow = personaIdsByWindow(windowRecords);
+        List<SessionWindowTimelineDto> windows = windowRecords
             .stream()
-            .map(this::toWindowDto)
+            .map(record -> toWindowDto(
+                record,
+                personaIdsByWindow.getOrDefault(record.getId(), List.of())
+            ))
             .toList();
         List<SessionMessageDto> messages = messageMapper.findBySessionId(session.getId())
             .stream()
@@ -618,6 +672,15 @@ public class ReadingSessionBusiness {
     private void requireInserted(int insertedRows, String reason) {
         if (insertedRows <= 0) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, reason);
+        }
+    }
+
+    private void requireCurrentUpdated(int updatedRows) {
+        if (updatedRows <= 0) {
+            throw new ApiException(
+                ApiErrorCode.COMMON_INTERNAL_ERROR,
+                "Reading session current pointer could not be updated"
+            );
         }
     }
 
@@ -760,7 +823,21 @@ public class ReadingSessionBusiness {
     }
 
     /** 저장된 윈도우 행을 timeline 윈도우 DTO로 매핑한다. */
-    private SessionWindowTimelineDto toWindowDto(SessionWindowRecord record) {
+    private Map<Long, List<Long>> personaIdsByWindow(List<SessionWindowRecord> windows) {
+        if (sessionWindowPersonaMapper == null || windows.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<Long>> personaIdsByWindow = new LinkedHashMap<>();
+        for (SessionWindowPersonaSelection selection : sessionWindowPersonaMapper.findByWindowIds(
+            windows.stream().map(SessionWindowRecord::getId).toList()
+        )) {
+            personaIdsByWindow.computeIfAbsent(selection.getWindowId(), ignored -> new java.util.ArrayList<>())
+                .add(selection.getPersonaId());
+        }
+        return personaIdsByWindow;
+    }
+
+    private SessionWindowTimelineDto toWindowDto(SessionWindowRecord record, List<Long> personaIds) {
         return SessionWindowTimelineDto.builder()
             .windowId(record.getId())
             .sessionId(record.getSessionId())
@@ -769,7 +846,7 @@ public class ReadingSessionBusiness {
             .title(record.getTitle())
             .position(record.getPosition())
             .status(record.getStatus())
-            .personaIds(sessionWindowPersonaMapper == null ? List.of() : sessionWindowPersonaMapper.findPersonaIds(record.getId()))
+            .personaIds(personaIds)
             .build();
     }
 
@@ -880,6 +957,7 @@ public class ReadingSessionBusiness {
     /** 검색 결과 행을 프론트엔드 기억 검색 DTO로 매핑한다. */
     private SessionSearchResultDto toSearchResultDto(SessionSearchResultRecord record) {
         return SessionSearchResultDto.builder()
+            .bookId(record.getBookId())
             .sessionId(record.getSessionId())
             .sourceId(record.getSourceId())
             .resultType(record.getResultType())

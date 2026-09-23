@@ -1,0 +1,11 @@
+appId: cloud.margins.mobile
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- openLink: "margins://oauth/google?error=AUTH_GOOGLE_OAUTH_CANCELLED"
+- assertVisible: "Google sign-in could not be completed."
+- tapOn: "Back to sign in"
+- assertVisible:
+    id: login-screen

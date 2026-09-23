@@ -1,4 +1,4 @@
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useNavigate } from 'react-router-dom';
 
 import { GlobalLoadingIndicator } from '@/components/layouts/global-loading-indicator';
 import { Button } from '@/components/ui/button';
@@ -19,22 +19,18 @@ type AuthenticatedAppShellProps = {
 };
 
 export function AuthenticatedAppShell({ onLogout, session }: AuthenticatedAppShellProps) {
-  const { t } = useI18n();
-  const location = useLocation();
-  const activeApp = location.pathname.startsWith('/memory-card') ? 'memory-card' : 'margins';
-
   return (
     <>
       <SkipLink />
       <GlobalLoadingIndicator />
-      <div
-        className="blueprint-auth-gnb border-b border-stone-300/80 bg-stone-50/95 px-3 py-2 backdrop-blur sm:px-5"
-        {...testAttr('auth-session-bar')}
-      >
-        <div className="mx-auto flex max-w-7xl items-center justify-end gap-2 text-sm">
-          <AppNavigation activeApp={activeApp} onLogout={onLogout} session={session} />
+      <header className="blueprint-auth-gnb web-app-header" {...testAttr('auth-session-bar')}>
+        <div className="web-app-header-inner">
+          <Link className="web-app-wordmark" to="/book/library">
+            Margins
+          </Link>
+          <AppNavigation onLogout={onLogout} session={session} />
         </div>
-      </div>
+      </header>
       <div id="main-content" tabIndex={-1}>
         <Outlet context={session} />
       </div>

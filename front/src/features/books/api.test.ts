@@ -23,11 +23,86 @@ describe('booksApi', () => {
   });
 
   it('serializes non-default shelf filters', async () => {
+    vi.mocked(getJson).mockResolvedValue({ threads: [] });
+
+    await booksApi.books({ stage: 'DISCUSS', status: 'reading', sort: 'rating_desc' }, '50');
+
+    expect(getJson).toHaveBeenCalledWith(
+      '/api/library/threads?status=reading&stage=DISCUSS&sort=rating_desc&cursor=50',
+    );
+  });
+
+  it('projects authoritative thread metadata onto the existing saved-book shape', async () => {
+    vi.mocked(getJson).mockResolvedValue({
+      threads: [
+        {
+          book: { bookId: 7, title: 'Dune', author: 'Frank Herbert' },
+          loop: {
+            stage: 'INTERVIEW',
+            answeredCount: 2,
+            targetCount: 5,
+            continueLocator: {
+              kind: 'INTERVIEW',
+              href: '/book/7/reflection/interview',
+            },
+          },
+          recentRevisions: [
+            {
+              revisionId: 11,
+              version: 2,
+              revisionSource: 'USER_EDIT',
+              createdAt: '2026-09-01T12:00:00',
+            },
+          ],
+          version: 'row-v2',
+        },
+      ],
+    });
+
+    const response = await booksApi.books();
+
+    expect(response.books[0]).toMatchObject({
+      bookId: 7,
+      loop: {
+        stage: 'INTERVIEW',
+        continueLocator: { href: '/book/7/reflection/interview' },
+      },
+      threadVersion: 'row-v2',
+    });
+  });
+
+  it('returns one bounded page and leaves the next cursor to the query layer', async () => {
+    vi.mocked(getJson).mockResolvedValueOnce({
+      nextCursor: '50',
+      threads: [
+        {
+          book: { bookId: 1, title: 'First page', author: 'Reader' },
+          loop: {
+            stage: 'REFLECT',
+            answeredCount: 0,
+            targetCount: 5,
+            continueLocator: { kind: 'REFLECT', href: '/book/1/reflection' },
+          },
+          recentRevisions: [],
+          version: 'row-1',
+        },
+      ],
+    });
+
+    const response = await booksApi.books({ status: 'reading' });
+
+    expect(getJson).toHaveBeenCalledOnce();
+    expect(getJson).toHaveBeenCalledWith('/api/library/threads?status=reading');
+    expect(response.books.map((book) => book.bookId)).toEqual([1]);
+    expect(response.nextCursor).toBe('50');
+  });
+
+  it('loads the complete saved-book collection for direct detail lookup', async () => {
     vi.mocked(getJson).mockResolvedValue({ books: [] });
 
-    await booksApi.books({ status: 'reading', sort: 'rating_desc' });
+    await booksApi.savedBooks();
 
-    expect(getJson).toHaveBeenCalledWith('/api/books?status=reading&sort=rating_desc');
+    expect(getJson).toHaveBeenCalledWith('/api/books');
   });
 
   it('maps a search candidate to the save DTO', async () => {

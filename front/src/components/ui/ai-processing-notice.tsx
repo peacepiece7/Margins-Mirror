@@ -3,6 +3,7 @@ import { useState } from 'react';
 
 import { Alert, AlertDescription } from './alert';
 import { Button } from './button';
+import { Checkbox } from './checkbox';
 import { useI18n } from '@/lib/i18n';
 import { dismissNoticeCookie, isNoticeDismissedCookie } from '@/lib/dismissible-notice';
 import { cn } from '@/utils/cn';
@@ -31,7 +32,7 @@ export function AiProcessingNotice({
 
   return (
     <Alert
-      className={cn('flex items-start gap-2 text-xs leading-5', className)}
+      className={cn('flex flex-col items-stretch gap-2 text-xs leading-5', className)}
       role="note"
       variant="warning"
       {...testAttr('ai-processing-notice')}
@@ -43,13 +44,15 @@ export function AiProcessingNotice({
         </a>
       </AlertDescription>
       {storageKey && dismissDays ? (
-        <div className="flex shrink-0 items-start gap-2">
-          <label className="flex items-center gap-1.5 whitespace-nowrap text-xs">
-            <input
+        <div
+          className="flex min-w-0 items-center justify-end gap-2"
+          {...testAttr('ai-processing-notice-controls')}
+        >
+          <label className="flex min-w-0 items-center gap-1.5 text-xs">
+            <Checkbox
               aria-label={t('doNotShowAiNoticeAgain')}
               checked={doNotShowAgain}
-              onChange={(event) => setDoNotShowAgain(event.target.checked)}
-              type="checkbox"
+              onCheckedChange={(checked) => setDoNotShowAgain(checked === true)}
             />
             {t('doNotShowAiNoticeAgain')}
           </label>

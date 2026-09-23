@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { I18nProvider } from '@/lib/i18n';
 import type { GuideBriefInput } from '@/types/api/reflection-loop';
 
 import { GuideBriefFields } from './GuideBriefFields';
@@ -27,10 +28,18 @@ function BriefHarness() {
 }
 
 describe('GuideBriefFields', () => {
-  afterEach(cleanup);
+  afterEach(() => {
+    cleanup();
+    window.localStorage.removeItem('margins.locale');
+  });
 
   it('updates every approved GuideBrief choice through accessible radio controls', () => {
-    render(<BriefHarness />);
+    window.localStorage.setItem('margins.locale', 'ko');
+    render(
+      <I18nProvider>
+        <BriefHarness />
+      </I18nProvider>,
+    );
 
     fireEvent.click(screen.getByText('고급 설정'));
     fireEvent.click(screen.getByLabelText(/쟁점 탐색/));

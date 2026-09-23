@@ -12,6 +12,7 @@ type JourneyStage = {
   titleKey: TranslationKey;
   detailKey: TranslationKey;
   statusKey: TranslationKey;
+  captionKey: TranslationKey;
   image: string;
   width: number;
   height: number;
@@ -36,6 +37,7 @@ const journeyStages: JourneyStage[] = [
     titleKey: 'mainPromotionFeatureDiscover',
     detailKey: 'landingStageDiscoverDetail',
     statusKey: 'landingStatusReady',
+    captionKey: 'landingStageDiscoverCaption',
     image: '/landing/stage-discover.webp',
     width: 546,
     height: 732,
@@ -45,6 +47,7 @@ const journeyStages: JourneyStage[] = [
     titleKey: 'reflectionStepReflect',
     detailKey: 'landingStageReflectDetail',
     statusKey: 'landingStatusPreserved',
+    captionKey: 'landingStageReflectCaption',
     image: '/landing/stage-reflect.webp',
     width: 550,
     height: 725,
@@ -54,6 +57,7 @@ const journeyStages: JourneyStage[] = [
     titleKey: 'reflectionStepInterview',
     detailKey: 'landingStageInterviewDetail',
     statusKey: 'landingStatusPrivate',
+    captionKey: 'landingStageInterviewCaption',
     image: '/landing/stage-interview.webp',
     width: 624,
     height: 878,
@@ -63,6 +67,7 @@ const journeyStages: JourneyStage[] = [
     titleKey: 'reflectionStepGuide',
     detailKey: 'landingStageGuideDetail',
     statusKey: 'landingStatusGuided',
+    captionKey: 'landingStageGuideCaption',
     image: '/landing/stage-guide.webp',
     width: 575,
     height: 826,
@@ -72,6 +77,7 @@ const journeyStages: JourneyStage[] = [
     titleKey: 'reflectionStepDiscuss',
     detailKey: 'landingStageDiscussDetail',
     statusKey: 'landingStatusLive',
+    captionKey: 'landingStageDiscussCaption',
     image: '/landing/stage-discuss.webp',
     width: 551,
     height: 725,
@@ -81,11 +87,14 @@ const journeyStages: JourneyStage[] = [
     titleKey: 'reflectionStepRefine',
     detailKey: 'landingStageRefineDetail',
     statusKey: 'landingStatusReaderChoice',
+    captionKey: 'landingStageRefineCaption',
     image: '/landing/stage-refine.webp',
     width: 615,
     height: 863,
   },
 ];
+
+const landingScreenParallaxDistance = 24;
 
 export function PublicLandingPage() {
   const rootRef = useRef<HTMLElement>(null);
@@ -169,7 +178,6 @@ export function PublicLandingPage() {
               >
                 <div className="landing-stage-copy">
                   <div className="landing-stage-meta">
-                    <span>{stage.number}</span>
                     <span>{t(stage.statusKey)}</span>
                   </div>
                   <h3 className="font-display">{t(stage.titleKey)}</h3>
@@ -208,6 +216,7 @@ export function PublicLandingPage() {
         </figure>
         <footer>
           <span>Margins</span>
+          <Link to="/terms">{t('termsTitle')}</Link>
           <Link to="/privacy">{t('privacyPolicyTitle')}</Link>
         </footer>
       </section>
@@ -286,6 +295,7 @@ function useViewportWidth() {
 type StackCardSurfaceProps = {
   canDrag: boolean;
   index: number;
+  isFront: boolean;
   isResetting: boolean;
   item: PreserveStackItem;
   maxExitDistance: number;
@@ -298,6 +308,7 @@ type StackCardSurfaceProps = {
 function StackCardSurface({
   canDrag,
   index,
+  isFront,
   isResetting,
   item,
   maxExitDistance,
@@ -371,7 +382,7 @@ function StackCardSurface({
       style={{ x: dragX, rotate: dragRotate, opacity: dragOpacity }}
       whileDrag={{ scale: 1.018 }}
     >
-      <img alt="" draggable={false} loading="lazy" src={item.src} />
+      <img alt="" draggable={false} loading={isFront ? 'eager' : 'lazy'} src={item.src} />
       <span className="landing-version-card-caption" data-stack-caption>
         {item.label}
       </span>
@@ -533,6 +544,7 @@ function VersionStack() {
             <StackCardSurface
               canDrag={isFront && phase === 'idle'}
               index={index}
+              isFront={isFront}
               isResetting={isResetting}
               item={item}
               maxExitDistance={maxExitDistance}
@@ -557,16 +569,19 @@ function StageVisual({ stage }: { stage: JourneyStage }) {
 
   return (
     <figure className="landing-screen-frame">
-      <img
-        alt=""
-        decoding="async"
-        height={stage.height}
-        loading="lazy"
-        src={stage.image}
-        width={stage.width}
-      />
+      <div className="landing-screen-media">
+        <img
+          alt=""
+          data-landing-screen-parallax
+          decoding="async"
+          height={stage.height}
+          loading="lazy"
+          src={stage.image}
+          width={stage.width}
+        />
+      </div>
       <figcaption>
-        {stage.number} · {t(stage.statusKey)}
+        {stage.number} · {t(stage.captionKey)}
       </figcaption>
     </figure>
   );
@@ -578,20 +593,24 @@ function useLandingMotion(rootRef: RefObject<HTMLElement | null>) {
     if (!root) return undefined;
 
     const revealElements = Array.from(root.querySelectorAll<HTMLElement>('[data-landing-reveal]'));
+    const parallaxImages = Array.from(
+      root.querySelectorAll<HTMLElement>('[data-landing-screen-parallax]'),
+    );
     const revealAll = () => {
       revealElements.forEach((element) => element.setAttribute('data-visible', 'true'));
     };
-    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const reducedMotionQuery = window.matchMedia?.('(prefers-reduced-motion: reduce)');
+    let reducedMotion = reducedMotionQuery?.matches ?? false;
 
     if (reducedMotion) {
       root.setAttribute('data-motion', 'reduced');
       revealAll();
-      return undefined;
+    } else {
+      root.setAttribute('data-motion', 'enabled');
     }
 
-    root.setAttribute('data-motion', 'enabled');
     const observer =
-      'IntersectionObserver' in window
+      !reducedMotion && 'IntersectionObserver' in window
         ? new IntersectionObserver(
             (entries, currentObserver) => {
               entries.forEach((entry) => {
@@ -605,10 +624,73 @@ function useLandingMotion(rootRef: RefObject<HTMLElement | null>) {
         : undefined;
 
     if (observer) revealElements.forEach((element) => observer.observe(element));
-    else revealAll();
+    else if (!reducedMotion) revealAll();
+
+    let parallaxFrame: number | undefined;
+    let parallaxListening = false;
+    const resetParallax = () => {
+      parallaxImages.forEach((image) => image.style.removeProperty('--landing-screen-parallax-y'));
+    };
+    const updateParallax = () => {
+      parallaxFrame = undefined;
+      const viewportHeight = window.innerHeight;
+
+      parallaxImages.forEach((image) => {
+        const frame = image.parentElement;
+        if (!frame) return;
+
+        const bounds = frame.getBoundingClientRect();
+        const travelProgress = Math.min(
+          1,
+          Math.max(0, (viewportHeight - bounds.top) / (viewportHeight + bounds.height)),
+        );
+        const offset = landingScreenParallaxDistance * (1 - travelProgress * 2);
+        image.style.setProperty('--landing-screen-parallax-y', `${offset.toFixed(2)}px`);
+      });
+    };
+    const scheduleParallax = () => {
+      if (parallaxFrame !== undefined) return;
+      parallaxFrame = window.requestAnimationFrame(updateParallax);
+    };
+    const syncParallax = () => {
+      const shouldListen = !reducedMotion;
+      if (shouldListen === parallaxListening) {
+        if (shouldListen) scheduleParallax();
+        return;
+      }
+
+      parallaxListening = shouldListen;
+      if (shouldListen) {
+        window.addEventListener('scroll', scheduleParallax, { passive: true });
+        scheduleParallax();
+      } else {
+        window.removeEventListener('scroll', scheduleParallax);
+        if (parallaxFrame !== undefined) window.cancelAnimationFrame(parallaxFrame);
+        parallaxFrame = undefined;
+        resetParallax();
+      }
+    };
+    const syncMotionPreference = () => {
+      reducedMotion = reducedMotionQuery?.matches ?? false;
+      root.setAttribute('data-motion', reducedMotion ? 'reduced' : 'enabled');
+      if (reducedMotion) {
+        revealAll();
+        observer?.disconnect();
+      }
+      syncParallax();
+    };
+
+    window.addEventListener('resize', syncParallax, { passive: true });
+    reducedMotionQuery?.addEventListener?.('change', syncMotionPreference);
+    syncParallax();
 
     return () => {
       observer?.disconnect();
+      window.removeEventListener('resize', syncParallax);
+      reducedMotionQuery?.removeEventListener?.('change', syncMotionPreference);
+      if (parallaxListening) window.removeEventListener('scroll', scheduleParallax);
+      if (parallaxFrame !== undefined) window.cancelAnimationFrame(parallaxFrame);
+      resetParallax();
     };
   }, [rootRef]);
 }

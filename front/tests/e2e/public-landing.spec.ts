@@ -1,5 +1,15 @@
 import { expect, test, type Locator } from '@playwright/test';
 
+// Public-page UX tests deliberately stay anonymous and do not need a running auth service.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/api/auth/refresh', (route) =>
+    route.fulfill({
+      status: 401,
+      json: { success: false, data: null, error: { message: 'Unauthorized' } },
+    }),
+  );
+});
+
 function captureVisibleLeftExitFrame(stack: Locator) {
   return stack.evaluate(
     (element) =>
@@ -130,6 +140,24 @@ test('keeps the public story on root and authentication on the login route', asy
     .evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(' ').length);
   expect(gridColumns).toBe(3);
 
+  const journeyImageStyles = await page
+    .locator('.landing-journey .landing-screen-frame img')
+    .evaluateAll((images) =>
+      images.map((image) => {
+        const style = getComputedStyle(image);
+        return { objectFit: style.objectFit, objectPosition: style.objectPosition };
+      }),
+    );
+  expect(journeyImageStyles).toHaveLength(6);
+  expect(journeyImageStyles).toEqual(
+    Array.from({ length: 6 }, () => ({ objectFit: 'cover', objectPosition: '50% 50%' })),
+  );
+  await expect(page.locator('.landing-hero-art')).toHaveCSS('object-position', '100% 50%');
+  await expect(page.locator('.landing-version-stack img').first()).toHaveCSS(
+    'object-position',
+    '50% 0%',
+  );
+
   const journeyIntroLayout = await page.locator('.landing-section-heading').evaluate((element) => {
     const title = element.querySelector('h2')!.getBoundingClientRect();
     const description = element.querySelector('p:last-child')!.getBoundingClientRect();
@@ -155,7 +183,53 @@ test('keeps the public story on root and authentication on the login route', asy
   expect(coverMetrics.journeyTop).toBeCloseTo(journeyTopBeforeScroll - 320, 0);
   expect(coverMetrics.mediaTransform).toBe(heroMetrics.mediaTransform);
 
+  const firstJourneyMedia = page.locator('.landing-screen-media').first();
+  const firstJourneyImage = firstJourneyMedia.locator('img');
+  await firstJourneyMedia.scrollIntoViewIfNeeded();
+  const parallaxBefore = await firstJourneyImage.evaluate(
+    (image) => new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+  );
+  await page.evaluate(() => window.scrollBy({ top: 180 }));
+  await expect
+    .poll(() =>
+      firstJourneyImage.evaluate(
+        (image) => new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+      ),
+    )
+    .toBeLessThan(parallaxBefore - 1);
+  const parallaxAfter = await firstJourneyImage.evaluate((image) => {
+    const media = image.parentElement!;
+    return {
+      imageHeight: image.getBoundingClientRect().height,
+      mediaHeight: media.getBoundingClientRect().height,
+      y: new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+    };
+  });
+  expect(Math.abs(parallaxAfter.y)).toBeLessThanOrEqual(24.1);
+  expect(parallaxAfter.imageHeight - parallaxAfter.mediaHeight).toBeCloseTo(48, 0);
+
   await page.getByRole('radio', { name: 'KO' }).click();
+  expect(
+    await page
+      .locator('.landing-stage-meta')
+      .evaluateAll((elements) => elements.map((element) => element.children.length)),
+  ).toEqual(Array.from({ length: 6 }, () => 1));
+  await expect(page.locator('.landing-screen-frame figcaption')).toHaveText([
+    '00 · 독서 준비',
+    '01 · 기록하',
+    '02 · 질의와 답변',
+    '03 · 발제 준비',
+    '04 · 토론 진행',
+    '05 · 생각 다듬기',
+  ]);
+  await expect(page.getByTestId('landing-workflow')).toContainText(
+    '다양한 질문에 답하며 감상을 더 구체적으로 만들어가요.',
+  );
+  await expect(page.getByTestId('landing-workflow')).toContainText(
+    '내 감상에서 출발한 발제안을 만들어요.',
+  );
+  await expect(page.getByTestId('landing-workflow')).not.toContainText('비공개 질문에 답하며');
+  await expect(page.getByTestId('landing-workflow')).not.toContainText('비공개 답변은 그대로 두고');
   const localizedTitleLayout = await page.evaluate(() => {
     const heading = document.querySelector<HTMLElement>('.landing-hero h1')!;
     const lede = document.querySelector<HTMLElement>('.landing-hero-lede')!;
@@ -172,6 +246,7 @@ test('keeps the public story on root and authentication on the login route', asy
   expect(localizedTitleLayout.overflowWrap).toBe('anywhere');
 
   const versionStack = page.getByTestId('landing-version-stack');
+  await expect(versionStack).toHaveCSS('min-height', '416px');
   await expect(versionStack).toHaveAttribute('data-reduced-motion', 'false');
   await expect(versionStack).toHaveAttribute('data-stack-motion', 'interactive');
   await expect(versionStack.locator('[data-stack-front] [data-stack-caption]')).toHaveText(
@@ -281,6 +356,8 @@ test('renders a static, overflow-free mobile landing for reduced motion', async 
   await page.setViewportSize({ width: 320, height: 800 });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
+  await expect(page.getByTestId('app-download-notice')).toBeVisible();
+  await page.getByTestId('app-download-close').click();
 
   const landing = page.getByTestId('public-landing-page');
   await expect(landing).toHaveAttribute('data-motion', 'reduced');
@@ -299,6 +376,42 @@ test('renders a static, overflow-free mobile landing for reduced motion', async 
   expect(metrics.gridColumns).toBe(1);
   expect(metrics.heroPosition).toBe('relative');
   expect(metrics.hasBookshelf).toBe(false);
+  const journeyImageStyles = await page
+    .locator('.landing-journey .landing-screen-frame img')
+    .evaluateAll((images) =>
+      images.map((image) => {
+        const style = getComputedStyle(image);
+        return { objectFit: style.objectFit, objectPosition: style.objectPosition };
+      }),
+    );
+  expect(journeyImageStyles).toEqual(
+    Array.from({ length: 6 }, () => ({ objectFit: 'cover', objectPosition: '50% 50%' })),
+  );
+  const reducedParallax = await page
+    .locator('[data-landing-screen-parallax]')
+    .evaluateAll((images) =>
+      images.map((image) => ({
+        offset: (image as HTMLElement).style.getPropertyValue('--landing-screen-parallax-y'),
+        transform: getComputedStyle(image).transform,
+      })),
+    );
+  expect(reducedParallax).toEqual(
+    Array.from({ length: 6 }, () => ({ offset: '', transform: 'none' })),
+  );
+  await page.getByRole('radio', { name: 'KO' }).click();
+  const preservationTitleMetrics = await page
+    .locator('.landing-preservation h2')
+    .evaluate((title) => {
+      const style = getComputedStyle(title);
+      return {
+        fontSize: Number.parseFloat(style.fontSize),
+        lineHeight: Number.parseFloat(style.lineHeight),
+      };
+    });
+  expect(preservationTitleMetrics.lineHeight / preservationTitleMetrics.fontSize).toBeCloseTo(
+    1.2,
+    2,
+  );
   const versionStack = page.getByTestId('landing-version-stack');
   await expect(versionStack).toHaveAttribute('data-reduced-motion', 'true');
   await expect(versionStack).toHaveAttribute('data-stack-motion', 'interactive');
@@ -354,6 +467,29 @@ test('renders a static, overflow-free mobile landing for reduced motion', async 
   await expect(page.getByTestId('landing-signup')).toBeVisible();
 });
 
+test('keeps the hero sticky on short viewports at tablet width and above', async ({ page }) => {
+  await page.setViewportSize({ width: 796, height: 640 });
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
+  await page.goto('/');
+
+  const journeyTopBeforeScroll = await page
+    .locator('.landing-journey')
+    .evaluate((element) => element.getBoundingClientRect().top);
+  const heroBeforeScroll = await page.locator('.landing-hero').evaluate((hero) => ({
+    height: hero.getBoundingClientRect().height,
+    position: getComputedStyle(hero).position,
+  }));
+  expect(heroBeforeScroll).toEqual({ height: 640, position: 'sticky' });
+
+  await page.evaluate(() => window.scrollTo({ top: 240 }));
+  const coverMetrics = await page.evaluate(() => ({
+    heroTop: document.querySelector('.landing-hero')!.getBoundingClientRect().top,
+    journeyTop: document.querySelector('.landing-journey')!.getBoundingClientRect().top,
+  }));
+  expect(coverMetrics.heroTop).toBe(0);
+  expect(coverMetrics.journeyTop).toBeCloseTo(journeyTopBeforeScroll - 240, 0);
+});
+
 test('keeps an active card exit moving when reduced motion is enabled at runtime', async ({
   page,
 }) => {
@@ -369,9 +505,135 @@ test('keeps an active card exit moving when reduced motion is enabled at runtime
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await expect(versionStack).toHaveAttribute('data-reduced-motion', 'true');
   await expect(versionStack).toHaveAttribute('data-stack-motion', 'interactive');
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-landing-screen-parallax]')
+        .evaluateAll((images) =>
+          images.map((image) =>
+            (image as HTMLElement).style.getPropertyValue('--landing-screen-parallax-y'),
+          ),
+        ),
+    )
+    .toEqual(Array.from({ length: 6 }, () => ''));
   const visibleExitFrame = await visibleExitFramePromise;
   expect(visibleExitFrame.opacity).toBeGreaterThan(0.9);
   expect(visibleExitFrame.x).toBeLessThan(-20);
   await expect(versionStack.locator('[data-stack-front] [data-stack-caption]')).toHaveText('GUIDE');
   await expect(versionStack).toHaveAttribute('data-stack-phase', 'idle');
+});
+
+test('keeps mobile journey parallax bounded and decodes the initial Preservation image', async ({
+  page,
+}) => {
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: width === 320 ? 800 : 844 });
+    await page.goto('/');
+
+    const versionStack = page.getByTestId('landing-version-stack');
+    const frontImage = versionStack.locator('[data-stack-front] img');
+    await expect(frontImage).toHaveAttribute('src', '/landing/preserve-revision.webp');
+    await expect(frontImage).toHaveAttribute('loading', 'eager');
+    await expect
+      .poll(async () => frontImage.evaluate((image) => image.naturalWidth))
+      .toBeGreaterThan(0);
+    await expect(
+      versionStack.locator('.landing-version-card:not([data-stack-front]) img'),
+    ).toHaveCount(3);
+    await expect(
+      versionStack.locator('.landing-version-card:not([data-stack-front]) img').first(),
+    ).toHaveAttribute('loading', 'lazy');
+
+    const journeyParallaxImages = page.locator('[data-landing-screen-parallax]');
+    await expect
+      .poll(() =>
+        journeyParallaxImages.evaluateAll((images) =>
+          images.every((image) =>
+            /^-?\d+\.\d{2}px$/.test(
+              (image as HTMLElement).style.getPropertyValue('--landing-screen-parallax-y'),
+            ),
+          ),
+        ),
+      )
+      .toBe(true);
+
+    const firstJourneyMedia = page.locator('.landing-screen-media').first();
+    const firstJourneyImage = firstJourneyMedia.locator('img');
+    await firstJourneyMedia.scrollIntoViewIfNeeded();
+    const parallaxBefore = await firstJourneyImage.evaluate(
+      (image) => new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+    );
+    await page.evaluate(() => window.scrollBy({ top: 120 }));
+    await expect
+      .poll(() =>
+        firstJourneyImage.evaluate(
+          (image) => new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+        ),
+      )
+      .toBeLessThan(parallaxBefore - 1);
+    const mobileParallaxMetrics = await firstJourneyImage.evaluate((image) => ({
+      imageHeight: image.getBoundingClientRect().height,
+      mediaHeight: image.parentElement!.getBoundingClientRect().height,
+      y: new DOMMatrixReadOnly(getComputedStyle(image).transform).m42,
+    }));
+    expect(Math.abs(mobileParallaxMetrics.y)).toBeLessThanOrEqual(24.1);
+    expect(mobileParallaxMetrics.imageHeight - mobileParallaxMetrics.mediaHeight).toBeCloseTo(
+      48,
+      0,
+    );
+
+    await versionStack.scrollIntoViewIfNeeded();
+    await expect.poll(async () => (await frontImage.boundingBox())?.height ?? 0).toBeGreaterThan(0);
+  }
+});
+
+test.describe('coarse-pointer mobile Preservation stack', () => {
+  test.use({ hasTouch: true, isMobile: true });
+
+  test('keeps the stack body and generic touch targets usable at 390px and 519px', async ({
+    page,
+  }) => {
+    for (const width of [390, 519]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.goto('/');
+
+      const stack = page.getByTestId('landing-version-stack');
+      const frontImage = stack.locator('[data-stack-front] img');
+      await expect(stack).toBeVisible();
+      const metrics = await page.evaluate(() => {
+        const stackElement = document.querySelector<HTMLElement>(
+          '[data-testid="landing-version-stack"]',
+        )!;
+        const login = document.querySelector<HTMLElement>('[data-testid="landing-login"]')!;
+        const stackStyle = getComputedStyle(stackElement);
+        const stackBox = stackElement.getBoundingClientRect();
+        const loginBox = login.getBoundingClientRect();
+        return {
+          coarsePointer: window.matchMedia('(pointer: coarse)').matches,
+          stackHeight: stackBox.height,
+          stackMinHeight: stackStyle.minHeight,
+          loginHeight: loginBox.height,
+          loginWidth: loginBox.width,
+        };
+      });
+
+      expect(metrics.coarsePointer).toBe(true);
+      expect(metrics.stackMinHeight).toBe('336px');
+      // Transformed DOMRects can report 335.9995 for a computed 336px box.
+      expect(metrics.stackHeight).toBeGreaterThanOrEqual(336 - 0.01);
+      expect(metrics.loginHeight).toBeGreaterThanOrEqual(44);
+      expect(metrics.loginWidth).toBeGreaterThanOrEqual(44);
+      await expect(frontImage).toHaveAttribute('src', '/landing/preserve-revision.webp');
+      await expect(frontImage).toHaveAttribute('loading', 'eager');
+      await expect
+        .poll(async () => frontImage.evaluate((image) => image.naturalWidth))
+        .toBeGreaterThan(0);
+      await expect
+        .poll(async () => frontImage.evaluate((image) => image.naturalHeight))
+        .toBeGreaterThan(0);
+      await expect
+        .poll(async () => (await frontImage.boundingBox())?.height ?? 0)
+        .toBeGreaterThan(200);
+    }
+  });
 });

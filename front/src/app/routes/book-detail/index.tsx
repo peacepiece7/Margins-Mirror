@@ -195,10 +195,11 @@ export function BookDetailPage(props: BookDetailPageProps) {
                 {t('saveEdit')}
               </Button>
               <Button
-                className="rounded border border-red-300 px-4 py-2 text-sm text-red-700"
+                className="px-4 py-2"
                 disabled={loading}
                 onClick={deleteSelectedBook}
                 type="button"
+                variant="destructive"
                 {...testAttr('book-detail-delete')}
               >
                 {t('delete')}
@@ -221,13 +222,11 @@ export function BookDetailPage(props: BookDetailPageProps) {
 
       <div
         className="rounded border border-stone-300 bg-white p-4 sm:p-5"
+        data-ui="book-question-panel"
         {...testAttr('book-question-panel')}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="font-semibold">{t('questionPanelTitle')}</h3>
-            <p className="text-sm text-stone-600">{t('questionPanelDescription')}</p>
-          </div>
+          <h3 className="font-semibold">{t('questionPanelTitle')}</h3>
           <Button
             className="rounded border border-stone-950 px-3 py-2 text-sm font-medium disabled:opacity-50"
             disabled={!selectedBook || loading || showQuestionSkeleton}
@@ -280,10 +279,11 @@ export function BookDetailPage(props: BookDetailPageProps) {
                     </span>
                   ) : (
                     <Button
-                      className="rounded border border-red-300 px-3 py-2 text-sm text-red-700 disabled:opacity-50"
+                      className="px-3 py-2"
                       disabled={loading}
                       onClick={() => deleteQuestion(question.questionId)}
                       type="button"
+                      variant="destructive"
                       {...testAttr('book-question-delete')}
                     >
                       {t('delete')}
@@ -303,6 +303,7 @@ export function BookDetailPage(props: BookDetailPageProps) {
 
       <div
         className="rounded border border-stone-300 bg-white p-4 sm:p-5"
+        data-ui="book-debate-entry"
         {...testAttr('book-debate-entry')}
       >
         <h3 className="font-semibold">{t('debateEntryTitle')}</h3>
@@ -386,11 +387,13 @@ export function BookDetailPage(props: BookDetailPageProps) {
         </Button>
         <div className="mt-4 grid gap-2" {...testAttr('book-knowledge-recommendations')}>
           <div className="flex items-center justify-between gap-2">
-            <div className="text-sm font-medium">Book Knowledge 추천 주제</div>
-            {bookKnowledgePending && <span className="text-xs text-stone-500">불러오는 중</span>}
+            <div className="text-sm font-medium">{t('debateSuggestedTopics')}</div>
+            {bookKnowledgePending && (
+              <span className="text-xs text-stone-500">{t('debateSuggestedTopicsLoading')}</span>
+            )}
           </div>
           {bookKnowledge?.summary && (
-            <p className="rounded bg-amber-50 px-3 py-2 text-sm leading-6 text-stone-700">
+            <p className="rounded bg-warning-surface px-3 py-2 text-sm leading-6 text-warning-ink">
               {bookKnowledge.summary}
             </p>
           )}
@@ -398,7 +401,7 @@ export function BookDetailPage(props: BookDetailPageProps) {
             <div className="flex flex-wrap gap-2">
               {bookKnowledgeDiscussionPoints.map((point) => (
                 <Button
-                  className="rounded border border-amber-300 bg-amber-50 px-3 py-2 text-left text-sm text-stone-800 hover:border-amber-500"
+                  className="rounded border border-warning-border bg-warning-surface px-3 py-2 text-left text-sm text-warning-ink"
                   key={point.id}
                   onClick={() => applyDiscussionPoint(point.id)}
                   title={point.rationale}
@@ -411,7 +414,7 @@ export function BookDetailPage(props: BookDetailPageProps) {
             </div>
           ) : (
             <div className="rounded bg-stone-100 p-3 text-sm text-stone-500">
-              {bookKnowledgeError || '저장된 추천 주제가 없으면 직접 주제를 입력할 수 있습니다.'}
+              {bookKnowledgeError || t('debateSuggestedTopicsEmpty')}
             </div>
           )}
           {!!bookKnowledge?.keywords?.length && (

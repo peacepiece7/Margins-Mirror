@@ -1,76 +1,211 @@
-import { useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ConfirmActionDialog } from '@/components/ui/confirm-action-dialog';
-import { useI18n } from '@/lib/i18n';
-import { bookKeys } from '@/lib/query-keys';
-import type { SaveBookResponse } from '@/types/api/book';
+import { Button } from '@/components/ui/button';
+import { SpinnerInline } from '@/components/ui/spinner';
+import { bookPath } from '@/features/books/routes';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
+import type { LibraryLoopStage, SaveBookResponse } from '@/types/api/book';
+import { testAttr } from '@/utils/testAttrs';
 
 import { useBooksQuery, useDeleteBookMutation, useUpdateBookShelfMutation } from '../queries';
 import { useBookSelectionStore } from '../selection-store';
+import type { BookShelfStatusFilter } from '../types';
 import { BookListPage } from './BookListPage';
-import { BookHeader } from './BookHeader';
+import { LibraryActivityList } from './LibraryThreadSummary';
+
+const shelfFilters: Array<{ id: BookShelfStatusFilter; label: TranslationKey }> = [
+  { id: 'all', label: 'shelfFilterAll' },
+  { id: 'want_to_read', label: 'shelfStatusWantToRead' },
+  { id: 'reading', label: 'shelfStatusReading' },
+  { id: 'read', label: 'shelfStatusRead' },
+  { id: 'dnf', label: 'shelfStatusDnf' },
+];
+
+const loopStages: Array<{ id: LibraryLoopStage; label: TranslationKey }> = [
+  { id: 'REFLECT', label: 'reflectionStepReflect' },
+  { id: 'INTERVIEW', label: 'reflectionStepInterview' },
+  { id: 'GUIDE', label: 'reflectionStepGuide' },
+  { id: 'DISCUSS', label: 'reflectionStepDiscuss' },
+  { id: 'REFINE', label: 'reflectionStepRefine' },
+];
 
 export function BookLibraryPanel() {
   const { t } = useI18n();
-  const queryClient = useQueryClient();
   const [pendingDelete, setPendingDelete] = useState<SaveBookResponse>();
+  const [stageFilter, setStageFilter] = useState<LibraryLoopStage>();
+  const loadMore = useRef<HTMLDivElement>(null);
   const filter = useBookSelectionStore((state) => state.shelfFilter);
   const sort = useBookSelectionStore((state) => state.shelfSort);
   const setFilter = useBookSelectionStore((state) => state.setShelfFilter);
   const setSort = useBookSelectionStore((state) => state.setShelfSort);
-  const query = {
+  const books = useBooksQuery({
     status: filter === 'all' ? undefined : filter,
+    stage: stageFilter,
     sort,
-  };
-  const books = useBooksQuery(query);
+  });
   const updateShelf = useUpdateBookShelfMutation();
   const deleteBook = useDeleteBookMutation();
   const selectedBookId = useBookSelectionStore((state) => state.selectedBookId);
   const selectBook = useBookSelectionStore((state) => state.selectBook);
-  const selectedBook =
-    books.data?.books.find((book) => book.bookId === selectedBookId) ?? books.data?.books[0];
+  const pages = books.data?.pages;
+  const visibleBooks = useMemo(
+    () => [
+      ...new Map(
+        (pages?.flatMap((page) => page.books) ?? []).map((book) => [book.bookId, book]),
+      ).values(),
+    ],
+    [pages],
+  );
+  const summary = pages?.[0]?.summary;
+  const { fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage } = books;
+
+  useEffect(() => {
+    if (
+      !loadMore.current ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      isFetchNextPageError ||
+      typeof IntersectionObserver === 'undefined'
+    )
+      return;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void fetchNextPage();
+      },
+      { rootMargin: '240px' },
+    );
+    observer.observe(loadMore.current);
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchNextPageError, isFetchingNextPage]);
+
+  function changeShelf(nextFilter: BookShelfStatusFilter) {
+    setFilter(nextFilter);
+  }
 
   return (
-    <>
-      {selectedBook && <BookHeader book={selectedBook} />}
-      <BookListPage
-        books={books.data?.books ?? []}
-        filter={filter}
-        loading={books.isFetching || updateShelf.isPending || deleteBook.isPending}
-        sort={sort}
-        onDelete={setPendingDelete}
-        onFilterChange={(nextFilter) => {
-          void queryClient.invalidateQueries({
-            exact: true,
-            queryKey: bookKeys.list({
-              status: nextFilter === 'all' ? undefined : nextFilter,
-              sort,
-            }),
-          });
-          setFilter(nextFilter);
-        }}
-        onRatingChange={(bookId, rating) =>
-          updateShelf.mutate({
-            bookId,
-            shelf: rating === undefined ? { clearRating: true } : { rating },
-          })
-        }
-        onSelect={(book) => selectBook(book.bookId)}
-        onSortChange={(nextSort) => {
-          void queryClient.invalidateQueries({
-            exact: true,
-            queryKey: bookKeys.list({
-              status: filter === 'all' ? undefined : filter,
-              sort: nextSort,
-            }),
-          });
-          setSort(nextSort);
-        }}
-        onStatusChange={(bookId, readingStatus) =>
-          updateShelf.mutate({ bookId, shelf: { readingStatus } })
-        }
-      />
+    <section className="web-library-shell" {...testAttr('library-shell')}>
+      <aside className="web-library-index" {...testAttr('library-shelf-index')}>
+        <div className="web-library-index-heading">
+          <span className="blueprint-unit-label">LIBRARY</span>
+          <h2>{t('libraryShelfTitle')}</h2>
+        </div>
+        <nav aria-label={t('shelfFilterLabel')} className="web-library-filter-list">
+          {shelfFilters.map((option) => {
+            const count = summary?.shelfCounts[option.id] ?? 0;
+            return (
+              <Button
+                aria-current={filter === option.id ? 'page' : undefined}
+                className={`rounded-none ${filter === option.id ? 'is-active' : ''}`}
+                key={option.id}
+                onClick={() => changeShelf(option.id)}
+                type="button"
+                variant="ghost"
+                {...testAttr(`book-shelf-filter-${option.id}`)}
+              >
+                <span>{t(option.label)}</span>
+                <small>{count}</small>
+              </Button>
+            );
+          })}
+        </nav>
+        <div className="web-library-stage-filter">
+          <h3>{t('libraryLoopStages')}</h3>
+          {loopStages.map((stage) => {
+            const count = summary?.stageCounts[stage.id] ?? 0;
+            return (
+              <Button
+                aria-pressed={stageFilter === stage.id}
+                className={`rounded-none ${stageFilter === stage.id ? 'is-active' : ''}`}
+                key={stage.id}
+                onClick={() =>
+                  setStageFilter((current) => (current === stage.id ? undefined : stage.id))
+                }
+                type="button"
+                variant="ghost"
+              >
+                <span>{t(stage.label)}</span>
+                <small>{count}</small>
+              </Button>
+            );
+          })}
+        </div>
+        <div className="web-library-index-actions">
+          <Link to={bookPath('book-search')}>＋ {t('pageBookSearch')}</Link>
+          <Link to={bookPath('public-reviews')}>{t('pagePublicReviews')} →</Link>
+        </div>
+      </aside>
+
+      <div className="web-library-main">
+        {books.isPending && (
+          <div className="web-library-loading" {...testAttr('book-list-loading')}>
+            <SpinnerInline>{t('libraryLoading')}</SpinnerInline>
+          </div>
+        )}
+        {books.isError && (
+          <Alert variant="destructive" {...testAttr('book-list-error')}>
+            <AlertDescription className="flex flex-wrap items-center justify-between gap-3">
+              <span>{t('libraryLoadError')}</span>
+              <Button
+                onClick={() => {
+                  void books.refetch();
+                }}
+                type="button"
+                variant="outline"
+              >
+                {t('libraryRetry')}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+        {!books.isPending && !books.isError && (
+          <>
+            <BookListPage
+              books={visibleBooks}
+              loading={books.isFetching || updateShelf.isPending || deleteBook.isPending}
+              sort={sort}
+              onDelete={setPendingDelete}
+              onRatingChange={(bookId, rating) =>
+                updateShelf.mutate({
+                  bookId,
+                  shelf: rating === undefined ? { clearRating: true } : { rating },
+                })
+              }
+              onSelect={(book) => selectBook(book.bookId)}
+              onSortChange={setSort}
+              onStatusChange={(bookId, readingStatus) =>
+                updateShelf.mutate({ bookId, shelf: { readingStatus } })
+              }
+            />
+            {hasNextPage && (
+              <div className="mt-4" ref={loadMore}>
+                <Button
+                  disabled={isFetchingNextPage}
+                  loading={isFetchingNextPage}
+                  onClick={() => void fetchNextPage()}
+                  type="button"
+                  variant="outline"
+                  {...testAttr('library-load-more')}
+                >
+                  {t('libraryMore')}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
+      </div>
+
+      <aside className="web-library-selected" {...testAttr('library-activity-rail')}>
+        <span className="blueprint-unit-label">REVISION LOG</span>
+        <div className="web-library-selected-book">
+          <h2>{t('libraryActivityTitle')}</h2>
+          <p>{t('libraryActivityDescription')}</p>
+        </div>
+        <LibraryActivityList activities={summary?.recentActivity ?? []} />
+      </aside>
+
       <ConfirmActionDialog
         cancelLabel={t('cancel')}
         confirmLabel={t('delete')}
@@ -89,6 +224,6 @@ export function BookLibraryPanel() {
         open={Boolean(pendingDelete)}
         title={t('delete')}
       />
-    </>
+    </section>
   );
 }

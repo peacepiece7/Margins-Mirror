@@ -58,4 +58,20 @@ describe('AiProcessingNotice', () => {
 
     expect(screen.getByRole('link')).toHaveAttribute('href', '/privacy');
   });
+
+  it('keeps the message above right-aligned dismiss controls at every width', () => {
+    const view = render(
+      <I18nProvider>
+        <AiProcessingNotice action="AI-assisted search" dismissDays={7} storageKey="notice" />
+      </I18nProvider>,
+    );
+
+    const notice = view.container.querySelector('[data-testid="ai-processing-notice"]');
+    const controls = screen.getByTestId('ai-processing-notice-controls');
+    const checkbox = screen.getByRole('checkbox');
+    expect(notice).toHaveClass('flex-col');
+    expect(notice).not.toHaveClass('sm:flex-row');
+    expect(controls).toHaveClass('justify-end');
+    expect(checkbox?.closest('label')).not.toHaveClass('whitespace-nowrap');
+  });
 });

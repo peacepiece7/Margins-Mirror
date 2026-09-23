@@ -8,6 +8,7 @@ import lombok.Value;
 @Builder
 public class MemoryCardGroupDto {
     Long groupId;
+    Long bookId;
     String title;
     String description;
     String sourceLabel;

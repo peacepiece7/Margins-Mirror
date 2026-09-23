@@ -1,6 +1,6 @@
 import type { BookCandidate, SaveBookResponse } from '@/types/api/book';
 
-import type { BookReadingStatus, BookShelfSort, BookShelfStatusFilter } from './types';
+import type { BookReadingStatus, BookShelfSort } from './types';
 
 export interface BookSearchPageProps {
   candidateHasMore: boolean;
@@ -21,11 +21,9 @@ export interface BookSearchPageProps {
 
 export interface BookListPageProps {
   books: SaveBookResponse[];
-  filter: BookShelfStatusFilter;
   loading: boolean;
   sort: BookShelfSort;
   onDelete: (book: SaveBookResponse) => void;
-  onFilterChange: (filter: BookShelfStatusFilter) => void;
   onRatingChange: (bookId: number, rating?: number) => void;
   onSelect: (book: SaveBookResponse) => void;
   onSortChange: (sort: BookShelfSort) => void;

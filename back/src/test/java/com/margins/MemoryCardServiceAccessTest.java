@@ -29,6 +29,7 @@ class MemoryCardServiceAccessTest {
 
         List<Executable> operations = List.of(
             service::groups,
+            () -> service.groups(1L),
             () -> service.group(1L),
             () -> service.createGroup(null),
             () -> service.bulkCreateGroup(null),

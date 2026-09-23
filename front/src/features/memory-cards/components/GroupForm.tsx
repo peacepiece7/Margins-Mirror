@@ -48,7 +48,7 @@ export function GroupForm({
           {...form.register('title', { required: t('requiredField') })}
         />
         {form.formState.errors.title?.message && (
-          <span className="text-xs leading-5 text-red-700" id="memory-card-group-title-error">
+          <span className="text-xs leading-5 text-destructive" id="memory-card-group-title-error">
             {form.formState.errors.title.message}
           </span>
         )}

@@ -1,25 +1,26 @@
+import { useEffect } from 'react';
+
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { MemoryCard } from '@/types/api/memory-card';
 import { testAttr } from '@/utils/testAttrs';
-
-import { StudyProgress } from './StudyProgress';
 
 interface StudyViewProps {
   card: MemoryCard | undefined;
   labels: {
-    backToGroup: string;
+    keyboardHint: string;
     meaningHidden: string;
     memorized: string;
-    memorizedCount: string;
     nextCard: string;
     noCards: string;
+    position: string;
+    previousCard: string;
     revealMeaning: string;
   };
-  memorizedCount: number;
-  onBack: () => void;
+  currentIndex: number;
   onMemorizedChange: (card: MemoryCard, memorized: boolean) => void;
   onNext: () => void;
+  onPrevious: () => void;
   onReveal: () => void;
   revealed: boolean;
   savingMemorizedCardIds: ReadonlySet<number>;
@@ -28,29 +29,49 @@ interface StudyViewProps {
 
 export function StudyView({
   card,
+  currentIndex,
   labels,
-  memorizedCount,
-  onBack,
   onMemorizedChange,
   onNext,
+  onPrevious,
   onReveal,
   revealed,
   savingMemorizedCardIds,
   totalCount,
 }: StudyViewProps) {
+  useEffect(() => {
+    function handleShortcut(event: KeyboardEvent) {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest('input, textarea, select, button, a, [contenteditable="true"]')) return;
+      if (!card) return;
+
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        onPrevious();
+      } else if (event.key === 'ArrowRight' && revealed) {
+        event.preventDefault();
+        onNext();
+      } else if (event.code === 'Space' && !revealed) {
+        event.preventDefault();
+        onReveal();
+      }
+    }
+
+    window.addEventListener('keydown', handleShortcut);
+    return () => window.removeEventListener('keydown', handleShortcut);
+  }, [card, onNext, onPrevious, onReveal, revealed]);
+
+  const position = labels.position
+    .replace('{current}', String(totalCount ? currentIndex + 1 : 0))
+    .replace('{total}', String(totalCount));
+
   return (
-    <section className="grid min-h-[calc(100vh-9rem)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Button
-          className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium"
-          onClick={onBack}
-          type="button"
-        >
-          {labels.backToGroup}
-        </Button>
-        <StudyProgress label={`${memorizedCount}/${totalCount} ${labels.memorizedCount}`} />
-      </div>
-      <div className="grid place-items-center overflow-y-auto rounded border border-stone-300 bg-white p-4 text-center sm:p-5">
+    <section className="web-memory-study-card" {...testAttr('memory-card-study-card')}>
+      <header>
+        <span>{position}</span>
+        <small>{labels.keyboardHint}</small>
+      </header>
+      <div className="web-memory-study-face">
         {card ? (
           <div className="grid max-w-2xl gap-5">
             <p className="break-words font-display text-5xl font-semibold tracking-normal">
@@ -71,31 +92,42 @@ export function StudyView({
           <p>{labels.noCards}</p>
         )}
       </div>
-      <div className="sticky bottom-0 grid gap-2 bg-[var(--margins-bg)] pb-[max(1rem,env(safe-area-inset-bottom))] pt-2 sm:grid-cols-3">
+      <div className="web-memory-study-actions">
         <Button
-          className="min-h-12 rounded bg-stone-900 px-4 py-3 text-sm font-semibold text-white disabled:opacity-50"
+          className="min-h-12 px-4 py-3 font-semibold"
+          disabled={!card}
+          onClick={onPrevious}
+          type="button"
+          variant="outline"
+          {...testAttr('memory-card-study-previous')}
+        >
+          {labels.previousCard}
+        </Button>
+        <Button
+          className="min-h-12 px-4 py-3 font-semibold"
           disabled={!card || revealed}
           onClick={onReveal}
           type="button"
+          variant="default"
           {...testAttr('memory-card-study-reveal')}
         >
           {labels.revealMeaning}
         </Button>
         <label className="flex min-h-12 items-center justify-center gap-2 rounded border border-stone-300 bg-white px-4 py-3 text-sm font-semibold">
-          <Input
+          <Checkbox
             checked={card?.memorized ?? false}
             disabled={!card || savingMemorizedCardIds.has(card.cardId)}
-            onChange={(event) => card && onMemorizedChange(card, event.target.checked)}
-            type="checkbox"
+            onCheckedChange={(checked) => card && onMemorizedChange(card, checked === true)}
             {...testAttr('memory-card-study-memorized-toggle')}
           />
           {labels.memorized}
         </label>
         <Button
-          className="min-h-12 rounded border border-stone-300 bg-white px-4 py-3 text-sm font-semibold disabled:opacity-50"
+          className="min-h-12 px-4 py-3 font-semibold"
           disabled={!card || !revealed}
           onClick={onNext}
           type="button"
+          variant="outline"
           {...testAttr('memory-card-study-next')}
         >
           {labels.nextCard}

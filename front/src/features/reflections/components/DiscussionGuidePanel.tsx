@@ -28,7 +28,7 @@ import {
   type GuideEditDraft,
 } from '../discussion-guide-edit';
 import { downloadDiscussionGuideMarkdown } from '../discussion-guide-export';
-import { discussionGuideOriginLabels } from '../discussion-guide-labels';
+import { discussionGuideOriginLabelKeys } from '../discussion-guide-labels';
 import {
   useCreateDiscussionRunMutation,
   useDiscussionGuideMarkdownExportMutation,
@@ -134,7 +134,7 @@ export function DiscussionGuidePanel({ bookId, guideId }: DiscussionGuidePanelPr
   return (
     <section
       aria-busy={pending}
-      className="grid min-w-0 gap-5"
+      className="web-reflection-page web-discussion-guide grid min-w-0 gap-5"
       {...testAttr('discussion-guide-page')}
     >
       <ReflectionLoopProgress active="guide" bookId={bookId} paths={paths} />
@@ -145,23 +145,25 @@ export function DiscussionGuidePanel({ bookId, guideId }: DiscussionGuidePanelPr
               DISCUSSION GUIDE
             </p>
             <h2 className="mt-2 text-2xl font-semibold tracking-tight">
-              나의 생각에서 출발한 발제안
+              {t('reflectionGuideTitle')}
             </h2>
           </div>
           {data ? (
             <div className="flex flex-wrap items-center justify-end gap-2">
               <Badge variant={data.current ? 'default' : 'outline'}>
-                v{data.guideVersion} · {data.current ? '현재' : '보관'}
+                v{data.guideVersion} ·{' '}
+                {data.current ? t('reflectionGuideCurrent') : t('reflectionGuideArchived')}
               </Badge>
               <Badge variant="outline">
-                {discussionGuideOriginLabels[data.origin] ?? data.origin}
+                {discussionGuideOriginLabelKeys[data.origin]
+                  ? t(discussionGuideOriginLabelKeys[data.origin])
+                  : data.origin}
               </Badge>
             </div>
           ) : null}
         </div>
         <p className="max-w-3xl text-sm leading-6 text-stone-600">
-          version마다 발제안과 질문이 그대로 보존됩니다. 비공개 인터뷰 답변 원문은 발제안에 표시되지
-          않습니다.
+          {t('reflectionGuideDescription')}
         </p>
       </header>
 
@@ -233,19 +235,21 @@ export function DiscussionGuidePanel({ bookId, guideId }: DiscussionGuidePanelPr
       {data?.current ? (
         <section className="flex flex-col gap-3 rounded border border-stone-300 bg-stone-50 p-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
-            <h3 className="font-semibold">발제안을 다듬어도 이전 version은 그대로 남아요</h3>
+            <h3 className="font-semibold">{t('reflectionGuideEditTitle')}</h3>
             <p className="mt-1 text-sm leading-6 text-stone-600">
               {projectionType === 'PARTICIPANT'
-                ? '진행자용으로 전환하면 직접 편집하거나 새 version을 만들 수 있습니다.'
-                : '직접 편집하거나 같은 설정으로 다시 생성하면 새 version이 만들어집니다.'}
+                ? t('reflectionGuideEditParticipantDescription')
+                : t('reflectionGuideEditFacilitatorDescription')}
               {draft
-                ? ` 편집 시간 합계 ${guideEditMinutes(draft)}분 / 목표 ${data.targetMinutes}분`
+                ? ` ${t('reflectionGuideEditMinutes')
+                    .replace('{edited}', String(guideEditMinutes(draft)))
+                    .replace('{target}', String(data.targetMinutes))}`
                 : ''}
             </p>
             {draft && validationMessage ? (
               <p
                 aria-live="polite"
-                className="mt-2 text-sm font-medium leading-6 text-amber-800"
+                className="mt-2 text-sm font-medium leading-6 text-warning-ink"
                 id="discussion-guide-edit-validation"
               >
                 {validationMessage}
@@ -262,7 +266,7 @@ export function DiscussionGuidePanel({ bookId, guideId }: DiscussionGuidePanelPr
                   type="button"
                   variant="outline"
                 >
-                  편집 취소
+                  {t('reflectionGuideEditCancel')}
                 </Button>
                 <Button
                   aria-describedby={
@@ -274,7 +278,9 @@ export function DiscussionGuidePanel({ bookId, guideId }: DiscussionGuidePanelPr
                   type="button"
                   {...testAttr('discussion-guide-save-version')}
                 >
-                  {editGuide.isPending ? '새 version 저장 중…' : '새 version으로 저장'}
+                  {editGuide.isPending
+                    ? t('reflectionGuideEditSaving')
+                    : t('reflectionGuideEditSave')}
                 </Button>
               </>
             ) : (
@@ -290,7 +296,7 @@ export function DiscussionGuidePanel({ bookId, guideId }: DiscussionGuidePanelPr
                   variant="outline"
                   {...testAttr('discussion-guide-edit')}
                 >
-                  직접 편집
+                  {t('reflectionGuideEditDirect')}
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -338,12 +344,12 @@ export function DiscussionGuidePanel({ bookId, guideId }: DiscussionGuidePanelPr
           {...testAttr('discussion-start-run')}
         >
           {createRun.isPending
-            ? '토론 준비 중…'
+            ? t('reflectionGuideRunPreparing')
             : data?.runId
-              ? '이 version의 토론 이어가기'
+              ? t('reflectionGuideRunResume')
               : data && !data.current
-                ? '보관 version은 새 토론을 시작할 수 없어요'
-                : '이 발제안으로 토론 시작'}
+                ? t('reflectionGuideRunArchived')
+                : t('reflectionGuideRunStart')}
         </Button>
       </div>
     </section>

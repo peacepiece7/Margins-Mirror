@@ -8,9 +8,9 @@ import { ApiRequestError } from '@/lib/api-client';
 
 import { ReflectionLoopPanel } from './ReflectionLoopPanel';
 
-const ensureSessionMutate = vi.fn();
 const saveMutate = vi.fn();
 const startInterviewMutate = vi.fn();
+let reflectionSessionId: number | undefined = 3;
 let reflectionData: ReflectionLoopResponse = {
   activeInterviewId: 17,
   currentRevision: {
@@ -39,14 +39,9 @@ let reflectionQuery: {
 };
 
 vi.mock('../queries', () => ({
-  useEnsureReflectionSessionMutation: () => ({
-    error: null,
-    isPending: false,
-    mutate: ensureSessionMutate,
-  }),
   useReflectionSessionForBook: () => ({
-    sessionId: 3,
-    sessions: { isLoading: false },
+    sessionId: reflectionSessionId,
+    sessions: { error: null, isError: false, isLoading: false, refetch: vi.fn() },
   }),
   useReflectionTimelineForBook: () => ({
     sessionId: 3,
@@ -97,9 +92,9 @@ afterEach(() => {
 describe('ReflectionLoopPanel draft state', () => {
   beforeEach(() => {
     window.localStorage.setItem('margins.locale', 'ko');
-    ensureSessionMutate.mockClear();
     saveMutate.mockClear();
     startInterviewMutate.mockClear();
+    reflectionSessionId = 3;
     reflectionData = {
       activeInterviewId: 17,
       currentRevision: {
@@ -133,7 +128,7 @@ describe('ReflectionLoopPanel draft state', () => {
     expect(save).toBeDisabled();
     expect(interview).toBeEnabled();
     expect(screen.getByTestId('reflection-save-status')).toHaveTextContent(
-      '모든 변경 사항이 저장되었습니다.',
+      '모든 변경 사항을 저장했습니다.',
     );
 
     fireEvent.change(editor, { target: { value: '  수정한 생각  ' } });
@@ -141,7 +136,7 @@ describe('ReflectionLoopPanel draft state', () => {
     expect(save).toBeEnabled();
     expect(interview).toBeDisabled();
     expect(screen.getByTestId('reflection-save-status')).toHaveTextContent(
-      '저장되지 않은 변경 사항',
+      '저장하지 않은 변경 사항',
     );
 
     fireEvent.click(save);
@@ -162,7 +157,7 @@ describe('ReflectionLoopPanel draft state', () => {
     renderPanel();
 
     const resume = await screen.findByRole('button', { name: '토론 이어가기' });
-    expect(screen.getByTestId('reflection-run-recovery')).toHaveTextContent('원래 발제안 version');
+    expect(screen.getByTestId('reflection-run-recovery')).toHaveTextContent('원래 발제안 버전');
 
     fireEvent.click(resume);
 
@@ -180,7 +175,7 @@ describe('ReflectionLoopPanel draft state', () => {
 
     const resume = await screen.findByRole('button', { name: 'Reflection 다듬기' });
     expect(screen.getByTestId('reflection-run-recovery')).toHaveTextContent(
-      '시작한 발제안 version',
+      '처음 시작한 발제안 버전',
     );
 
     fireEvent.click(resume);
@@ -208,10 +203,36 @@ describe('ReflectionLoopPanel draft state', () => {
 
     renderPanel();
 
-    expect(await screen.findByText('Reflection을 아직 작성하지 않았어')).toBeInTheDocument();
-    expect(screen.getByText('지금의 생각을 먼저 적어 저장해줘.')).toBeInTheDocument();
+    expect(await screen.findByText('아직 작성한 Reflection이 없습니다')).toBeInTheDocument();
+    expect(screen.getByText('지금 떠오르는 생각을 먼저 적어 저장해 주세요.')).toBeInTheDocument();
     expect(screen.queryByText(privateMessage)).not.toBeInTheDocument();
     expect(screen.getByTestId('primary-reflection-content')).toHaveValue('');
     expect(screen.getByTestId('primary-reflection-save')).toBeDisabled();
+  });
+
+  it('does not prepare a reading session until the reader submits a Reflection', async () => {
+    reflectionSessionId = undefined;
+    reflectionQuery = {
+      data: undefined,
+      isFetching: false,
+      error: null,
+      isError: false,
+      refetch: vi.fn(),
+    };
+
+    renderPanel();
+
+    expect(saveMutate).not.toHaveBeenCalled();
+    fireEvent.change(await screen.findByLabelText('Reflection 본문'), {
+      target: { value: '처음 남기는 생각' },
+    });
+    fireEvent.click(screen.getByTestId('primary-reflection-save'));
+
+    expect(saveMutate).toHaveBeenCalledOnce();
+    expect(saveMutate).toHaveBeenCalledWith({
+      content: '처음 남기는 생각',
+      title: 'Reflection',
+      visibility: 'PRIVATE',
+    });
   });
 });

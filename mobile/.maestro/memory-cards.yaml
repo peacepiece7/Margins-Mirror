@@ -1,0 +1,37 @@
+appId: cloud.margins.mobile
+env:
+  TEST_PASSWORD: ${MARGINS_MAESTRO_PREMIUM_PASSWORD}
+  TEST_USERNAME: ${MARGINS_MAESTRO_PREMIUM_USERNAME}
+---
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: global-navigation-study
+- assertVisible:
+    id: library-selection-prompt
+- scrollUntilVisible:
+    element:
+      id: library-book-card
+      text: ".*The Left Hand of Darkness.*"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn:
+    id: library-book-card
+    text: ".*The Left Hand of Darkness.*"
+- assertVisible:
+    id: memory-card-groups-screen
+- tapOn:
+    id: memory-card-group-open
+    index: 0
+- assertVisible:
+    id: memory-card-group-screen
+- tapOn:
+    id: memory-card-study-open
+- assertVisible:
+    id: memory-card-study-screen
+- tapOn:
+    id: memory-card-study-reveal
+- assertVisible:
+    id: memory-card-study-screen

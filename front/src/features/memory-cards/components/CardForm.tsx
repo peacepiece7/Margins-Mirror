@@ -67,7 +67,10 @@ export function CardForm({
                 {...form.register(name, { required: required ? t('requiredField') : false })}
               />
               {form.formState.errors[name]?.message && (
-                <span className="text-xs leading-5 text-red-700" id={`memory-card-${name}-error`}>
+                <span
+                  className="text-xs leading-5 text-destructive"
+                  id={`memory-card-${name}-error`}
+                >
                   {form.formState.errors[name]?.message}
                 </span>
               )}

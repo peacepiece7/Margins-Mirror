@@ -1,6 +1,7 @@
 package com.margins.memorycard.business;
 
 import com.margins.auth.support.AuthContext;
+import com.margins.book.mapper.BookMapper;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
 import com.margins.memorycard.dto.BulkMemoryCardGroupRequest;
@@ -35,9 +36,18 @@ public class MemoryCardBusiness {
     private static final int MAX_CARDS = 500;
 
     private final MemoryCardMapper memoryCardMapper;
+    private final BookMapper bookMapper;
 
     public MemoryCardGroupListResponse groups() {
-        List<MemoryCardGroupDto> groups = memoryCardMapper.findGroups(currentUserId()).stream()
+        return groups(null);
+    }
+
+    public MemoryCardGroupListResponse groups(Long bookId) {
+        Long userId = currentUserId();
+        if (bookId != null) {
+            requireOwnedBook(bookId, userId);
+        }
+        List<MemoryCardGroupDto> groups = memoryCardMapper.findGroups(userId, bookId).stream()
             .map((record) -> toGroupDto(record, null))
             .toList();
         return MemoryCardGroupListResponse.builder().groups(groups).build();
@@ -50,8 +60,13 @@ public class MemoryCardBusiness {
 
     @Transactional
     public MemoryCardGroupDto createGroup(CreateMemoryCardGroupRequest request) {
+        Long userId = currentUserId();
+        if (request.getBookId() != null) {
+            requireOwnedBook(request.getBookId(), userId);
+        }
         MemoryCardGroupRecord record = MemoryCardGroupRecord.builder()
-            .userId(currentUserId())
+            .userId(userId)
+            .bookId(request.getBookId())
             .title(cleanRequired(request.getTitle(), "group.title", 255))
             .description(cleanOptional(request.getDescription(), 1000))
             .sourceLabel(cleanOptional(request.getSourceLabel(), 255))
@@ -246,6 +261,12 @@ public class MemoryCardBusiness {
         return group;
     }
 
+    private void requireOwnedBook(Long bookId, Long userId) {
+        if (bookMapper.findByIdForUser(bookId, userId) == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book was not found");
+        }
+    }
+
     private MemoryCardRecord requireOwnedCard(Long cardId) {
         MemoryCardRecord card = memoryCardMapper.findCard(cardId);
         if (card == null || memoryCardMapper.findGroup(card.getGroupId(), currentUserId()) == null) {
@@ -301,6 +322,7 @@ public class MemoryCardBusiness {
     private MemoryCardGroupDto toGroupDto(MemoryCardGroupRecord record, List<MemoryCardDto> cards) {
         return MemoryCardGroupDto.builder()
             .groupId(record.getId())
+            .bookId(record.getBookId())
             .title(record.getTitle())
             .description(record.getDescription())
             .sourceLabel(record.getSourceLabel())

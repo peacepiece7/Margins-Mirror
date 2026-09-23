@@ -17,7 +17,7 @@ export const readingSessionsApi = {
     return getJson('/api/reading-sessions/latest');
   },
 
-  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse | null> {
+  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse> {
     return getJson(`/api/reading-sessions/${sessionId}`);
   },
 

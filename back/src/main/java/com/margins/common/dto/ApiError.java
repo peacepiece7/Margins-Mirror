@@ -1,5 +1,6 @@
 package com.margins.common.dto;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.support.RequestCorrelationContext;
 import java.util.List;
@@ -10,6 +11,7 @@ import lombok.Value;
 /** Public failure metadata shared by JSON APIs and authentication filters. */
 @Value
 @Builder
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class ApiError {
     ApiErrorCode code;
     String message;

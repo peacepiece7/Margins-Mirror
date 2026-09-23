@@ -1,5 +1,6 @@
 package com.margins.auth.config;
 
+import java.util.List;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -10,4 +11,6 @@ public class GoogleAuthProperties {
     private String clientId = "";
     private String clientSecret = "";
     private String frontendCallbackUrl = "http://localhost:5173/auth/callback";
+    private boolean mobileEnabled = false;
+    private List<String> mobileRedirectUris = List.of();
 }

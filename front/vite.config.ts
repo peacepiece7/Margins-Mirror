@@ -25,6 +25,7 @@ export default defineConfig({
     },
   },
   server: {
+    watch: { ignored: ['**/dist-design-system/**'] },
     port: frontendPort,
     proxy: {
       '/api': {

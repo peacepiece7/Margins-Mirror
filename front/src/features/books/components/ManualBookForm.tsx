@@ -21,7 +21,7 @@ export function ManualBookForm({
   const author = useWatch({ control: form.control, name: 'author', defaultValue: '' });
 
   return (
-    <Card className="rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_18px_50px_rgba(23,23,23,0.06)] ring-0 sm:p-5">
+    <Card className="web-discover-manual rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_18px_50px_rgba(23,23,23,0.06)] ring-0 sm:p-5">
       <CardContent className="p-0">
         <form
           className="grid gap-3"
@@ -36,19 +36,21 @@ export function ManualBookForm({
           </div>
           <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
             <Input
+              aria-label={t('bookTitleLabel')}
               aria-describedby={form.formState.errors.title ? 'manual-book-title-error' : undefined}
               aria-invalid={Boolean(form.formState.errors.title)}
-              placeholder={t('searchPlaceholder')}
+              placeholder={t('bookTitlePlaceholder')}
               required
               {...form.register('title', { required: t('requiredField') })}
               {...testAttr('manual-book-title-input')}
             />
             {form.formState.errors.title?.message && (
-              <p className="text-xs leading-5 text-red-700" id="manual-book-title-error">
+              <p className="text-xs leading-5 text-destructive" id="manual-book-title-error">
                 {form.formState.errors.title.message}
               </p>
             )}
             <Input
+              aria-label={t('bookAuthorLabel')}
               aria-describedby={
                 form.formState.errors.author ? 'manual-book-author-error' : undefined
               }
@@ -59,7 +61,7 @@ export function ManualBookForm({
               {...testAttr('manual-book-author-input')}
             />
             {form.formState.errors.author?.message && (
-              <p className="text-xs leading-5 text-red-700" id="manual-book-author-error">
+              <p className="text-xs leading-5 text-destructive" id="manual-book-author-error">
                 {form.formState.errors.author.message}
               </p>
             )}

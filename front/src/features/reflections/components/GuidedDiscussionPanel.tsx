@@ -235,7 +235,11 @@ export function GuidedDiscussionPanel({
   }
 
   return (
-    <section aria-busy={pending} className="grid gap-5" {...testAttr('guided-discussion-page')}>
+    <section
+      aria-busy={pending}
+      className="web-reflection-page web-guided-discussion grid gap-5"
+      {...testAttr('guided-discussion-page')}
+    >
       <ReflectionLoopProgress active="discuss" bookId={bookId} paths={paths} />
       <header className="grid gap-2">
         <p className="text-xs font-semibold tracking-[0.18em] text-stone-500">
@@ -270,7 +274,7 @@ export function GuidedDiscussionPanel({
       ) : null}
 
       {blockedModeration ? (
-        <Alert className="border-amber-300 bg-amber-50" variant="warning">
+        <Alert variant="warning">
           <AlertTitle>
             {blockedModeration.intent === 'DISCUSSION_STRUCTURE'
               ? t('reflectionDiscussionStructureTitle')
@@ -290,7 +294,7 @@ export function GuidedDiscussionPanel({
             {blockedModeration.decision === 'REDIRECT' &&
             blockedModeration.intent !== 'DISCUSSION_STRUCTURE' &&
             blockedModeration.suggestedQuestion ? (
-              <p className="rounded border border-amber-200 bg-white px-3 py-2">
+              <p className="rounded border border-warning-border bg-white px-3 py-2">
                 {blockedModeration.suggestedQuestion}
               </p>
             ) : null}
@@ -310,7 +314,7 @@ export function GuidedDiscussionPanel({
         </Alert>
       ) : null}
 
-      <section className="grid gap-4 rounded border border-stone-300 bg-white p-4 sm:p-6">
+      <section className="web-guided-discussion-current grid gap-4 rounded border border-stone-300 bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-center gap-2">
           <Badge>
             {current?.stage && stageLabelKeys[current.stage as keyof typeof stageLabelKeys]
@@ -354,7 +358,7 @@ export function GuidedDiscussionPanel({
       {selectionRequired ? (
         <section
           aria-label={t('reflectionPerspectiveCandidatesLabel')}
-          className="grid gap-3 rounded border border-amber-300 bg-amber-50 p-4 sm:p-5"
+          className="grid gap-3 rounded border border-warning-border bg-warning-surface p-4 sm:p-5"
           {...testAttr('guided-perspective-candidates')}
         >
           <div>
@@ -404,6 +408,7 @@ export function GuidedDiscussionPanel({
         aria-live="polite"
         className="grid max-h-[30rem] gap-3 overflow-y-auto rounded border border-stone-300 bg-stone-100 p-3 sm:p-4"
         ref={historyRef}
+        data-ui="guided-discussion-history"
         {...testAttr('guided-discussion-history')}
       >
         {messages.map((message) => {
@@ -452,6 +457,7 @@ export function GuidedDiscussionPanel({
 
       <section
         className="sticky bottom-2 grid max-h-[70dvh] gap-3 overflow-y-auto rounded border border-stone-300 bg-white/95 p-3 shadow-lg backdrop-blur sm:bottom-3 sm:p-4"
+        data-ui="guided-discussion-composer"
         {...testAttr('guided-discussion-composer')}
       >
         <div className="grid gap-2">

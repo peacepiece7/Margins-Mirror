@@ -1,8 +1,9 @@
 import { Label } from '@/components/ui/label';
 import { NativeSelect } from '@/components/ui/native-select';
+import { useI18n } from '@/lib/i18n';
 
 import type { DiscussionGuideVersionNavigatorProps } from '../discussion-guide-component-types';
-import { discussionGuideOriginLabels } from '../discussion-guide-labels';
+import { discussionGuideOriginLabelKeys } from '../discussion-guide-labels';
 
 export function DiscussionGuideVersionNavigator({
   disabled,
@@ -10,14 +11,15 @@ export function DiscussionGuideVersionNavigator({
   onSelect,
   versions,
 }: DiscussionGuideVersionNavigatorProps) {
+  const { t } = useI18n();
   if (!versions.length) return null;
 
   return (
-    <section className="grid gap-2 rounded border border-stone-300 bg-white p-4 sm:grid-cols-[1fr_auto] sm:items-end">
+    <section className="web-guide-version-rail grid gap-2 rounded border border-stone-300 bg-white p-4">
       <div>
-        <Label htmlFor="discussion-guide-version">Version 이력</Label>
+        <Label htmlFor="discussion-guide-version">{t('reflectionGuideVersionHistory')}</Label>
         <p className="mt-1 text-xs leading-5 text-stone-500">
-          이전 version은 수정되지 않으며 필요할 때 언제든 다시 볼 수 있습니다.
+          {t('reflectionGuideVersionHistoryDescription')}
         </p>
       </div>
       <NativeSelect
@@ -30,8 +32,14 @@ export function DiscussionGuideVersionNavigator({
         {versions.map((version) => (
           <option key={version.guideId} value={version.guideId}>
             v{version.guideVersion} ·{' '}
-            {discussionGuideOriginLabels[version.origin] ?? version.origin}
-            {version.current ? ' · 현재' : version.hasRun ? ' · 토론 연결됨' : ' · 보관'}
+            {discussionGuideOriginLabelKeys[version.origin]
+              ? t(discussionGuideOriginLabelKeys[version.origin])
+              : version.origin}
+            {version.current
+              ? ` · ${t('reflectionGuideCurrent')}`
+              : version.hasRun
+                ? ` · ${t('reflectionGuideVersionLinked')}`
+                : ` · ${t('reflectionGuideArchived')}`}
           </option>
         ))}
       </NativeSelect>

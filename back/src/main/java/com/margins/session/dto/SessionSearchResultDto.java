@@ -10,6 +10,7 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 public class SessionSearchResultDto {
+    private Long bookId;
     private Long sessionId;
     private Long sourceId;
     private String resultType;

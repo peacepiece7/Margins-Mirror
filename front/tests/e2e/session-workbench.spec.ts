@@ -16,7 +16,27 @@ async function login(page: Page) {
   await page.getByTestId('login-submit').click();
   await expect(page.getByTestId('book-list-page')).toBeVisible();
   await expect(page).toHaveURL(/\/book\/library$/);
-  await page.getByTestId('portal-nav-book-search').click();
+  await page.getByTestId('nav-discover').click();
+}
+
+async function persistPreferredLocale(page: Page, locale: 'en' | 'ko') {
+  const returnUrl = page.url();
+  await page.getByTestId('nav-account').click();
+  await expect(page.getByTestId('account-page')).toBeVisible();
+  const localeSelect = page.locator('#account-locale');
+  if ((await localeSelect.inputValue()) !== locale) {
+    await localeSelect.selectOption(locale);
+    await Promise.all([
+      page.waitForResponse(
+        (response) =>
+          response.url().endsWith('/api/account/profile') &&
+          response.request().method() === 'PATCH' &&
+          response.status() === 200,
+      ),
+      page.getByTestId('account-profile-save').click(),
+    ]);
+  }
+  await page.goto(returnUrl);
 }
 
 async function expectMobileReflectionWorkflow(page: Page, pageTestId: string) {
@@ -41,7 +61,10 @@ async function expectMobileReflectionWorkflow(page: Page, pageTestId: string) {
   expect(metrics.workflowTop).toBeLessThan(metrics.viewportHeight);
 }
 
-test.beforeEach(async ({ request }) => {
+test.beforeEach(async ({ page, request }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('margins.app-download-notice.v1', 'dismissed');
+  });
   const response = await request.post(`${backendUrl}/api/test/reset`);
   expect(response.ok()).toBeTruthy();
 });
@@ -59,19 +82,18 @@ test('follows the owner replan page flow from book registration to reflection an
   await Promise.all([
     page.waitForResponse(
       (response) =>
-        response.url().endsWith('/api/books/search-candidates') &&
-        response.request().method() === 'POST',
+        response.url().endsWith('/api/catalog/search') && response.request().method() === 'POST',
     ),
     page.getByTestId('book-search-submit').click(),
   ]);
   await expect(page.getByTestId('book-candidate-list')).toContainText(/dune|듄/i);
-  await expect(page.getByTestId('book-candidate-id').first()).toContainText('Book ID');
+  await expect(page.getByTestId('book-candidate-id')).toHaveCount(0);
   const savedCandidateTitle = await page.getByTestId('book-candidate-title').first().innerText();
 
   await Promise.all([
     page.waitForResponse(
       (response) =>
-        response.url().endsWith('/api/books') &&
+        response.url().endsWith('/api/books/from-catalog') &&
         response.request().method() === 'POST' &&
         response.status() === 200,
     ),
@@ -139,30 +161,47 @@ test('follows the owner replan page flow from book registration to reflection an
   expect(await firstQuestion.evaluate((element) => element.tagName)).toBe('DIV');
   await expect(page.getByTestId('book-question-panel')).toHaveCount(1);
 
+  let readingSessionEnsureCount = 0;
+  let exposeMissingReadingSession = true;
+  await page.route(/\/api\/books\/\d+\/reading-session$/, async (route) => {
+    const method = route.request().method();
+    if (method === 'GET' && exposeMissingReadingSession) {
+      await route.fulfill({
+        body: JSON.stringify({ data: null, error: null, success: true }),
+        contentType: 'application/json',
+        status: 200,
+      });
+      return;
+    }
+    if (method === 'PUT') {
+      readingSessionEnsureCount += 1;
+      exposeMissingReadingSession = false;
+    }
+    await route.continue();
+  });
+  await page.reload();
+  await expect(page.getByTestId('book-detail-page')).toBeVisible();
   await page.getByTestId('book-start-review').click();
   await expect(page.getByTestId('reflection-loop-page')).toBeVisible();
   await expect(page).toHaveURL(/\/book\/\d+\/reflection$/);
-  const activeReflectionUrl = page.url();
-  await page.getByTestId('nav-account').click();
-  await expect(page.getByTestId('account-page')).toBeVisible();
-  await page.locator('#account-locale').selectOption('ko');
-  await Promise.all([
-    page.waitForResponse(
-      (response) =>
-        response.url().endsWith('/api/account/profile') &&
-        response.request().method() === 'PATCH' &&
-        response.status() === 200,
-    ),
-    page.getByTestId('account-profile-save').click(),
-  ]);
-  await page.goto(activeReflectionUrl);
+  await persistPreferredLocale(page, 'ko');
   await expect(page.getByTestId('reflection-loop-page')).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: '지금 떠오르는 생각부터 남겨 보세요' }),
+  ).toBeVisible();
   await page.setViewportSize({ height: 844, width: 390 });
   await expectMobileReflectionWorkflow(page, 'reflection-loop-page');
+  expect(readingSessionEnsureCount).toBe(0);
   await page
     .getByTestId('primary-reflection-content')
     .fill('The opening ritual makes power feel intimate and dangerous.');
   await Promise.all([
+    page.waitForResponse(
+      (response) =>
+        /\/api\/books\/\d+\/reading-session$/.test(response.url()) &&
+        response.request().method() === 'PUT' &&
+        response.status() === 200,
+    ),
     page.waitForResponse(
       (response) =>
         response.url().includes('/api/reading-sessions/') &&
@@ -172,7 +211,9 @@ test('follows the owner replan page flow from book registration to reflection an
     ),
     page.getByTestId('primary-reflection-save').click(),
   ]);
-  await expect(page.getByText('Revision history')).toBeVisible();
+  expect(readingSessionEnsureCount).toBe(1);
+  await page.unroute(/\/api\/books\/\d+\/reading-session$/);
+  await expect(page.getByRole('heading', { name: '수정 이력', exact: true })).toBeVisible();
   await expect(page.getByTestId('reflection-loop-page')).toContainText(
     'The opening ritual makes power feel intimate and dangerous.',
   );
@@ -394,7 +435,7 @@ test('follows the owner replan page flow from book registration to reflection an
   expect(page.url()).not.toBe(firstGuideUrl);
 
   await page.goto(reflectionUrl);
-  await expect(page.getByTestId('reflection-run-recovery')).toContainText('원래 발제안 version');
+  await expect(page.getByTestId('reflection-run-recovery')).toContainText('원래 발제안 버전');
   await page.getByRole('button', { name: '토론 이어가기' }).click();
   await expect(page).toHaveURL(activeRunUrl);
   await expect(page.getByTestId('guided-discussion-page')).toBeVisible();
@@ -425,7 +466,9 @@ test('follows the owner replan page flow from book registration to reflection an
   const refineUrl = page.url();
 
   await page.goto(reflectionUrl);
-  await expect(page.getByTestId('reflection-run-recovery')).toContainText('시작한 발제안 version');
+  await expect(page.getByTestId('reflection-run-recovery')).toContainText(
+    '처음 시작한 발제안 버전',
+  );
   await page.getByRole('button', { name: 'Reflection 다듬기' }).click();
   await expect(page).toHaveURL(refineUrl);
   await expect(page.getByTestId('reflection-refine-page')).toBeVisible();
@@ -475,9 +518,18 @@ test('follows the owner replan page flow from book registration to reflection an
   await page.getByTestId('debate-session-submit').click();
   const firstReplyResponse = await firstReplyResponsePromise;
   expect(firstReplyResponse.request().postDataJSON().personaId).toBe(selectedPersonaIds[0]);
+  const firstReplyBody = await firstReplyResponse.json();
+  const firstPersonaReply = firstReplyBody.data.messages.find(
+    (message: { content: string; personaId?: number }) =>
+      message.personaId === selectedPersonaIds[0],
+  ) as { content: string; personaId: number } | undefined;
+  expect(firstPersonaReply).toBeTruthy();
   await expect(page.getByTestId('debate-message-list')).toContainText(
     'How does ritual shape political authority?',
   );
+  await expect(page.getByTestId('debate-message-list')).toContainText(firstPersonaReply!.content, {
+    timeout: 20000,
+  });
   await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[0], {
     timeout: 20000,
   });
@@ -491,6 +543,11 @@ test('follows the owner replan page flow from book registration to reflection an
   await page.getByTestId('debate-all-submit').click();
   const allRepliesResponse = await allRepliesResponsePromise;
   expect(allRepliesResponse.request().postDataJSON().personaIds).toEqual(selectedPersonaIds);
+  const allRepliesBody = await allRepliesResponse.json();
+  const allReplyPersonaIds = allRepliesBody.data.messages
+    .map((message: { personaId?: number }) => message.personaId)
+    .filter((personaId: number | undefined): personaId is number => personaId !== undefined);
+  expect(new Set(allReplyPersonaIds)).toEqual(new Set(selectedPersonaIds));
   await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[0], {
     timeout: 20000,
   });
@@ -512,12 +569,20 @@ test('follows the owner replan page flow from book registration to reflection an
     (window: { windowId: number }) => window.windowId === Number(debateRoomUrl.split('/').pop()),
   );
   expect(refreshedWindow.personaIds).toEqual(selectedPersonaIds);
+  const refreshedPersonaIds = refreshedTimelineBody.data.messages
+    .filter(
+      (message: { personaId?: number | null; windowId: number }) =>
+        message.windowId === refreshedWindow.windowId && message.personaId != null,
+    )
+    .map((message: { personaId: number }) => message.personaId);
+  expect(new Set(refreshedPersonaIds)).toEqual(new Set(selectedPersonaIds));
   await expect(page.getByTestId('logout-submit')).toBeVisible();
   await expect(page.getByTestId('current-book-summary')).toContainText('Dune: Edited');
   await expect(page).toHaveURL(debateRoomUrl);
   await expect(page.getByTestId('debate-message-list')).toContainText(
     'How does ritual shape political authority?',
   );
+  await expect(page.getByTestId('debate-message-list')).toContainText(firstPersonaReply!.content);
   await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[0]);
   await expect(page.getByTestId('debate-message-list')).toContainText(selectedPersonaNames[1]);
 });
@@ -541,7 +606,7 @@ test('supports manual registration and saved-book deletion from the page shell',
     page.getByTestId('manual-book-submit').click(),
   ]);
   await expect(page.getByTestId('book-list-page')).toContainText('Manual Margins Book');
-  await expect(page.getByTestId('current-book-summary')).toContainText('Manual Margins Book');
+  await expect(page.getByTestId('library-activity-rail')).toContainText('Recent activity');
 
   await page
     .getByTestId('saved-book-detail-link')
@@ -553,7 +618,7 @@ test('supports manual registration and saved-book deletion from the page shell',
   await expect(page.getByTestId('current-book-title')).toHaveText('Manual Margins Book');
   await expect(page.getByTestId('current-book-summary')).toContainText('reflection');
 
-  await page.getByTestId('portal-nav-book-search').click();
+  await page.getByTestId('nav-discover').click();
   await page.getByTestId('manual-book-title-input').fill('Second Manual Margins Book');
   await page.getByTestId('manual-book-author-input').fill('Second Reader Author');
   await Promise.all([
@@ -565,8 +630,9 @@ test('supports manual registration and saved-book deletion from the page shell',
     ),
     page.getByTestId('manual-book-submit').click(),
   ]);
-  await expect(page.getByTestId('current-book-title')).toHaveText('Second Manual Margins Book');
-  await expect(page.getByTestId('current-book-summary')).not.toContainText('reflection');
+  await expect(
+    page.getByTestId('saved-book-detail-link').filter({ hasText: 'Second Manual Margins Book' }),
+  ).toBeVisible();
 
   await page
     .getByTestId('saved-book-row')

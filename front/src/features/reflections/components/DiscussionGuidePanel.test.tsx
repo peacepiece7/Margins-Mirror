@@ -249,7 +249,7 @@ describe('DiscussionGuidePanel versions', () => {
     );
 
     fireEvent.click(screen.getByTestId('discussion-guide-regenerate'));
-    fireEvent.click(screen.getByRole('button', { name: '새 version 만들기' }));
+    fireEvent.click(screen.getByRole('button', { name: '새 버전 만들기' }));
 
     expect(regenerateMutate).toHaveBeenCalledWith(
       {
@@ -280,7 +280,7 @@ describe('DiscussionGuidePanel versions', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('읽기 전용으로 보관된 version입니다')).toBeVisible();
+    expect(screen.getByText('읽기 전용으로 보관된 버전입니다')).toBeVisible();
     expect(screen.queryByTestId('discussion-guide-edit')).not.toBeInTheDocument();
     expect(screen.queryByTestId('discussion-guide-regenerate')).not.toBeInTheDocument();
     expect(screen.getByTestId('discussion-start-run')).toBeDisabled();

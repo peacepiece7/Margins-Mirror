@@ -169,7 +169,7 @@ describe('ReflectionInterviewPanel Guide brief', () => {
     expect(screen.getByText('업데이트 필요')).toBeVisible();
     expect(screen.getByText('임시 분석')).toBeVisible();
     expect(screen.getByText(/근거: 책 배경 요약/)).toBeVisible();
-    expect(screen.getByRole('link', { name: '원문 revision 보기' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '원문 수정본 보기' })).toHaveAttribute(
       'href',
       '/book/1/reflection#reflection-revision-1',
     );

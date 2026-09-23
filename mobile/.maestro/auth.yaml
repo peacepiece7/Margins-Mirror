@@ -1,0 +1,18 @@
+appId: cloud.margins.mobile
+env:
+  TEST_PASSWORD: ${MARGINS_MAESTRO_PASSWORD}
+  TEST_USERNAME: ${MARGINS_MAESTRO_USERNAME}
+---
+- runFlow: subflows/login.yaml
+- stopApp
+- launchApp
+- assertVisible:
+    id: library-screen
+- tapOn:
+    id: global-navigation-account
+- assertVisible:
+    id: account-screen
+- tapOn:
+    id: account-logout
+- assertVisible:
+    id: welcome-screen

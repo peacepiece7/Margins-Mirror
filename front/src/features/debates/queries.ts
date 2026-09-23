@@ -59,10 +59,8 @@ export function useCreateDebateRoomMutation(bookId: number) {
       topic: string;
       personaIds: number[];
     }) => {
-      const sessionId = existingSessionId ?? (await debatesApi.readingSession(bookId))?.sessionId;
-      if (!sessionId) {
-        throw new Error('Reading session is not available yet');
-      }
+      const sessionId =
+        existingSessionId ?? (await debatesApi.ensureReadingSession(bookId)).sessionId;
       const window = await debatesApi.createWindow(
         sessionId,
         'debate',
@@ -71,8 +69,14 @@ export function useCreateDebateRoomMutation(bookId: number) {
       );
       return { sessionId, windowId: window.windowId, personaIds: window.personaIds };
     },
-    onSuccess: ({ sessionId }) =>
-      queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
+    onSuccess: async ({ sessionId }, input) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
+        ...(!input.sessionId
+          ? [queryClient.invalidateQueries({ queryKey: sessionKeys.book(bookId) })]
+          : []),
+      ]);
+    },
   });
 }
 

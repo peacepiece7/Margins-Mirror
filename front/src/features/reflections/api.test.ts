@@ -17,10 +17,13 @@ describe('reflectionsApi', () => {
 
   it('loads the book-scoped reading-session locator', async () => {
     vi.mocked(getJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
+    vi.mocked(putJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
 
     await reflectionsApi.readingSession(7);
+    await reflectionsApi.ensureReadingSession(7);
 
     expect(getJson).toHaveBeenCalledWith('/api/books/7/reading-session');
+    expect(putJson).toHaveBeenCalledWith('/api/books/7/reading-session', {});
   });
 
   it('generates questions with explicit transport inputs', async () => {

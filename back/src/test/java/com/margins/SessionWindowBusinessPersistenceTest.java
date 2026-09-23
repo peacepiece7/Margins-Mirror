@@ -159,12 +159,17 @@ class SessionWindowBusinessPersistenceTest {
         );
         business.configureSessionWindowPersonaMapper(personaMapper);
 
-        Method toWindowDto = ReadingSessionBusiness.class.getDeclaredMethod("toWindowDto", SessionWindowRecord.class);
+        Method toWindowDto = ReadingSessionBusiness.class.getDeclaredMethod(
+            "toWindowDto",
+            SessionWindowRecord.class,
+            List.class
+        );
         toWindowDto.setAccessible(true);
         SessionWindowTimelineDto timeline = (SessionWindowTimelineDto) toWindowDto.invoke(
             business,
             SessionWindowRecord.builder().id(300L).sessionId(3L).windowType("debate").title("Debate")
-                .position(5).status("open").build()
+                .position(5).status("open").build(),
+            personaMapper.findPersonaIds(300L)
         );
 
         assertThat(timeline.getPersonaIds()).containsExactly(5L, 4L);
@@ -1360,6 +1365,25 @@ class SessionWindowBusinessPersistenceTest {
         @Override
         public List<Long> findPersonaIds(Long windowId) {
             return personaIds == null ? List.of() : personaIds;
+        }
+
+        @Override
+        public List<com.margins.session.model.SessionWindowPersonaSelection> findByWindowIds(
+            List<Long> windowIds
+        ) {
+            if (windowId == null || personaIds == null || !windowIds.contains(windowId)) {
+                return List.of();
+            }
+            java.util.ArrayList<com.margins.session.model.SessionWindowPersonaSelection> selections =
+                new java.util.ArrayList<>();
+            for (int index = 0; index < personaIds.size(); index++) {
+                selections.add(com.margins.session.model.SessionWindowPersonaSelection.builder()
+                    .windowId(windowId)
+                    .personaId(personaIds.get(index))
+                    .selectionOrder(index)
+                    .build());
+            }
+            return selections;
         }
     }
 

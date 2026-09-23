@@ -1,11 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import {
-  useEnsureReflectionSessionMutation,
-  useSaveReflectionMutation,
-  useReflectionTimelineForBook,
-} from '../queries';
+import { useSaveReflectionMutation, useReflectionTimelineForBook } from '../queries';
 import { dateInputValue } from '../review-date';
 import { ReviewEditorPage } from './ReviewEditorPage';
 
@@ -21,13 +17,6 @@ export function ReviewEditorPanel({ bookId, insightId }: { bookId: number; insig
   );
   const [visibility, setVisibility] = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
   const save = useSaveReflectionMutation(bookId, sessionId, insightId);
-  const ensureSession = useEnsureReflectionSessionMutation(bookId);
-
-  useEffect(() => {
-    if (!sessions.isLoading && !sessionId && !ensureSession.isPending) {
-      ensureSession.mutate(undefined);
-    }
-  }, [ensureSession, sessionId, sessions.isLoading]);
 
   useEffect(() => {
     if (!insight) return;
@@ -61,7 +50,7 @@ export function ReviewEditorPanel({ bookId, insightId }: { bookId: number; insig
       content={content}
       evidence={evidence}
       isEditing={Boolean(insightId)}
-      loading={save.isPending || timeline.isFetching}
+      loading={sessions.isLoading || save.isPending || timeline.isFetching}
       reviewedOn={reviewedOn}
       visibility={visibility}
       onAuthorNameChange={setAuthorName}

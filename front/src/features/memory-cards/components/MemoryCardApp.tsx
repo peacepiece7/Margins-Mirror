@@ -35,6 +35,7 @@ import { GroupForm } from './GroupForm';
 import { GroupListView } from './GroupListView';
 import { MemoryCardHeader } from './MemoryCardHeader';
 import { MemoryCardStatus } from './MemoryCardStatus';
+import { StudyProgress } from './StudyProgress';
 import { StudyView } from './StudyView';
 
 const MAX_MEMORY_CARD_UPLOAD_SIZE = 500;
@@ -164,6 +165,40 @@ function duplicateCount(cards: MemoryCard[], upload: ParsedMemoryCardUpload | un
   return upload.cards.filter((card) => existing.has(card.frontText.trim().toLowerCase())).length;
 }
 
+function MemoryGroupIndex({
+  currentGroupId,
+  groups,
+  label,
+  onOpen,
+}: {
+  currentGroupId?: number;
+  groups: MemoryCardGroup[];
+  label: string;
+  onOpen: (groupId: number) => void;
+}) {
+  return (
+    <aside className="web-memory-group-index" {...testAttr('memory-card-group-index')}>
+      <span className="blueprint-unit-label">GROUPS</span>
+      <h2>{label}</h2>
+      <nav aria-label={label}>
+        {groups.map((group) => (
+          <Button
+            aria-current={currentGroupId === group.groupId ? 'page' : undefined}
+            className="h-auto w-full rounded-none"
+            key={group.groupId}
+            onClick={() => onOpen(group.groupId)}
+            type="button"
+            variant="ghost"
+          >
+            <span>{group.title}</span>
+            <small>{group.cardCount}</small>
+          </Button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
+
 export function MemoryCardApp() {
   const { locale, t } = useI18n();
   const navigate = useNavigate();
@@ -229,6 +264,7 @@ export function MemoryCardApp() {
 
   const duplicates = useMemo(() => duplicateCount(cards, parsedUpload), [cards, parsedUpload]);
   const currentStudyCard = cards[studyIndex];
+  const memorizedCount = cards.filter((card) => card.memorized).length;
   const selectedCard = route.cardId
     ? cards.find((card) => card.cardId === route.cardId)
     : undefined;
@@ -247,6 +283,8 @@ export function MemoryCardApp() {
     if (!selectedGroup) return;
     applyCards(selectedGroup.cards ?? [], { forceUploadSync: true, useTemplateWhenEmpty: true });
     setEditingGroup(false);
+    setStudyIndex(0);
+    setRevealed(false);
     // Authoritative query data resets route-bound form defaults and generated upload content.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGroup?.groupId]);
@@ -489,6 +527,11 @@ export function MemoryCardApp() {
     setRevealed(false);
   }
 
+  function previousStudyCard() {
+    setStudyIndex((index) => (cards.length ? (index - 1 + cards.length) % cards.length : 0));
+    setRevealed(false);
+  }
+
   return (
     <BlueprintWorkspace className="blueprint-memory-workspace">
       <MemoryCardHeader
@@ -502,166 +545,228 @@ export function MemoryCardApp() {
       <MemoryCardStatus error={operationError} loading={loading} message={message} />
 
       {page === 'groups' && (
-        <section className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
-          <GroupListView
-            deleteLabel={t('delete')}
-            emptyLabel={t('memoryCardEmptyGroups')}
+        <section className="web-memory-groups-layout">
+          <MemoryGroupIndex
+            currentGroupId={selectedGroup?.groupId}
             groups={groups}
-            onDelete={(group) => void removeGroup(group)}
-            onOpen={(group) => void openGroup(group.groupId)}
-            openLabel={t('memoryCardOpen')}
-            rowDescription={(group) =>
-              group.description || group.sourceLabel || t('memoryCardNoDescription')
-            }
-            rowMeta={(group) =>
-              interpolate(t('memoryCardGroupMeta'), {
-                count: group.cardCount,
-                date: displayDate(group.updatedAt, locale),
-              })
-            }
+            label={t('memoryCardGroupList')}
+            onOpen={(groupId) => void openGroup(groupId)}
           />
-          <div className="grid content-start gap-4">
+          <div className="web-memory-groups-main">
+            <GroupListView
+              deleteLabel={t('delete')}
+              emptyLabel={t('memoryCardEmptyGroups')}
+              groups={groups}
+              onDelete={(group) => void removeGroup(group)}
+              onOpen={(group) => void openGroup(group.groupId)}
+              openLabel={t('memoryCardOpen')}
+              rowDescription={(group) =>
+                group.description || group.sourceLabel || t('memoryCardNoDescription')
+              }
+              rowMeta={(group) =>
+                interpolate(t('memoryCardGroupMeta'), {
+                  count: group.cardCount,
+                  date: displayDate(group.updatedAt, locale),
+                })
+              }
+            />
+          </div>
+          <aside className="web-memory-tools">
             <GroupForm
               initialValues={{ title: '', description: '', sourceLabel: '' }}
               loading={commandLoading}
               onSubmit={submitGroup}
               title={t('memoryCardNewGroup')}
             />
-          </div>
+          </aside>
         </section>
       )}
 
       {page === 'detail' && selectedGroup && (
-        <section className="grid gap-5">
-          <div className="grid gap-3 rounded border border-stone-300 bg-white p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h2 className="break-words text-2xl font-semibold">{selectedGroup.title}</h2>
-                <p className="break-words text-sm text-stone-600">
-                  {selectedGroup.description ||
-                    selectedGroup.sourceLabel ||
-                    t('memoryCardNoDescription')}
-                </p>
+        <section className="web-memory-detail-layout">
+          <MemoryGroupIndex
+            currentGroupId={selectedGroup.groupId}
+            groups={groups}
+            label={t('memoryCardGroupList')}
+            onOpen={(groupId) => void openGroup(groupId)}
+          />
+          <div className="web-memory-detail-main">
+            <div className="grid gap-3 rounded border border-stone-300 bg-white p-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <h2 className="break-words text-2xl font-semibold">{selectedGroup.title}</h2>
+                  <p className="break-words text-sm text-stone-600">
+                    {selectedGroup.description ||
+                      selectedGroup.sourceLabel ||
+                      t('memoryCardNoDescription')}
+                  </p>
+                </div>
+                <Button
+                  className="min-h-11 px-3 py-2"
+                  onClick={() => setEditingGroup((value) => !value)}
+                  type="button"
+                  variant="outline"
+                  {...testAttr('memory-card-group-edit-toggle')}
+                >
+                  {t('memoryCardGroupEdit')}
+                </Button>
               </div>
-              <Button
-                className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-stone-900"
-                onClick={() => setEditingGroup((value) => !value)}
-                type="button"
-                {...testAttr('memory-card-group-edit-toggle')}
-              >
-                {t('memoryCardGroupEdit')}
-              </Button>
+              {editingGroup && (
+                <GroupForm
+                  initialValues={{
+                    title: selectedGroup.title,
+                    description: selectedGroup.description ?? '',
+                    sourceLabel: selectedGroup.sourceLabel ?? '',
+                  }}
+                  loading={commandLoading}
+                  onSubmit={submitGroup}
+                  title={t('memoryCardGroupEdit')}
+                />
+              )}
             </div>
-            {editingGroup && (
-              <GroupForm
-                initialValues={{
-                  title: selectedGroup.title,
-                  description: selectedGroup.description ?? '',
-                  sourceLabel: selectedGroup.sourceLabel ?? '',
-                }}
-                loading={commandLoading}
-                onSubmit={submitGroup}
-                title={t('memoryCardGroupEdit')}
-              />
-            )}
+
+            {selectedCard && route.mode === 'card' && <CardDetail card={selectedCard} />}
+
+            <CardList
+              cards={cards}
+              labels={{
+                delete: t('delete'),
+                edit: t('edit'),
+                memorized: t('memoryCardMemorized'),
+                open: t('memoryCardOpen'),
+              }}
+              onDelete={(card) => void removeCard(card)}
+              onEdit={startEditCard}
+              onMemorizedChange={(card, memorized) => void setCardMemorized(card, memorized)}
+              onOpen={(card) =>
+                navigate(
+                  memoryCardPath('card', {
+                    groupId: selectedGroup.groupId,
+                    cardId: card.cardId,
+                  }),
+                )
+              }
+              savingMemorizedCardIds={pendingMemorizedCardIdSet}
+            />
           </div>
 
-          {selectedCard && route.mode === 'card' && <CardDetail card={selectedCard} />}
+          <aside className="web-memory-tools">
+            {showCardForm && (
+              <CardForm
+                editing={route.mode === 'edit-card'}
+                initialValues={{
+                  frontText: route.mode === 'edit-card' ? (selectedCard?.frontText ?? '') : '',
+                  backText: route.mode === 'edit-card' ? (selectedCard?.backText ?? '') : '',
+                  exampleText: route.mode === 'edit-card' ? (selectedCard?.exampleText ?? '') : '',
+                  memo: route.mode === 'edit-card' ? (selectedCard?.memo ?? '') : '',
+                }}
+                loading={commandLoading}
+                onCancel={() =>
+                  navigate(memoryCardPath('cards', { groupId: selectedGroup.groupId }))
+                }
+                onSubmit={submitCard}
+              />
+            )}
 
-          {showCardForm && (
-            <CardForm
-              editing={route.mode === 'edit-card'}
-              initialValues={{
-                frontText: route.mode === 'edit-card' ? (selectedCard?.frontText ?? '') : '',
-                backText: route.mode === 'edit-card' ? (selectedCard?.backText ?? '') : '',
-                exampleText: route.mode === 'edit-card' ? (selectedCard?.exampleText ?? '') : '',
-                memo: route.mode === 'edit-card' ? (selectedCard?.memo ?? '') : '',
-              }}
-              loading={commandLoading}
-              onCancel={() => navigate(memoryCardPath('cards', { groupId: selectedGroup.groupId }))}
-              onSubmit={submitCard}
-            />
-          )}
-
-          {showUpload && (
-            <BulkImportForm
-              cardsCount={cards.length}
-              duplicateCount={duplicates}
-              form={uploadForm}
-              labels={{
-                description: t('memoryCardBulkDescription'),
-                duplicateHandling: t('memoryCardDuplicateHandling'),
-                duplicateIgnore: t('memoryCardDuplicateIgnore'),
-                duplicateRemove: t('memoryCardDuplicateRemove'),
-                duplicateReplace: t('memoryCardDuplicateReplace'),
-                existingDuplicates: t('memoryCardExistingDuplicates'),
-                fileUpload: t('memoryCardFileUpload'),
-                limitNotice: interpolate(t('memoryCardPrefillLimitNotice'), {
-                  count: cards.length,
-                  limit: MAX_MEMORY_CARD_UPLOAD_SIZE,
-                }),
-                requiredField: t('requiredField'),
-                save: t('memoryCardSave'),
-                templateDownload: t('memoryCardTemplateDownload'),
-                title: t('memoryCardBulkTitle'),
-                validate: t('memoryCardJsonValidate'),
-                validatedCards: t('memoryCardValidatedCards'),
-              }}
-              loading={loading}
-              maxUploadSize={MAX_MEMORY_CARD_UPLOAD_SIZE}
-              onDownloadTemplate={downloadTemplate}
-              onFileChange={(event) => void readUploadFile(event)}
-              onSubmit={submitUpload}
-              onValidate={validateUpload}
-              parsedUpload={parsedUpload}
-            />
-          )}
-
-          <CardList
-            cards={cards}
-            labels={{
-              delete: t('delete'),
-              edit: t('edit'),
-              memorized: t('memoryCardMemorized'),
-              open: t('memoryCardOpen'),
-            }}
-            onDelete={(card) => void removeCard(card)}
-            onEdit={startEditCard}
-            onMemorizedChange={(card, memorized) => void setCardMemorized(card, memorized)}
-            onOpen={(card) =>
-              navigate(
-                memoryCardPath('card', {
-                  groupId: selectedGroup.groupId,
-                  cardId: card.cardId,
-                }),
-              )
-            }
-            savingMemorizedCardIds={pendingMemorizedCardIdSet}
-          />
+            {showUpload && (
+              <BulkImportForm
+                cardsCount={cards.length}
+                duplicateCount={duplicates}
+                form={uploadForm}
+                labels={{
+                  description: t('memoryCardBulkDescription'),
+                  duplicateHandling: t('memoryCardDuplicateHandling'),
+                  duplicateIgnore: t('memoryCardDuplicateIgnore'),
+                  duplicateRemove: t('memoryCardDuplicateRemove'),
+                  duplicateReplace: t('memoryCardDuplicateReplace'),
+                  existingDuplicates: t('memoryCardExistingDuplicates'),
+                  fileUpload: t('memoryCardFileUpload'),
+                  limitNotice: interpolate(t('memoryCardPrefillLimitNotice'), {
+                    count: cards.length,
+                    limit: MAX_MEMORY_CARD_UPLOAD_SIZE,
+                  }),
+                  requiredField: t('requiredField'),
+                  save: t('memoryCardSave'),
+                  templateDownload: t('memoryCardTemplateDownload'),
+                  title: t('memoryCardBulkTitle'),
+                  validate: t('memoryCardJsonValidate'),
+                  validatedCards: t('memoryCardValidatedCards'),
+                }}
+                loading={loading}
+                maxUploadSize={MAX_MEMORY_CARD_UPLOAD_SIZE}
+                onDownloadTemplate={downloadTemplate}
+                onFileChange={(event) => void readUploadFile(event)}
+                onSubmit={submitUpload}
+                onValidate={validateUpload}
+                parsedUpload={parsedUpload}
+              />
+            )}
+          </aside>
         </section>
       )}
 
       {page === 'study' && selectedGroup && (
-        <StudyView
-          card={currentStudyCard}
-          labels={{
-            backToGroup: t('memoryCardBackToGroup'),
-            meaningHidden: t('memoryCardMeaningHidden'),
-            memorized: t('memoryCardMemorized'),
-            memorizedCount: t('memoryCardMemorizedCount'),
-            nextCard: t('memoryCardNextCard'),
-            noCards: t('memoryCardNoStudyCards'),
-            revealMeaning: t('memoryCardRevealMeaning'),
-          }}
-          memorizedCount={cards.filter((card) => card.memorized).length}
-          onBack={() => navigate(memoryCardPath('group', { groupId: selectedGroup.groupId }))}
-          onMemorizedChange={(card, memorized) => void setCardMemorized(card, memorized)}
-          onNext={nextStudyCard}
-          onReveal={() => setRevealed(true)}
-          revealed={revealed}
-          savingMemorizedCardIds={pendingMemorizedCardIdSet}
-          totalCount={cards.length}
-        />
+        <section className="web-memory-study-layout" {...testAttr('memory-card-study-layout')}>
+          <MemoryGroupIndex
+            currentGroupId={selectedGroup.groupId}
+            groups={groups}
+            label={t('memoryCardGroupList')}
+            onOpen={(groupId) => void openGroup(groupId)}
+          />
+          <div className="web-memory-study-main">
+            <StudyView
+              card={currentStudyCard}
+              currentIndex={studyIndex}
+              labels={{
+                keyboardHint: t('memoryCardKeyboardHint'),
+                meaningHidden: t('memoryCardMeaningHidden'),
+                memorized: t('memoryCardMemorized'),
+                nextCard: t('memoryCardNextCard'),
+                noCards: t('memoryCardNoStudyCards'),
+                position: t('memoryCardPosition'),
+                previousCard: t('memoryCardPreviousCard'),
+                revealMeaning: t('memoryCardRevealMeaning'),
+              }}
+              onMemorizedChange={(card, memorized) => void setCardMemorized(card, memorized)}
+              onNext={nextStudyCard}
+              onPrevious={previousStudyCard}
+              onReveal={() => setRevealed(true)}
+              revealed={revealed}
+              savingMemorizedCardIds={pendingMemorizedCardIdSet}
+              totalCount={cards.length}
+            />
+          </div>
+          <aside className="web-memory-study-summary" {...testAttr('memory-card-study-summary')}>
+            <span className="blueprint-unit-label">STUDY</span>
+            <h2>{t('memoryCardStudySummary')}</h2>
+            <p>{selectedGroup.title}</p>
+            <StudyProgress
+              label={`${memorizedCount}/${cards.length} ${t('memoryCardMemorizedCount')}`}
+            />
+            <dl>
+              <div>
+                <dt>{t('memoryCardTotalCount')}</dt>
+                <dd>{cards.length}</dd>
+              </div>
+              <div>
+                <dt>{t('memoryCardMemorized')}</dt>
+                <dd>{memorizedCount}</dd>
+              </div>
+              <div>
+                <dt>{t('memoryCardRemainingCount')}</dt>
+                <dd>{cards.length - memorizedCount}</dd>
+              </div>
+            </dl>
+            <Button
+              className="w-full rounded-none"
+              onClick={() => navigate(memoryCardPath('group', { groupId: selectedGroup.groupId }))}
+              type="button"
+              variant="outline"
+            >
+              {t('memoryCardBackToGroup')}
+            </Button>
+          </aside>
+        </section>
       )}
       <ConfirmActionDialog
         cancelLabel={t('cancel')}

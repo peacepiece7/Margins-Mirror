@@ -96,6 +96,60 @@ class BookBusinessPersistenceTest {
             .contains("\"discussionAngles\"")
             .contains("\"confidence\":\"low\"");
         assertThat(mapper.inserted.getReadingStatus()).isEqualTo("want_to_read");
+        assertThat(mapper.inserted.isTestData()).isTrue();
+        assertThat(mapper.lockedOwnerId).isEqualTo(1L);
+    }
+
+    @Test
+    void saveBookCopiesTheOwnersProductionMarker() {
+        FakeBookMapper mapper = new FakeBookMapper();
+        mapper.ownerTestData = false;
+        BookBusiness business = business(new EmptyBookSearchProvider(), mapper);
+
+        business.saveBook(SaveBookRequest.builder()
+            .candidateId("manual-production-owner")
+            .title("Production-owned book")
+            .author("Reader")
+            .build());
+
+        assertThat(mapper.inserted.isTestData()).isFalse();
+    }
+
+    @Test
+    void saveBookPersistsSelectedInitialReadingStatusAtomically() {
+        FakeBookMapper mapper = new FakeBookMapper();
+        BookBusiness business = business(new EmptyBookSearchProvider(), mapper);
+
+        SaveBookResponse response = business.saveBook(SaveBookRequest.builder()
+            .candidateId("google:9780441172719")
+            .title("Dune")
+            .author("Frank Herbert")
+            .readingStatus(" READING ")
+            .build());
+
+        assertThat(response.getReadingStatus()).isEqualTo("reading");
+        assertThat(mapper.inserted.getReadingStatus()).isEqualTo("reading");
+        assertThat(mapper.inserted.getStatusStartedAt()).isNotNull();
+        assertThat(mapper.inserted.getStatusFinishedAt()).isNull();
+    }
+
+    @Test
+    void saveBookRejectsInvalidInitialReadingStatus() {
+        FakeBookMapper mapper = new FakeBookMapper();
+        mapper.sourceDuplicate = BookRecord.builder().id(99L).build();
+        BookBusiness business = business(new EmptyBookSearchProvider(), mapper);
+
+        assertThatThrownBy(() -> business.saveBook(SaveBookRequest.builder()
+            .candidateId("google:9780441172719")
+            .title("Dune")
+            .author("Frank Herbert")
+            .readingStatus("later")
+            .build()))
+            .isInstanceOf(ResponseStatusException.class)
+            .extracting("statusCode")
+            .isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(mapper.inserted).isNull();
+        assertThat(mapper.duplicateLookupSourceRef).isNull();
     }
 
     @Test
@@ -219,6 +273,33 @@ class BookBusinessPersistenceTest {
 
         assertThat(mapper.inserted).isNull();
         assertThat(mapper.duplicateLookupIsbn).isEqualTo("9780441478125");
+    }
+
+    @Test
+    void saveBookRejectsExistingBookWithSameSourceReferenceWithoutIsbn() {
+        FakeBookMapper mapper = new FakeBookMapper();
+        mapper.sourceDuplicate = BookRecord.builder()
+            .id(99L)
+            .userId(1L)
+            .title("Dune")
+            .author("Frank Herbert")
+            .sourceRef("google:volume-1")
+            .build();
+        BookBusiness business = business(new EmptyBookSearchProvider(), mapper);
+
+        assertThatThrownBy(() -> business.saveBook(SaveBookRequest.builder()
+            .candidateId("  google:volume-1  ")
+            .title("Dune")
+            .author("Frank Herbert")
+            .build()))
+            .isInstanceOfSatisfying(ApiException.class, (exception) -> {
+                assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                assertThat(exception.getCode()).isEqualTo(ApiErrorCode.BOOK_ALREADY_EXISTS);
+            });
+
+        assertThat(mapper.inserted).isNull();
+        assertThat(mapper.duplicateLookupSourceRef).isEqualTo("google:volume-1");
+        assertThat(mapper.duplicateLookupIsbn).isNull();
     }
 
     @Test
@@ -649,18 +730,27 @@ class BookBusinessPersistenceTest {
     }
 
     private static class FakeBookMapper implements BookMapper {
+        @Override
+        public Boolean lockUser(long id) {
+            this.lockedOwnerId = id;
+            return ownerTestData;
+        }
         private BookRecord inserted;
         private BookRecord updated;
         private BookRecord enriched;
         private BookRecord duplicate;
+        private BookRecord sourceDuplicate;
         private BookRecord bookById;
         private Long deletedBookId;
         private int findByIdCalls;
         private int deleteRows = 1;
         private String duplicateLookupIsbn;
+        private String duplicateLookupSourceRef;
         protected String shelfStatusFilter;
         protected String shelfSort;
         private int insertRows = 1;
+        private Long lockedOwnerId;
+        private boolean ownerTestData = true;
 
         @Override
         public int insert(BookRecord record) {
@@ -673,6 +763,12 @@ class BookBusinessPersistenceTest {
         public BookRecord findDuplicateByIsbn(Long userId, String isbn) {
             this.duplicateLookupIsbn = isbn;
             return duplicate;
+        }
+
+        @Override
+        public BookRecord findDuplicateBySourceRef(Long userId, String sourceRef) {
+            this.duplicateLookupSourceRef = sourceRef;
+            return sourceDuplicate;
         }
 
         @Override

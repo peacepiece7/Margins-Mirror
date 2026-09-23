@@ -138,6 +138,7 @@ describe('authentication form boundaries', () => {
     render(<LoginHarness />);
 
     expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact');
+    expect(screen.getByRole('link', { name: 'Service Terms' })).toHaveAttribute('href', '/terms');
     expect(screen.getByTestId('login-fields-grid')).toHaveClass('gap-1');
     expect(document.querySelector('label[for="login-username"]')).toHaveTextContent('Username');
     expect(document.querySelector('label[for="login-password"]')).toHaveTextContent('Password');
@@ -187,6 +188,7 @@ describe('authentication form boundaries', () => {
 
     fireEvent.click(screen.getByTestId('register-privacy-consent'));
     expect(screen.getByTestId('consent-probe')).toHaveTextContent('true');
+    expect(screen.getByRole('link', { name: 'Service Terms' })).toHaveAttribute('href', '/terms');
 
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
     await waitFor(() =>

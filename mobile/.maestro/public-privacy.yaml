@@ -1,0 +1,51 @@
+appId: cloud.margins.mobile
+# BDD: PRIVACY-001, PROJ-034
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- scrollUntilVisible:
+    element:
+      text: "Privacy"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn: "Privacy"
+- assertVisible:
+    id: privacy-screen
+- assertVisible: "Version and effective date: 2026-07-27"
+- assertVisible: "1. Operator and contact"
+- scrollUntilVisible:
+    element:
+      text: "3. Processing and overseas transfer"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- assertVisible: "3. Processing and overseas transfer"
+- scrollUntilVisible:
+    element:
+      text: "5. Resignation, deletion, and retention"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- assertVisible: "5. Resignation, deletion, and retention"
+- scrollUntilVisible:
+    element:
+      text: "Policy history"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn: "Policy history"
+- assertVisible:
+    id: privacy-history-screen
+- assertVisible: "Effective 2026-07-27 · Initial publication"
+- assertVisible: "Full policy dated 2026-07-27"

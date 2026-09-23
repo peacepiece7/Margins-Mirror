@@ -15,7 +15,8 @@ public class AsyncConfig {
         ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
         executor.setCorePoolSize(2);
         executor.setMaxPoolSize(4);
-        executor.setQueueCapacity(100);
+        // Keep default queue delay well below the 120-second Book Knowledge claim lease.
+        executor.setQueueCapacity(4);
         executor.setThreadNamePrefix("book-knowledge-");
         executor.setWaitForTasksToCompleteOnShutdown(true);
         executor.setAwaitTerminationSeconds(10);

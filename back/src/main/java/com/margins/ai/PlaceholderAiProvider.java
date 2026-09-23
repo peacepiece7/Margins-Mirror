@@ -74,17 +74,13 @@ public class PlaceholderAiProvider implements AiProvider {
         GenerationLocale locale
     ) {
         int count = request.getCount() == null ? 3 : request.getCount();
-        String focus = request.getFocus() == null || request.getFocus().isBlank()
-            ? locale == GenerationLocale.KO ? "이번 독서" : "this reading"
-            : request.getFocus();
-
         List<QuestionDto> questions = locale == GenerationLocale.KO ? List.of(
             QuestionDto.builder()
                 .windowId(windowId)
                 .questionType("reflection")
                 .status("active")
                 .aiModel("placeholder")
-                .questionText(focus + "에서 어떤 장면이 이 책을 이해하는 방식을 바꾸었나요?")
+                .questionText("어떤 장면이 이 책을 이해하는 방식을 가장 크게 바꾸었나요?")
                 .build(),
             QuestionDto.builder()
                 .windowId(windowId)
@@ -103,7 +99,7 @@ public class PlaceholderAiProvider implements AiProvider {
         ) : List.of(
             QuestionDto.builder().windowId(windowId).questionType("reflection").status("active")
                 .aiModel("placeholder")
-                .questionText("Which scene in " + focus + " most changed how you understood the book?").build(),
+                .questionText("Which scene most changed how you understood the book?").build(),
             QuestionDto.builder().windowId(windowId).questionType("evidence").status("active")
                 .aiModel("placeholder")
                 .questionText("Which passage best supports your current interpretation?").build(),

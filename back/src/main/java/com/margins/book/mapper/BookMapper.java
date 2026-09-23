@@ -16,6 +16,9 @@ import org.apache.ibatis.annotations.Update;
 @Mapper
 public interface BookMapper {
 
+    @Select("SELECT is_test_data FROM users WHERE id=#{id} AND deleted_at IS NULL FOR UPDATE")
+    Boolean lockUser(long id);
+
     String BOOK_SELECT_COLUMNS = """
         id,
         user_id,
@@ -55,6 +58,8 @@ public interface BookMapper {
           cover_image_url,
           raw_metadata,
           reading_status,
+          status_started_at,
+          status_finished_at,
           is_test_data
         )
         VALUES (
@@ -72,6 +77,8 @@ public interface BookMapper {
           #{coverImageUrl},
           #{rawMetadata},
           COALESCE(#{readingStatus}, 'want_to_read'),
+          #{statusStartedAt},
+          #{statusFinishedAt},
           #{testData}
         )
         """)
@@ -91,6 +98,21 @@ public interface BookMapper {
     BookRecord findDuplicateByIsbn(
         @Param("userId") Long userId,
         @Param("isbn") String isbn
+    );
+
+    @Select("""
+        SELECT
+        """ + BOOK_SELECT_COLUMNS + """
+        FROM books
+        WHERE user_id = #{userId}
+          AND deleted_at IS NULL
+          AND source_ref = #{sourceRef}
+        ORDER BY updated_at DESC, id DESC
+        LIMIT 1
+        """)
+    BookRecord findDuplicateBySourceRef(
+        @Param("userId") Long userId,
+        @Param("sourceRef") String sourceRef
     );
 
     @Select("""

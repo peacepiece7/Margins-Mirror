@@ -1,0 +1,135 @@
+.ds-gallery {
+  width: min(100%, 76rem);
+  margin-inline: auto;
+  padding: 0 2rem;
+}
+.ds-masthead {
+  min-height: 5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-bottom: 1px solid rgb(var(--border));
+}
+.ds-masthead a {
+  color: rgb(var(--foreground));
+  text-decoration: none;
+}
+.ds-intro {
+  padding-block: 4rem;
+}
+.ds-eyebrow {
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+  margin-bottom: 1rem;
+}
+.ds-intro h1 {
+  font-size: clamp(2rem, 5vw, 3.5rem);
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.04em;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.ds-intro > p:not(.ds-eyebrow) {
+  margin-block: 1.5rem;
+  color: rgb(var(--muted-foreground));
+  line-height: 1.8;
+}
+.ds-index {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 2rem;
+  border-block: 1px solid rgb(var(--border));
+  padding-block: 0.5rem;
+}
+.ds-index a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  font-size: 0.875rem;
+  text-decoration: none;
+}
+.ds-section {
+  padding-block: 2.5rem;
+  scroll-margin-top: 1rem;
+  border-bottom: 1px solid rgb(var(--border));
+}
+.ds-section-heading {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.75rem 2rem;
+  margin-bottom: 1.5rem;
+}
+.ds-section-heading span {
+  min-width: 10rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+}
+.ds-section-heading h2 {
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+.ds-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5rem;
+}
+.ds-grid > * {
+  min-width: 0;
+}
+.ds-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--margins-control-gap);
+}
+.ds-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1rem;
+}
+.ds-swatch {
+  height: 6rem;
+  border: 1px solid rgb(var(--border));
+  border-radius: var(--radius);
+  margin-bottom: 0.75rem;
+}
+.ds-swatches strong,
+.ds-swatches code {
+  display: block;
+  font-size: 0.75rem;
+  overflow-wrap: anywhere;
+}
+.ds-swatches code {
+  color: rgb(var(--muted-foreground));
+  margin-top: 0.25rem;
+}
+.ds-gallery [data-slot='card-title'] {
+  font-size: 1rem;
+  line-height: 1.5;
+}
+.ds-footer {
+  padding-block: 2rem;
+  font-size: 0.75rem;
+  color: rgb(var(--muted-foreground));
+}
+@media (max-width: 767px) {
+  .ds-gallery {
+    padding-inline: 1rem;
+  }
+  .ds-intro {
+    padding-block: 2.5rem;
+  }
+  .ds-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .ds-swatches {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+  .ds-section {
+    padding-block: 2rem;
+  }
+}

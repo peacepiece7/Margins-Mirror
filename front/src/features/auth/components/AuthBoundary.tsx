@@ -544,16 +544,26 @@ export function AuthBoundary({ authenticated, publicRoot }: AuthBoundaryProps) {
           onSubmit={handleSubmit(submitLogin)}
           {...testAttr('login-form')}
         >
-          <div>
+          <div className="auth-form-heading">
             <div className="flex items-start justify-between gap-3">
-              <h1 className="font-display text-4xl font-semibold tracking-normal sm:text-5xl">
-                <Link to="/" {...testAttr('auth-home-link')}>
-                  Margins
-                </Link>
-              </h1>
+              <Link
+                className="auth-form-wordmark font-display"
+                to="/"
+                {...testAttr('auth-home-link')}
+              >
+                Margins
+              </Link>
               <LanguageToggle locale={locale} setLocale={setLocale} label={t('language')} />
             </div>
-            <p className="mt-3 text-sm leading-6 text-stone-600">{t('loginSubtitle')}</p>
+            <p className="auth-form-eyebrow">
+              {authMode === 'login' ? t('authLoginEyebrow') : t('authRegisterEyebrow')}
+            </p>
+            <h1 className="font-display text-4xl font-medium tracking-normal sm:text-5xl">
+              {authMode === 'login' ? t('authLoginHeadline') : t('authRegisterHeadline')}
+            </h1>
+            <p className="mt-3 text-sm leading-6 text-stone-600">
+              {authMode === 'login' ? t('loginSubtitle') : t('registerSubtitle')}
+            </p>
           </div>
           <Tabs
             className="blueprint-auth-tabs"
@@ -591,11 +601,7 @@ export function AuthBoundary({ authenticated, publicRoot }: AuthBoundaryProps) {
             </TabsList>
           </Tabs>
           {error && (
-            <Alert
-              className="border-red-300 bg-red-50 text-red-800"
-              variant="destructive"
-              {...testAttr('login-error')}
-            >
+            <Alert variant="destructive" {...testAttr('login-error')}>
               <AlertDescription>{error}</AlertDescription>
             </Alert>
           )}
@@ -636,7 +642,6 @@ export function AuthBoundary({ authenticated, publicRoot }: AuthBoundaryProps) {
             />
           )}
           <Button
-            className="rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium text-stone-800 hover:border-stone-700 hover:bg-stone-50 hover:text-stone-950 disabled:opacity-50"
             disabled={isSubmitting}
             onClick={() => {
               window.location.href = authApi.googleOAuthStartUrl();

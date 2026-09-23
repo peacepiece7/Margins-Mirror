@@ -142,7 +142,7 @@ describe('authenticated route composition', () => {
     renderGate('/login');
 
     expect(screen.getByTestId('login-form')).toBeVisible();
-    expect(screen.getByTestId('google-login-submit')).toHaveClass('bg-white', 'text-stone-800');
+    expect(screen.getByTestId('google-login-submit')).toHaveAttribute('data-variant', 'outline');
     expect(screen.getByTestId('google-login-submit').querySelector('svg')).toBeInTheDocument();
     expect(screen.getByRole('tablist')).toHaveClass('min-h-11', 'gap-1');
     expect(screen.getByTestId('auth-mode-login')).toHaveClass(
@@ -278,11 +278,9 @@ describe('authenticated route composition', () => {
     });
     fireEvent.click(screen.getByTestId('login-submit'));
 
-    expect(await screen.findByTestId('login-error')).toHaveClass(
-      'border-red-300',
-      'bg-red-50',
-      'text-red-800',
-    );
+    const error = await screen.findByTestId('login-error');
+    expect(error).toHaveAttribute('data-slot', 'alert');
+    expect(error).toHaveClass('text-destructive');
   });
 
   it('renders duplicate-check failures once in the field error area', async () => {

@@ -116,6 +116,34 @@ describe('MemoryCardApp', () => {
     expect(screen.getByTestId('memory-card-study-memorized-toggle')).toBeChecked();
   });
 
+  it('renders the study index and truthful summary while cycling cards', async () => {
+    const twoCardGroup = { ...group, cardCount: 2, cards: [card, secondCard] };
+    vi.mocked(memoryCardsApi.groups).mockResolvedValue({ groups: [twoCardGroup] });
+    vi.mocked(memoryCardsApi.group).mockResolvedValue(twoCardGroup);
+
+    renderMemoryCard('/memory-card/groups/7/study');
+
+    expect(await screen.findByTestId('memory-card-study-layout')).toBeVisible();
+    expect(screen.getByTestId('memory-card-group-index')).toContainElement(
+      screen.getByRole('button', { name: /Fantasy words/ }),
+    );
+    expect(screen.getByRole('button', { name: /Fantasy words/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('memory-card-study-summary')).toHaveTextContent('Total cards2');
+    expect(screen.getByTestId('memory-card-study-summary')).toHaveTextContent('Remaining2');
+    expect(screen.getByTestId('memory-card-study-card')).toHaveTextContent('Card 1 of 2');
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    expect(screen.getByText('지팡이')).toBeVisible();
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByText('cloak')).toBeVisible();
+    expect(screen.getByText('The meaning is hidden.')).toBeVisible();
+    fireEvent.click(screen.getByTestId('memory-card-study-previous'));
+    expect(screen.getByText('wand')).toBeVisible();
+  });
+
   it('does not announce the cached group refetch as foreground processing', async () => {
     let groupCallCount = 0;
     let resolveRefetch!: (value: MemoryCardGroup) => void;

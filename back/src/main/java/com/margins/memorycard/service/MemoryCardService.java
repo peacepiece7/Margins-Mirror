@@ -22,8 +22,12 @@ public class MemoryCardService {
     private final MembershipService membershipService;
 
     public MemoryCardGroupListResponse groups() {
+        return groups(null);
+    }
+
+    public MemoryCardGroupListResponse groups(Long bookId) {
         membershipService.requirePremium();
-        return memoryCardBusiness.groups();
+        return memoryCardBusiness.groups(bookId);
     }
 
     public MemoryCardGroupDto group(Long groupId) {

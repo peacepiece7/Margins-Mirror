@@ -1,6 +1,7 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { publicReviewKeys, sessionKeys } from '@/lib/query-keys';
+import { writeReadingSessionTimeline } from '@/lib/reading-session-cache';
 
 import { reflectionsApi, type SessionInsightInput } from './api';
 
@@ -41,8 +42,7 @@ export function useGenerateQuestionsForBookMutation(bookId: number) {
       let sessionId = existingSessionId;
       let windowId: number | undefined;
       if (!sessionId) {
-        sessionId = (await reflectionsApi.readingSession(bookId))?.sessionId;
-        if (!sessionId) throw new Error('Reading session is not available yet');
+        sessionId = await ensureReflectionSession(bookId);
         const window = await reflectionsApi.createQuestionWindow(sessionId);
         windowId = window.windowId;
       } else {
@@ -57,8 +57,14 @@ export function useGenerateQuestionsForBookMutation(bookId: number) {
       await reflectionsApi.generateQuestions(windowId, 3);
       return sessionId;
     },
-    onSuccess: (sessionId) =>
-      queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
+    onSuccess: async (sessionId, existingSessionId) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
+        ...(!existingSessionId
+          ? [queryClient.invalidateQueries({ queryKey: sessionKeys.book(bookId) })]
+          : []),
+      ]);
+    },
   });
 }
 
@@ -76,18 +82,7 @@ export function useDeleteQuestionMutation(sessionId?: number) {
 
 async function ensureReflectionSession(bookId: number, existingSessionId?: number) {
   if (existingSessionId) return existingSessionId;
-  const sessionId = (await reflectionsApi.readingSession(bookId))?.sessionId;
-  if (!sessionId) throw new Error('Reading session is not available yet');
-  return sessionId;
-}
-
-export function useEnsureReflectionSessionMutation(bookId: number) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (existingSessionId?: number) => ensureReflectionSession(bookId, existingSessionId),
-    onSuccess: (sessionId) =>
-      queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) }),
-  });
+  return (await reflectionsApi.ensureReadingSession(bookId)).sessionId;
 }
 
 export function useSaveReflectionMutation(
@@ -99,18 +94,21 @@ export function useSaveReflectionMutation(
   return useMutation({
     mutationFn: async (insight: SessionInsightInput) => {
       const sessionId = await ensureReflectionSession(bookId, existingSessionId);
-      if (insightId) {
-        await reflectionsApi.updateInsight(sessionId, insightId, insight);
-      } else {
-        await reflectionsApi.createInsight(sessionId, insight);
-      }
-      return sessionId;
+      const timeline = insightId
+        ? await reflectionsApi.updateInsight(sessionId, insightId, insight)
+        : await reflectionsApi.createInsight(sessionId, insight);
+      return { sessionId, timeline };
     },
-    onSuccess: async (sessionId, insight) => {
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
-      if (insight.visibility === 'PUBLIC') {
-        await queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() });
-      }
+    onSuccess: async ({ sessionId, timeline }, insight) => {
+      await writeReadingSessionTimeline(queryClient, timeline);
+      await Promise.all([
+        ...(!existingSessionId
+          ? [queryClient.invalidateQueries({ queryKey: sessionKeys.book(bookId) })]
+          : []),
+        ...(insight.visibility === 'PUBLIC'
+          ? [queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() })]
+          : []),
+      ]);
     },
   });
 }
@@ -157,35 +155,54 @@ export function useGenerateQuestionsMutation(sessionId: number) {
 }
 
 export function useSaveAnswerMutation(sessionId: number) {
-  const invalidate = useInvalidateTimeline();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ questionId, content }: { questionId: number; content: string }) =>
       reflectionsApi.saveAnswer(questionId, content),
-    onSuccess: () => invalidate(sessionId),
+    onSuccess: async (timeline) => {
+      if (timeline.sessionId === sessionId) {
+        await writeReadingSessionTimeline(queryClient, timeline);
+      } else {
+        await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
+      }
+    },
   });
 }
 
 export function useCreateInsightMutation(sessionId: number) {
-  const invalidate = useInvalidateTimeline();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (insight: SessionInsightInput) => reflectionsApi.createInsight(sessionId, insight),
-    onSuccess: (_, input) => invalidate(sessionId, input.visibility === 'PUBLIC'),
+    onSuccess: async (timeline, input) => {
+      await writeReadingSessionTimeline(queryClient, timeline);
+      if (input.visibility === 'PUBLIC') {
+        await queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() });
+      }
+    },
   });
 }
 
 export function useUpdateInsightMutation(sessionId: number) {
-  const invalidate = useInvalidateTimeline();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ insightId, insight }: { insightId: number; insight: SessionInsightInput }) =>
       reflectionsApi.updateInsight(sessionId, insightId, insight),
-    onSuccess: (_, input) => invalidate(sessionId, input.insight.visibility === 'PUBLIC'),
+    onSuccess: async (timeline, input) => {
+      await writeReadingSessionTimeline(queryClient, timeline);
+      if (input.insight.visibility === 'PUBLIC') {
+        await queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() });
+      }
+    },
   });
 }
 
 export function useDeleteInsightMutation(sessionId: number) {
-  const invalidate = useInvalidateTimeline();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (insightId: number) => reflectionsApi.deleteInsight(sessionId, insightId),
-    onSuccess: () => invalidate(sessionId, true),
+    onSuccess: async (timeline) => {
+      await writeReadingSessionTimeline(queryClient, timeline);
+      await queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() });
+    },
   });
 }

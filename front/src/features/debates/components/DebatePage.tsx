@@ -220,7 +220,7 @@ export function DebatePage({
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
-                className="rounded border border-stone-950 px-4 py-2 text-sm font-medium disabled:opacity-50"
+                className="px-4 py-2"
                 disabled={
                   currentWindow?.windowType !== 'debate' ||
                   !selectedDebatePersonas.length ||
@@ -229,12 +229,13 @@ export function DebatePage({
                 }
                 onClick={requestAllPersonaReplies}
                 type="button"
+                variant="outline"
                 {...testAttr('debate-all-submit')}
               >
                 {t('debateAllReply')}
               </Button>
               <Button
-                className="rounded bg-stone-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="px-4 py-2"
                 disabled={
                   currentWindow?.windowType !== 'debate' ||
                   !selectedDebatePersonas.length ||
@@ -242,6 +243,7 @@ export function DebatePage({
                   !(debateDraft.trim() || debateTopic.trim())
                 }
                 type="submit"
+                variant="default"
                 {...testAttr('debate-session-submit')}
               >
                 {t('debateSpeakerReply')}

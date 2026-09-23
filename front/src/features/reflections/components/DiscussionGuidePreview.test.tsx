@@ -1,12 +1,17 @@
 import { cleanup, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { I18nProvider } from '@/lib/i18n';
 import type { DiscussionGuideProjectionResponse } from '@/types/api/reflection-loop';
 
 import { DiscussionGuidePreview } from './DiscussionGuidePreview';
 
 describe('DiscussionGuidePreview', () => {
-  afterEach(cleanup);
+  beforeEach(() => window.localStorage.setItem('margins.locale', 'ko'));
+  afterEach(() => {
+    cleanup();
+    window.localStorage.removeItem('margins.locale');
+  });
 
   it('keeps projection controls visible but hides persisted preview during editing', () => {
     renderPreview({
@@ -39,15 +44,17 @@ describe('DiscussionGuidePreview', () => {
     expect(participantPanel).toHaveAttribute('tabindex', '-1');
 
     rerender(
-      <DiscussionGuidePreview
-        draftActive={false}
-        exportPending={false}
-        onExport={vi.fn()}
-        onProjectionTypeChange={vi.fn()}
-        projection={undefined}
-        projectionError
-        projectionType="FACILITATOR"
-      />,
+      <I18nProvider>
+        <DiscussionGuidePreview
+          draftActive={false}
+          exportPending={false}
+          onExport={vi.fn()}
+          onProjectionTypeChange={vi.fn()}
+          projection={undefined}
+          projectionError
+          projectionType="FACILITATOR"
+        />
+      </I18nProvider>,
     );
     expect(screen.getByRole('status')).toHaveTextContent('미리보기를 불러오지 못했습니다');
   });
@@ -61,15 +68,17 @@ function renderPreview(options: {
   const projection = 'projection' in options ? options.projection : participantProjection();
 
   return render(
-    <DiscussionGuidePreview
-      draftActive={draftActive}
-      exportPending={false}
-      onExport={vi.fn()}
-      onProjectionTypeChange={vi.fn()}
-      projection={projection}
-      projectionError={false}
-      projectionType={projection?.projection ?? 'FACILITATOR'}
-    />,
+    <I18nProvider>
+      <DiscussionGuidePreview
+        draftActive={draftActive}
+        exportPending={false}
+        onExport={vi.fn()}
+        onProjectionTypeChange={vi.fn()}
+        projection={projection}
+        projectionError={false}
+        projectionType={projection?.projection ?? 'FACILITATOR'}
+      />
+    </I18nProvider>,
   );
 }
 

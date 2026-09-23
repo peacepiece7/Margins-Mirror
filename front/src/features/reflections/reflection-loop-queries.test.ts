@@ -3,7 +3,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { reflectionLoopKeys, sessionKeys } from '@/lib/query-keys';
 import type { ReadingSessionTimelineResponse } from '@/types/api/session';
@@ -14,17 +14,86 @@ import {
   useCreateDiscussionRunMutation,
   mergeGuidedDiscussionMessages,
   useGuidedDiscussionTurnMutation,
+  useSavePrimaryReflectionMutation,
 } from './reflection-loop-queries';
 
 vi.mock('./api', () => ({
   reflectionsApi: {
     completeRun: vi.fn(),
+    createReflection: vi.fn(),
     createRun: vi.fn(),
+    ensureReadingSession: vi.fn(),
     turn: vi.fn(),
   },
 }));
 
-describe('mergeGuidedDiscussionMessages', () => {
+describe('reflection loop queries', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('ensures a missing reading session once when the reader saves a Reflection', async () => {
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries');
+    vi.mocked(reflectionsApi.ensureReadingSession).mockResolvedValue({
+      sessionId: 3,
+      title: 'Dune reflection',
+    });
+    vi.mocked(reflectionsApi.createReflection).mockResolvedValue({
+      currentRevision: {
+        content: '처음 남기는 생각',
+        revisionId: 21,
+        revisionSource: 'INITIAL',
+        version: 1,
+      },
+      reflectionId: 11,
+      revisions: [],
+      sessionId: 3,
+      visibility: 'PRIVATE',
+    });
+
+    function wrapper({ children }: { children: ReactNode }) {
+      return createElement(QueryClientProvider, { client: queryClient }, children);
+    }
+    const { result } = renderHook(() => useSavePrimaryReflectionMutation(7, undefined, undefined), {
+      wrapper,
+    });
+
+    await act(() =>
+      result.current.mutateAsync({ content: '처음 남기는 생각', visibility: 'PRIVATE' }),
+    );
+
+    expect(reflectionsApi.ensureReadingSession).toHaveBeenCalledOnce();
+    expect(reflectionsApi.ensureReadingSession).toHaveBeenCalledWith(7);
+    expect(reflectionsApi.createReflection).toHaveBeenCalledWith(3, {
+      content: '처음 남기는 생각',
+      visibility: 'PRIVATE',
+    });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: sessionKeys.book(7) });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: sessionKeys.timeline(3) });
+  });
+
+  it('does not retry a failed reading-session ensure inside one save action', async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
+    });
+    vi.mocked(reflectionsApi.ensureReadingSession).mockRejectedValueOnce(
+      new Error('service unavailable'),
+    );
+
+    function wrapper({ children }: { children: ReactNode }) {
+      return createElement(QueryClientProvider, { client: queryClient }, children);
+    }
+    const { result } = renderHook(() => useSavePrimaryReflectionMutation(7, undefined, undefined), {
+      wrapper,
+    });
+
+    await expect(
+      act(() => result.current.mutateAsync({ content: '처음 남기는 생각', visibility: 'PRIVATE' })),
+    ).rejects.toThrow('service unavailable');
+
+    expect(reflectionsApi.ensureReadingSession).toHaveBeenCalledOnce();
+    expect(reflectionsApi.createReflection).not.toHaveBeenCalled();
+  });
+
   it('appends new turn messages without duplicating persisted history', () => {
     const timeline = {
       sessionId: 3,

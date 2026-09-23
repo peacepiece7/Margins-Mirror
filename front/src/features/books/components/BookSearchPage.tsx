@@ -27,8 +27,8 @@ export function BookSearchPage({
 }: BookSearchPageProps) {
   const { t } = useI18n();
   return (
-    <section className="grid gap-5" {...testAttr('book-search-page')}>
-      <Card className="rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_18px_50px_rgba(23,23,23,0.06)] ring-0 sm:p-5">
+    <section className="web-discover-page grid gap-5" {...testAttr('book-search-page')}>
+      <Card className="web-discover-search rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_18px_50px_rgba(23,23,23,0.06)] ring-0 sm:p-5">
         <CardContent className="p-0">
           <h2 className="font-display text-3xl font-semibold tracking-normal">
             {t('searchHeading')}
@@ -50,7 +50,7 @@ export function BookSearchPage({
       />
       {(candidates.length > 0 || loadingMore) && (
         <div
-          className="flex min-h-10 items-center justify-center text-sm text-stone-500"
+          className="web-discover-load-more flex min-h-10 items-center justify-center text-sm text-stone-500"
           ref={loadMoreRef}
           {...testAttr('book-candidate-load-more')}
         >

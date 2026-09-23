@@ -13,12 +13,12 @@ async function login(page: Page) {
   await page.getByTestId('login-submit').click();
   await expect(page.getByTestId('book-list-page')).toBeVisible();
   await expect(page).toHaveURL(/\/book\/library$/);
-  await page.getByTestId('portal-nav-book-search').click();
+  await page.getByTestId('nav-discover').click();
   await expect(page.getByTestId('reading-portal')).toBeVisible();
 }
 
 async function addManualBook(page: Page, title: string, author: string) {
-  await page.getByTestId('portal-nav-book-search').click();
+  await page.getByTestId('nav-discover').click();
   await expect(page).toHaveURL(/\/book\/discover$/);
   await expect(page.getByTestId('book-search-page')).toBeVisible();
   await page.getByTestId('manual-book-title-input').fill(title);
@@ -32,7 +32,7 @@ async function addManualBook(page: Page, title: string, author: string) {
     ),
     page.getByTestId('manual-book-submit').click(),
   ]);
-  await page.getByTestId('portal-nav-book-list').click();
+  await page.getByTestId('nav-margins').click();
   await expect(page.getByTestId('book-list-page')).toBeVisible();
 }
 
@@ -80,11 +80,11 @@ test('filters, sorts, and keeps the selected book visible across shelf views', a
   await Promise.all([
     page.waitForResponse(
       (response) =>
-        response.url().includes('/api/books?') &&
+        response.url().includes('/api/library/threads?') &&
         response.url().includes('status=reading') &&
         response.request().method() === 'GET',
     ),
-    page.getByTestId('book-shelf-filter').selectOption('reading'),
+    page.getByTestId('book-shelf-filter-reading').click(),
   ]);
   // The local E2E database may contain non-test books that the reset endpoint must preserve.
   await expect(page.getByTestId('book-list-page')).toContainText('Alpha Shelf Book');
@@ -101,21 +101,25 @@ test('filters, sorts, and keeps the selected book visible across shelf views', a
 
   await alphaRow.getByTestId('saved-book-detail-link').click();
   await expect(page.getByTestId('book-detail-page')).toBeVisible();
-  await page.getByTestId('portal-nav-book-list').click();
+  await page.getByTestId('nav-margins').click();
   await expect(page).toHaveURL(/\/book\/library$/);
-  await expect(page.getByTestId('book-shelf-filter')).toHaveValue('reading');
-  await expect(page.getByTestId('current-book-summary')).toContainText('Alpha Shelf Book');
+  await expect(page.getByTestId('book-shelf-filter-reading')).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.getByTestId('library-activity-rail')).toContainText('Recent activity');
 
   await Promise.all([
     page.waitForResponse(
-      (response) => response.url().includes('/api/books') && response.request().method() === 'GET',
+      (response) =>
+        response.url().includes('/api/library/threads') && response.request().method() === 'GET',
     ),
-    page.getByTestId('book-shelf-filter').selectOption('all'),
+    page.getByTestId('book-shelf-filter-all').click(),
   ]);
   await Promise.all([
     page.waitForResponse(
       (response) =>
-        response.url().includes('/api/books') &&
+        response.url().includes('/api/library/threads') &&
         response.url().includes('sort=title_asc') &&
         response.request().method() === 'GET',
     ),
@@ -128,4 +132,37 @@ test('filters, sorts, and keeps the selected book visible across shelf views', a
       return visibleTitles[0] || '';
     })
     .toContain('Alpha Shelf Book');
+
+  for (const width of [1440, 1180, 1179, 1101, 1024, 901, 900, 768, 390]) {
+    await page.setViewportSize({ height: 900, width });
+    const metrics = await page.evaluate(() => {
+      const shell = document.querySelector<HTMLElement>('[data-testid="library-shell"]');
+      const row = document.querySelector<HTMLElement>('[data-testid="saved-book-row"]');
+      const main = document.querySelector<HTMLElement>('.web-library-main');
+      const activityRail = document.querySelector<HTMLElement>(
+        '[data-testid="library-activity-rail"]',
+      );
+      const activity = document.querySelector<HTMLElement>(
+        '[data-testid="library-recent-activity"]',
+      );
+      return {
+        activityMinHeight: activity ? getComputedStyle(activity).minHeight : '',
+        activityScrollbarGutter: activity ? getComputedStyle(activity).scrollbarGutter : '',
+        activityTop: activityRail?.getBoundingClientRect().top ?? 0,
+        documentWidth: document.documentElement.scrollWidth,
+        mainTop: main?.getBoundingClientRect().top ?? 0,
+        rowColumns: row ? getComputedStyle(row).gridTemplateColumns.split(/\s+/).length : 0,
+        shellColumns: shell ? getComputedStyle(shell).gridTemplateColumns.split(/\s+/).length : 0,
+        viewportWidth: window.innerWidth,
+      };
+    });
+
+    expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.shellColumns).toBe(width >= 1180 ? 3 : width > 900 ? 2 : 1);
+    expect(metrics.rowColumns).toBe(width > 900 ? 3 : 1);
+    expect(metrics.activityMinHeight).toBe('0px');
+    expect(metrics.activityScrollbarGutter).toContain('stable');
+    if (width < 1180) expect(metrics.mainTop).toBeLessThan(metrics.activityTop);
+    await expect(page.getByTestId('library-activity-rail')).toBeVisible();
+  }
 });

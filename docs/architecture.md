@@ -1,6 +1,6 @@
 # Architecture
 
-Margins는 `React client -> Spring Boot API -> MySQL` 흐름을 기본 경계로 사용합니다.
+Margins는 `React web / Expo mobile -> Spring Boot API -> MySQL` 흐름을 기본 경계로 사용합니다.
 
 ## Frontend
 
@@ -9,6 +9,10 @@ Margins는 `React client -> Spring Boot API -> MySQL` 흐름을 기본 경계로
 ## Backend
 
 HTTP controller, application service, business rule과 MyBatis mapper를 분리합니다. JWT 인증과 refresh cookie, 개인정보 동의, 계정 lifecycle, 독서 session, reflection과 AI 토론 기능이 각 domain 경계 안에서 동작합니다.
+
+## Mobile
+
+`mobile/src/shared`는 API transport, 메모리 access token과 SecureStore refresh token을 소유합니다. `mobile/src/features`는 화면과 기능별 query를, `mobile/src/app`은 Expo Router 경로와 인증 경계를 조합합니다. 공개 Terms 경로는 검토된 문서가 게시될 때까지 수락 불가능한 준비 화면을 표시합니다.
 
 ## Persistence
 
@@ -20,4 +24,4 @@ AI provider 호출은 backend adapter 뒤에 두고, 사용자 입력과 생성 
 
 ## Security boundary
 
-실제 API key, OAuth secret, JWT secret과 데이터베이스 credential은 저장소 밖의 환경변수로 주입합니다. 공개본에는 운영 host, SSH 설정, 운영 runbook과 배포 workflow가 포함되지 않습니다.
+실제 API key, OAuth secret, JWT secret과 데이터베이스 credential은 저장소 밖의 환경변수로 주입합니다. 공개본에는 운영 host, SSH 설정, 운영 runbook과 배포 workflow가 포함되지 않습니다. 모바일의 `EXPO_PUBLIC_*` 값에는 공개 origin과 검증된 redirect URI만 사용하며 secret을 넣지 않습니다.

@@ -19,7 +19,7 @@ describe('semantic UI adapters', () => {
     );
 
     expect(screen.getByLabelText('Warning card')).toHaveAttribute('data-tone', 'warning');
-    expect(screen.getByRole('alert')).toHaveClass('bg-emerald-50');
+    expect(screen.getByRole('alert')).toHaveClass('bg-success-surface');
     expect(screen.getByText('New')).toHaveAttribute('data-variant', 'info');
   });
 

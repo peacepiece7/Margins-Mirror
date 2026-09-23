@@ -292,6 +292,47 @@ public class ReflectionInterviewBusiness {
         return response(requireInterview(interviewId));
     }
 
+    public ReflectionInterviewResponse completeInterview(Long interviewId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            reflectionBusiness.requireEnabled();
+            ReflectionInterviewRecord interview = requireInterviewForUpdate(interviewId);
+            if (!"ACTIVE".equals(interview.getStatus())
+                || interview.getGeneratedCount() < MAXIMUM_QUESTIONS
+                || interview.getAnsweredCount() >= MINIMUM_ANSWERS) {
+                throw new ApiException(
+                    ApiErrorCode.COMMON_CONFLICT,
+                    "Interview cannot complete from this state"
+                );
+            }
+            QuestionRecord current = reflectionInterviewMapper.findCurrentInterviewQuestion(
+                interviewId,
+                currentUserId()
+            );
+            if (current != null) {
+                requireChanged(
+                    reflectionInterviewMapper.resolveInterviewQuestion(
+                        interviewId,
+                        current.getId(),
+                        currentUserId(),
+                        "skipped",
+                        "SKIP"
+                    ),
+                    "Interview question could not be completed"
+                );
+                if (interview.getAnsweredCount() + interview.getSkippedCount()
+                    < interview.getGeneratedCount()) {
+                    interview.setSkippedCount(interview.getSkippedCount() + 1);
+                }
+            }
+            interview.setStatus("COMPLETED");
+            requireChanged(
+                reflectionInterviewMapper.updateInterview(interview),
+                "Interview could not be completed"
+            );
+        });
+        return response(requireInterview(interviewId));
+    }
+
     public ReflectionInterviewRecord requireInterview(Long interviewId) {
         ReflectionInterviewRecord interview = reflectionInterviewMapper.findOwnedInterview(
             interviewId,

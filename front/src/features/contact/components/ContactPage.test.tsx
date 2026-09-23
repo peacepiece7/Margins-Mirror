@@ -59,6 +59,21 @@ describe('ContactPage', () => {
     expect(screen.getByText(/Do not include passwords/)).toBeVisible();
   });
 
+  it('uses the shared form controls with explicit accessible field relationships', async () => {
+    renderPage();
+
+    expect(screen.getByLabelText('Reply email')).toHaveAttribute('data-slot', 'input');
+    expect(screen.getByLabelText('Category')).toHaveAttribute('data-slot', 'native-select');
+    expect(screen.getByLabelText('Category')).toHaveClass('h-11', 'md:h-8');
+    expect(screen.getByLabelText('Subject')).toHaveAttribute('data-slot', 'input');
+    expect(screen.getByLabelText('Message')).toHaveAttribute('data-slot', 'textarea');
+
+    fireEvent.click(screen.getByTestId('contact-submit'));
+    const emailError = await screen.findByText('Enter an email address for the reply.');
+    expect(screen.getByLabelText('Reply email')).toHaveAttribute('aria-describedby', emailError.id);
+    expect(emailError).toHaveAttribute('role', 'alert');
+  });
+
   it('prefills but does not lock the authenticated account email', async () => {
     vi.mocked(readAuthSession).mockReturnValue({
       userId: 1,
@@ -117,6 +132,28 @@ describe('ContactPage', () => {
     expect(screen.getByLabelText('Category')).toHaveValue('BUG_REPORT');
     expect(screen.getByLabelText('Subject')).toHaveValue('');
     expect(screen.getByLabelText('Message')).toHaveValue('');
+  });
+
+  it('relocalizes submitted feedback while preserving the inquiry reference', async () => {
+    vi.mocked(contactApi.submit).mockResolvedValue({
+      inquiryId: 2,
+      status: 'OPEN',
+      createdAt: '2026-08-24T00:00:00Z',
+    });
+    renderPage();
+    fillValidForm();
+    fireEvent.click(screen.getByTestId('contact-submit'));
+
+    expect(await screen.findByTestId('contact-success')).toHaveTextContent(
+      'Your inquiry was sent. Reference #2',
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'KO' }));
+    expect(screen.getByTestId('contact-success')).toHaveTextContent(
+      '문의가 전송되었습니다. 접수 번호 #2',
+    );
+    expect(screen.getByTestId('contact-success')).not.toHaveTextContent(
+      'Your inquiry was sent. Reference',
+    );
   });
 
   it('keeps every entry and localizes provider failure feedback', async () => {

@@ -47,7 +47,11 @@ export const reflectionsApi = {
     return getJson(`/api/books/${bookId}/reading-session`);
   },
 
-  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse | null> {
+  ensureReadingSession(bookId: number): Promise<BookReadingSessionResponse> {
+    return putJson(`/api/books/${bookId}/reading-session`, {});
+  },
+
+  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse> {
     return getJson(`/api/reading-sessions/${sessionId}`);
   },
 

@@ -1,3 +1,5 @@
+import type { LibraryLoopStage } from '@/types/api/book';
+
 export type BookReadingStatus = 'want_to_read' | 'reading' | 'read' | 'dnf';
 
 export type BookShelfStatusFilter = 'all' | BookReadingStatus;
@@ -18,6 +20,7 @@ export type MarginsPage =
 
 export interface BookShelfQuery {
   status?: BookShelfStatusFilter;
+  stage?: LibraryLoopStage;
   sort?: BookShelfSort;
 }
 

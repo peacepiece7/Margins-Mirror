@@ -1,6 +1,7 @@
 package com.margins;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.tuple;
 
 import com.margins.auth.mapper.AuthEmailVerificationMapper;
 import com.margins.auth.mapper.UserMapper;
@@ -27,8 +28,10 @@ import com.margins.testsupport.IntegrationFixtureSupport;
 import com.margins.testsupport.IntegrationFixtureSupport.SessionGraph;
 import com.margins.testsupport.IntegrationSchemaSupport;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.sql.Statement;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -171,6 +174,7 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
         void findActiveExcludesSoftDeletedAndInactivePersonas() throws Exception {
             PersonaRecord active = samplePersona("psychologist", "Psychologist");
             personaMapper.insert(active);
+            markPersonaShared(active.getId());
 
             try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement()) {
@@ -181,6 +185,7 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
 
             PersonaRecord inactive = samplePersona("inactive-persona", "Inactive");
             personaMapper.insert(inactive);
+            markPersonaShared(inactive.getId());
             try (Connection connection = dataSource.getConnection();
                 Statement statement = connection.createStatement()) {
                 statement.execute(
@@ -203,8 +208,11 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
         }
 
         @Test
-        void insertPersistsRawMetadataAndFindByIdForUserReturnsAliases() {
+        void insertPersistsRawMetadataShelfStateAndFindByIdForUserReturnsAliases() {
             BookRecord inserted = sampleBook("The Left Hand of Darkness", "Ursula K. Le Guin");
+            LocalDateTime statusStartedAt = LocalDateTime.of(2026, 8, 31, 9, 15, 30);
+            inserted.setReadingStatus(BookReadingStatus.READING);
+            inserted.setStatusStartedAt(statusStartedAt);
 
             bookMapper.insert(inserted);
 
@@ -215,7 +223,9 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
             assertThat(found.getLanguageCode()).isEqualTo("en");
             assertThat(found.getCoverImageUrl()).isEqualTo("https://example.com/cover.jpg");
             assertThat(found.getRawMetadata()).contains("integration");
-            assertThat(found.getReadingStatus()).isEqualTo(BookReadingStatus.WANT_TO_READ);
+            assertThat(found.getReadingStatus()).isEqualTo(BookReadingStatus.READING);
+            assertThat(found.getStatusStartedAt()).isEqualTo(statusStartedAt);
+            assertThat(found.getStatusFinishedAt()).isNull();
             assertThat(found.isTestData()).isTrue();
         }
 
@@ -226,6 +236,19 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
             bookMapper.insert(inserted);
 
             BookRecord duplicate = bookMapper.findDuplicateByIsbn(USER_ID, "9780679722762");
+
+            assertThat(duplicate).isNotNull();
+            assertThat(duplicate.getTitle()).isEqualTo("Beloved");
+        }
+
+        @Test
+        void findDuplicateMatchesUserAndSourceReference() {
+            BookRecord inserted = sampleBook("Beloved", "Toni Morrison");
+            inserted.setIsbn(null);
+            inserted.setSourceRef("google:volume-1");
+            bookMapper.insert(inserted);
+
+            BookRecord duplicate = bookMapper.findDuplicateBySourceRef(USER_ID, "google:volume-1");
 
             assertThat(duplicate).isNotNull();
             assertThat(duplicate.getTitle()).isEqualTo("Beloved");
@@ -321,6 +344,12 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
 
             assertThat(sessionWindowPersonaMapper.findPersonaIds(graph.windowId()))
                 .containsExactly(second.getId(), first.getId());
+            assertThat(sessionWindowPersonaMapper.findByWindowIds(List.of(graph.windowId())))
+                .extracting("windowId", "personaId", "selectionOrder")
+                .containsExactly(
+                    tuple(graph.windowId(), second.getId(), 0),
+                    tuple(graph.windowId(), first.getId(), 1)
+                );
         }
     }
 
@@ -336,7 +365,9 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
         }
 
         @Test
-        void findFirstByBookReturnsTheLatestOwnedSessionLocator() {
+        void findLatestCreatedByBookReturnsTheLatestOwnedSessionLocator() {
+            assertThat(readingSessionMapper.findCurrentByBookIdAndUserId(graph.bookId(), graph.userId()).getId())
+                .isEqualTo(graph.sessionId());
             ReadingSessionRecord latest = ReadingSessionRecord.builder()
                 .userId(graph.userId())
                 .bookId(graph.bookId())
@@ -345,14 +376,24 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
                 .build();
             readingSessionMapper.insert(latest);
 
-            ReadingSessionRecord found = readingSessionMapper.findFirstByBookIdAndUserId(
+            ReadingSessionRecord found = readingSessionMapper.findLatestCreatedByBookIdAndUserId(
                 graph.bookId(),
                 graph.userId()
             );
 
             assertThat(found.getId()).isEqualTo(latest.getId());
             assertThat(found.getTitle()).isEqualTo("Latest reflection");
-            assertThat(readingSessionMapper.findFirstByBookIdAndUserId(graph.bookId(), 999L)).isNull();
+            assertThat(readingSessionMapper.findCurrentByBookIdAndUserId(graph.bookId(), graph.userId()).getId())
+                .isEqualTo(graph.sessionId());
+            assertThat(readingSessionMapper.updateCurrentForBook(graph.bookId(), graph.userId(), latest.getId()))
+                .isEqualTo(1);
+            assertThat(readingSessionMapper.findCurrentByBookIdAndUserId(graph.bookId(), graph.userId()).getId())
+                .isEqualTo(latest.getId());
+            assertThat(readingSessionMapper.updateCurrentForBook(graph.bookId(), graph.userId(), null))
+                .isEqualTo(1);
+            assertThat(readingSessionMapper.findCurrentByBookIdAndUserId(graph.bookId(), graph.userId()))
+                .isNull();
+            assertThat(readingSessionMapper.findLatestCreatedByBookIdAndUserId(graph.bookId(), 999L)).isNull();
         }
     }
 
@@ -439,6 +480,27 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
                 .singleElement()
                 .extracting(MemoryCardGroupRecord::getCardCount)
                 .isEqualTo(2);
+        }
+
+        @Test
+        void optionalBookFilterReturnsOnlyOwnedBookScopedGroupsWhileOmittedFilterReturnsAll() {
+            BookRecord book = sampleBook("Memory Card scoped book", "Integration Author");
+            bookMapper.insert(book);
+            MemoryCardGroupRecord globalGroup = memoryCardGroup("Global words");
+            MemoryCardGroupRecord scopedGroup = memoryCardGroup("Selected book words");
+            scopedGroup.setBookId(book.getId());
+            memoryCardMapper.insertGroup(globalGroup);
+            memoryCardMapper.insertGroup(scopedGroup);
+
+            assertThat(memoryCardMapper.findGroups(USER_ID, book.getId()))
+                .singleElement()
+                .extracting(MemoryCardGroupRecord::getBookId, MemoryCardGroupRecord::getTitle)
+                .containsExactly(book.getId(), "Selected book words");
+            assertThat(memoryCardMapper.findGroups(USER_ID))
+                .extracting(MemoryCardGroupRecord::getTitle)
+                .containsExactlyInAnyOrder("Global words", "Selected book words");
+            assertThat(memoryCardMapper.findGroup(scopedGroup.getId(), USER_ID).getBookId())
+                .isEqualTo(book.getId());
         }
     }
 
@@ -538,6 +600,13 @@ class MapperIntegrationTest extends AbstractMySqlIntegrationTest {
             .tone("measured")
             .active(true)
             .build();
+    }
+
+    private void markPersonaShared(Long personaId) throws SQLException {
+        IntegrationSchemaSupport.executeSql(
+            dataSource,
+            "UPDATE personas SET is_shared = TRUE WHERE id = " + personaId
+        );
     }
 
     private static BookRecord sampleBook(String title, String author) {

@@ -30,19 +30,16 @@ export function SpeechDraftControl({
       <Button
         aria-label={speech.listening ? t('speechListeningStop') : t('speechStart')}
         aria-pressed={speech.listening}
-        className={`inline-flex min-h-9 items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-medium ${
-          speech.listening
-            ? 'border-red-700 bg-red-50 text-red-800'
-            : 'border-stone-300 bg-white text-stone-700 hover:border-stone-950'
-        } disabled:cursor-not-allowed disabled:opacity-50`}
+        className="min-h-9 px-3 py-2"
         disabled={blocked}
         onClick={speech.toggle}
         type="button"
+        variant={speech.listening ? 'destructive' : 'outline'}
         {...testAttr(`${label}-speech-toggle`)}
       >
         <span
           aria-hidden="true"
-          className={`h-2 w-2 rounded-full ${speech.listening ? 'bg-red-600' : 'bg-stone-400'}`}
+          className={`h-2 w-2 rounded-full ${speech.listening ? 'bg-destructive' : 'bg-stone-400'}`}
         />
         {speech.listening ? t('speechStop') : t('speechInput')}
       </Button>
@@ -52,7 +49,11 @@ export function SpeechDraftControl({
         </div>
       )}
       {speech.error && (
-        <div className="text-xs text-red-700" role="status" {...testAttr(`${label}-speech-error`)}>
+        <div
+          className="text-xs text-destructive"
+          role="status"
+          {...testAttr(`${label}-speech-error`)}
+        >
           {speech.error}
         </div>
       )}

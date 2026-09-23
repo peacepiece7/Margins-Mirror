@@ -13,6 +13,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.request;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -103,6 +104,32 @@ class SessionControllerValidationTest {
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data").value(nullValue()));
+    }
+
+    @Test
+    void bookReadingSessionEnsureReturnsTheIdempotentLocator() throws Exception {
+        when(readingSessionService.ensureForBook(7L)).thenReturn(BookReadingSessionResponse.builder()
+            .sessionId(11L)
+            .title("Book 7 reflection")
+            .build());
+
+        mockMvc.perform(put("/api/books/7/reading-session"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.sessionId").value(11))
+            .andExpect(jsonPath("$.data.title").value("Book 7 reflection"));
+    }
+
+    @Test
+    void missingDirectReadingSessionTimelineReturnsNotFound() throws Exception {
+        when(readingSessionService.findTimeline(404L))
+            .thenThrow(new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Reading session not found"));
+
+        mockMvc.perform(get("/api/reading-sessions/404"))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false))
+            .andExpect(jsonPath("$.error.code").value("COMMON_NOT_FOUND"))
+            .andExpect(jsonPath("$.data").doesNotExist());
     }
 
     @Test

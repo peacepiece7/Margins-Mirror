@@ -23,6 +23,7 @@ import com.margins.reflectionloop.model.dto.response.GuidedDiscussionTurnRespons
 import com.margins.reflectionloop.model.dto.response.ReflectionInterviewResponse;
 import com.margins.reflectionloop.model.dto.response.ReflectionLoopResponse;
 import com.margins.reflectionloop.model.dto.response.ReflectionRefinementResponse;
+import com.margins.reflectionloop.model.dto.response.ReflectionRouteAuthorityResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -49,6 +50,11 @@ public class ReflectionLoopService {
     @Transactional(readOnly = true)
     public ReflectionLoopResponse sessionReflection(Long sessionId) {
         return reflectionBusiness.getPrimaryBySession(sessionId);
+    }
+
+    @Transactional(readOnly = true)
+    public ReflectionRouteAuthorityResponse reflectionRouteAuthority(Long sessionId) {
+        return reflectionBusiness.routeAuthority(sessionId);
     }
 
     @Transactional
@@ -82,6 +88,10 @@ public class ReflectionLoopService {
 
     public ReflectionInterviewResponse continueInterview(Long interviewId) {
         return interviewBusiness.continueInterview(interviewId);
+    }
+
+    public ReflectionInterviewResponse completeInterview(Long interviewId) {
+        return interviewBusiness.completeInterview(interviewId);
     }
 
     public DiscussionGuideResponse createGuide(Long interviewId, GuideBriefRequest request) {

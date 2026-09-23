@@ -4,6 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { booksApi } from '../api';
+import type { CatalogCandidate, CatalogSearchResponse } from '@/types/api/catalog';
 import { BookSearchPanel } from './BookSearchPanel';
 import { FlashAlertProvider } from '@/components/ui/flash-alert';
 import { ApiRequestError } from '@/lib/api-client';
@@ -12,11 +13,38 @@ import { writeAuthSession } from '@/lib/auth-session';
 import { I18nProvider } from '@/lib/i18n';
 import { useBookSelectionStore } from '../selection-store';
 
-const candidate = {
+const candidate: CatalogCandidate = {
   author: 'Frank Herbert',
-  candidateId: 'google:dune',
+  candidateId: 'catalog:1',
+  catalogBookId: 1,
+  coverStatus: 'MISSING',
+  format: 'PRINT',
+  inLibrary: false,
+  sources: [],
   title: 'Dune',
 };
+
+function response(overrides: Partial<CatalogSearchResponse> = {}): CatalogSearchResponse {
+  return {
+    snapshotId: 'snapshot-1',
+    candidates: [candidate],
+    nextCursor: null,
+    resultState: 'RESULTS',
+    freshness: 'FRESH',
+    visibleCount: 1,
+    truncated: false,
+    collection: {
+      id: 'collection-1',
+      state: 'IDLE',
+      lastOutcome: 'SUCCEEDED',
+      generation: 1,
+      resultVersion: 1,
+      succeededSourceCount: 1,
+      failedSourceCount: 0,
+    },
+    ...overrides,
+  };
+}
 
 function apiError(code: string) {
   return {
@@ -87,15 +115,223 @@ function expectEditorialCard(card: Element | null, borderClass: string) {
 }
 
 describe('BookSearchPanel save feedback', () => {
+  it('changing filters rebuilds only the committed keyword without collecting', async () => {
+    const view = renderPanel();
+    await searchForCandidate(view);
+    fireEvent.change(view.getByTestId('book-search-input'), {
+      target: { value: 'Unsubmitted draft' },
+    });
+    const fieldControl = view.container.querySelector<HTMLSelectElement>('select[name="field"]');
+    expect(fieldControl).not.toBeNull();
+    fireEvent.change(fieldControl!, { target: { value: 'AUTHOR' } });
+    await waitFor(() => expect(booksApi.catalogSearch).toHaveBeenCalledTimes(2));
+    expect(vi.mocked(booksApi.catalogSearch).mock.calls[1][0]).toMatchObject({
+      query: 'Dune',
+      field: 'AUTHOR',
+      intent: 'REBUILD',
+    });
+  });
+
+  it('automatically displays the first collected result without another SUBMIT', async () => {
+    const pending = response({ candidates: [], resultState: 'COLLECTING', freshness: 'UNKNOWN' });
+    pending.collection = {
+      ...pending.collection,
+      state: 'COLLECTING',
+      resultVersion: 1,
+      lastOutcome: 'NONE',
+    };
+    vi.mocked(booksApi.catalogSearch).mockResolvedValueOnce(pending).mockResolvedValue(response());
+    vi.spyOn(booksApi, 'catalogCollection').mockResolvedValue({
+      ...pending.collection,
+      state: 'IDLE',
+      resultVersion: 2,
+      lastOutcome: 'SUCCEEDED',
+    });
+    const view = renderPanel();
+    await searchForCandidate(view);
+    expect(booksApi.catalogSearch).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(booksApi.catalogSearch).mock.calls[1][0].intent).toBe('REBUILD');
+  });
+
+  it('automatically displays a cover completed after idle metadata collection', async () => {
+    const pending = response({
+      candidates: [{ ...candidate, coverStatus: 'PENDING' }],
+    });
+    vi.mocked(booksApi.catalogSearch).mockResolvedValueOnce(pending);
+    vi.spyOn(booksApi, 'catalogPage').mockResolvedValue(
+      response({
+        candidates: [
+          {
+            ...candidate,
+            coverStatus: 'READY',
+            thumbnail: '/api/catalog/covers/1/hash',
+          },
+        ],
+        collection: { ...pending.collection, coverVersion: 1 },
+      }),
+    );
+    vi.spyOn(booksApi, 'catalogCollection').mockResolvedValue({
+      ...pending.collection,
+      coverVersion: 1,
+    });
+
+    const view = renderPanel();
+    await searchForCandidate(view);
+
+    await waitFor(() => expect(booksApi.catalogPage).toHaveBeenCalledTimes(1));
+    expect(booksApi.catalogSearch).toHaveBeenCalledTimes(1);
+    expect(await view.findByTestId('book-candidate-cover')).toHaveAttribute(
+      'src',
+      '/api/catalog/covers/1/hash',
+    );
+    expect(view.queryByRole('button', { name: '새 결과 보기' })).not.toBeInTheDocument();
+  });
+
+  it('refreshes a pending cover on a loaded later page without dropping loaded results', async () => {
+    let finishCover!: (value: CatalogSearchResponse['collection']) => void;
+    const firstPage = response({ nextCursor: 'page-2', visibleCount: 2 });
+    const secondCandidate = {
+      ...candidate,
+      candidateId: 'catalog:2',
+      catalogBookId: 2,
+      title: 'Earthsea',
+      coverStatus: 'PENDING' as const,
+    };
+    const rebuiltFirstPage = response({
+      snapshotId: 'snapshot-1',
+      nextCursor: 'page-2',
+      visibleCount: 2,
+      collection: { ...firstPage.collection, coverVersion: 1 },
+    });
+    vi.mocked(booksApi.catalogSearch)
+      .mockResolvedValueOnce(firstPage)
+      .mockResolvedValue(rebuiltFirstPage);
+    vi.spyOn(booksApi, 'catalogPage')
+      .mockResolvedValueOnce(
+        response({
+          candidates: [secondCandidate],
+          nextCursor: null,
+          visibleCount: 2,
+        }),
+      )
+      .mockResolvedValueOnce(rebuiltFirstPage)
+      .mockResolvedValueOnce(
+        response({
+          snapshotId: 'snapshot-1',
+          candidates: [
+            {
+              ...secondCandidate,
+              coverStatus: 'READY',
+              thumbnail: '/api/catalog/covers/2/hash',
+            },
+          ],
+          nextCursor: null,
+          visibleCount: 2,
+          collection: { ...firstPage.collection, coverVersion: 1 },
+        }),
+      );
+    vi.spyOn(booksApi, 'catalogCollection').mockImplementation(
+      () => new Promise((resolve) => (finishCover = resolve)),
+    );
+
+    const view = renderPanel();
+    await searchForCandidate(view);
+    fireEvent.click(view.getByTestId('book-candidate-load-more'));
+    await waitFor(() => expect(view.getAllByTestId('book-candidate-card')).toHaveLength(2));
+    await waitFor(() => expect(booksApi.catalogCollection).toHaveBeenCalledTimes(1));
+
+    finishCover({ ...firstPage.collection, coverVersion: 1 });
+
+    await waitFor(() => expect(booksApi.catalogPage).toHaveBeenCalledTimes(3));
+    expect(booksApi.catalogSearch).toHaveBeenCalledTimes(1);
+    expect(view.getAllByTestId('book-candidate-card')).toHaveLength(2);
+    expect(view.getByTestId('book-candidate-cover')).toHaveAttribute(
+      'src',
+      '/api/catalog/covers/2/hash',
+    );
+  });
+
+  it('keeps nonempty results until the reader explicitly applies an update', async () => {
+    const first = response();
+    first.collection = { ...first.collection, state: 'COLLECTING' };
+    vi.mocked(booksApi.catalogSearch)
+      .mockResolvedValueOnce(first)
+      .mockResolvedValue(
+        response({
+          candidates: [{ ...candidate, catalogBookId: 2, title: 'New edition' }],
+        }),
+      );
+    vi.spyOn(booksApi, 'catalogCollection').mockResolvedValue({
+      ...first.collection,
+      state: 'IDLE',
+      resultVersion: 2,
+    });
+    const view = renderPanel();
+    await searchForCandidate(view);
+    const apply = await view.findByRole('button', { name: '새 결과 보기' });
+    expect(view.getByTestId('book-candidate-title')).toHaveTextContent('Dune');
+    expect(booksApi.catalogSearch).toHaveBeenCalledTimes(1);
+    fireEvent.click(apply);
+    expect(await view.findByText('New edition')).toBeVisible();
+  });
+
+  it('clearing the query aborts an in-flight request', async () => {
+    vi.mocked(booksApi.catalogSearch).mockImplementation(() => new Promise(() => {}));
+    const view = renderPanel();
+    fireEvent.change(view.getByTestId('book-search-input'), { target: { value: 'Dune' } });
+    fireEvent.click(view.getByTestId('book-search-submit'));
+    await waitFor(() => expect(booksApi.catalogSearch).toHaveBeenCalledTimes(1));
+    const signal = vi.mocked(booksApi.catalogSearch).mock.calls[0][1]!;
+    fireEvent.click(view.getByRole('button', { name: '지우기' }));
+    await waitFor(() => expect(signal.aborted).toBe(true));
+    await waitFor(() => expect(view.getByTestId('book-search-input')).toHaveValue(''));
+  });
+
+  it('replaces an unavailable DB image with a stable placeholder', async () => {
+    vi.mocked(booksApi.catalogSearch).mockResolvedValue(
+      response({
+        candidates: [
+          { ...candidate, thumbnail: '/api/catalog/covers/1/hash', coverStatus: 'READY' },
+        ],
+      }),
+    );
+    const view = renderPanel();
+    await searchForCandidate(view);
+    const cover = view.getByTestId('book-candidate-cover');
+    expect(cover).toHaveClass('object-contain');
+    fireEvent.error(cover);
+    expect(view.queryByTestId('book-candidate-cover')).not.toBeInTheDocument();
+    expect(view.getByTitle('표지 없음')).toBeVisible();
+    expect(view.getByTestId('book-candidate-save')).toBeEnabled();
+  });
+
+  it('validates the 200-character search boundary without a network request', async () => {
+    const view = renderPanel();
+    expect(view.getByTestId('book-search-validation-slot')).toHaveClass('min-h-10', 'sm:min-h-5');
+    fireEvent.change(view.getByTestId('book-search-input'), { target: { value: 'x'.repeat(201) } });
+    fireEvent.click(view.getByTestId('book-search-submit'));
+    expect(await view.findByRole('alert')).toHaveTextContent('1~200자');
+    expect(booksApi.catalogSearch).not.toHaveBeenCalled();
+  });
+
+  it('uses the shared Radix select triggers for every catalog filter', () => {
+    const view = renderPanel();
+    const filters = [
+      view.getByTestId('book-search-field-select'),
+      view.getByTestId('book-search-language-select'),
+      view.getByTestId('book-search-format-select'),
+    ];
+
+    for (const filter of filters) {
+      expect(filter).toHaveAttribute('data-slot', 'select-trigger');
+      expect(filter).toHaveClass('min-h-11', 'w-full');
+    }
+    expect(view.container.querySelector('[data-slot="native-select"]')).not.toBeInTheDocument();
+  });
   beforeEach(() => {
     window.localStorage.setItem('margins.locale', 'ko');
-    vi.spyOn(booksApi, 'searchCandidates').mockResolvedValue({
-      candidates: [candidate],
-      hasMore: false,
-      limit: 5,
-      page: 1,
-      totalItems: 1,
-    });
+    vi.spyOn(booksApi, 'catalogSearch').mockResolvedValue(response());
+    vi.spyOn(booksApi, 'catalogCapabilities').mockResolvedValue({ operator: false });
   });
 
   afterEach(() => {
@@ -122,50 +358,33 @@ describe('BookSearchPanel save feedback', () => {
     );
   });
 
-  it('loads and appends the next page when the result sentinel intersects', async () => {
-    class ImmediateIntersectionObserver {
-      constructor(private readonly callback: IntersectionObserverCallback) {}
-
-      observe(target: Element) {
-        this.callback(
-          [{ isIntersecting: true, target } as IntersectionObserverEntry],
-          this as unknown as IntersectionObserver,
-        );
-      }
-
-      disconnect() {}
-
-      unobserve() {}
-    }
-    vi.stubGlobal('IntersectionObserver', ImmediateIntersectionObserver);
-    vi.mocked(booksApi.searchCandidates)
-      .mockReset()
-      .mockResolvedValueOnce({
-        candidates: [candidate],
-        hasMore: true,
-        limit: 5,
-        page: 1,
-        totalItems: 2,
-      })
-      .mockResolvedValueOnce({
+  it('loads the signed snapshot page without another provider search', async () => {
+    vi.mocked(booksApi.catalogSearch).mockResolvedValue(
+      response({ nextCursor: 'signed-cursor', visibleCount: 2 }),
+    );
+    vi.spyOn(booksApi, 'catalogPage').mockResolvedValue(
+      response({
         candidates: [
-          { author: 'Ursula K. Le Guin', candidateId: 'google:earthsea', title: 'Earthsea' },
+          { ...candidate, catalogBookId: 2, candidateId: 'catalog:2', title: 'Earthsea' },
         ],
-        hasMore: false,
-        limit: 5,
-        page: 2,
-        totalItems: 2,
-      });
+        nextCursor: null,
+        visibleCount: 2,
+      }),
+    );
     const view = renderPanel();
-
     await searchForCandidate(view);
-
+    fireEvent.click(view.getByTestId('book-candidate-load-more'));
     await waitFor(() => expect(view.getAllByTestId('book-candidate-card')).toHaveLength(2));
-    expect(booksApi.searchCandidates).toHaveBeenNthCalledWith(2, 'Dune', 2, 5);
+    expect(booksApi.catalogSearch).toHaveBeenCalledTimes(1);
+    expect(booksApi.catalogPage).toHaveBeenCalledWith(
+      'snapshot-1',
+      'signed-cursor',
+      expect.any(AbortSignal),
+    );
   });
 
-  it('shows a project alert after adding a new book and moves to Library', async () => {
-    vi.spyOn(booksApi, 'save').mockResolvedValue({
+  it('preserves saved-book feedback and Library navigation', async () => {
+    vi.spyOn(booksApi, 'saveCatalog').mockResolvedValue({
       author: candidate.author,
       bookId: 7,
       title: candidate.title,
@@ -175,10 +394,8 @@ describe('BookSearchPanel save feedback', () => {
 
     fireEvent.click(view.getByTestId('book-candidate-save'));
 
-    await waitFor(() =>
-      expect(view.getByTestId('flash-alert')).toHaveTextContent('책이 추가되었습니다.'),
-    );
-    expect(view.getByText('Library destination')).toBeVisible();
+    expect(await view.findByText('Library destination')).toBeVisible();
+    expect(view.getByTestId('flash-alert')).toHaveTextContent('책이 추가되었습니다.');
   });
 
   it('keeps a same-user save continuation visible across access-token refresh', async () => {
@@ -230,28 +447,26 @@ describe('BookSearchPanel save feedback', () => {
 
     fireEvent.click(view.getByTestId('book-candidate-save'));
 
-    await waitFor(() =>
-      expect(view.getByTestId('flash-alert')).toHaveTextContent('책이 추가되었습니다.'),
-    );
-    expect(view.getByText('Library destination')).toBeVisible();
+    expect(await view.findByText('Library destination')).toBeVisible();
+    expect(view.getByTestId('flash-alert')).toHaveTextContent('책이 추가되었습니다.');
   });
 
   it('shows a localized project alert when an existing book cannot be added again', async () => {
-    vi.spyOn(booksApi, 'save').mockRejectedValue(new ApiRequestError('BOOK_ALREADY_EXISTS', 409));
+    vi.spyOn(booksApi, 'saveCatalog').mockRejectedValue(
+      new ApiRequestError('BOOK_ALREADY_EXISTS', 409),
+    );
     const view = renderPanel();
     await searchForCandidate(view);
 
     fireEvent.click(view.getByTestId('book-candidate-save'));
 
-    await waitFor(() =>
-      expect(view.getByTestId('flash-alert')).toHaveTextContent('이미 추가된 책입니다.'),
-    );
+    expect(await view.findByText('내 서재에 있음')).toBeVisible();
     expect(view.queryByText('Library destination')).not.toBeInTheDocument();
   });
 
   it('ignores a book-save continuation after the authenticated session rotates', async () => {
     let resolveSave!: (book: { author: string; bookId: number; title: string }) => void;
-    vi.spyOn(booksApi, 'save').mockReturnValue(
+    vi.spyOn(booksApi, 'saveCatalog').mockReturnValue(
       new Promise((resolve) => {
         resolveSave = resolve;
       }),
@@ -269,7 +484,7 @@ describe('BookSearchPanel save feedback', () => {
   });
 
   it('blocks an invalid manual add and associates both required errors', async () => {
-    const save = vi.spyOn(booksApi, 'save').mockResolvedValue({
+    const save = vi.spyOn(booksApi, 'saveCatalog').mockResolvedValue({
       author: 'Reader',
       bookId: 8,
       title: 'Manual',
@@ -290,19 +505,17 @@ describe('BookSearchPanel save feedback', () => {
   });
 
   it('shows an empty result state after a completed search', async () => {
-    vi.mocked(booksApi.searchCandidates).mockResolvedValue({
-      candidates: [],
-      hasMore: false,
-      limit: 5,
-      page: 1,
-      totalItems: 0,
-    });
+    vi.mocked(booksApi.catalogSearch).mockResolvedValue(
+      response({ candidates: [], resultState: 'EMPTY', visibleCount: 0 }),
+    );
     const view = renderPanel();
 
     fireEvent.change(view.getByTestId('book-search-input'), { target: { value: 'Missing' } });
     fireEvent.click(view.getByTestId('book-search-submit'));
 
-    await waitFor(() => expect(view.getAllByText('검색 결과가 없을 때 직접 등록')).toHaveLength(2));
+    expect(
+      await view.findByText('일치하는 판본이 없습니다. 다른 검색어나 필터로 확인해 주세요.'),
+    ).toBeVisible();
   });
 
   it('clears the committed search and its cached candidates without changing the page', async () => {
@@ -314,28 +527,23 @@ describe('BookSearchPanel save feedback', () => {
     await waitFor(() => expect(view.queryByTestId('book-candidate-save')).not.toBeInTheDocument());
     expect(view.getByTestId('book-search-input')).toHaveValue('');
     expect(view.getByTestId('book-search-page')).toBeVisible();
-    expect(booksApi.searchCandidates).toHaveBeenCalledTimes(1);
+    expect(booksApi.catalogSearch).toHaveBeenCalledTimes(1);
   });
 
   it('retries a failed search without changing the committed query', async () => {
-    vi.mocked(booksApi.searchCandidates)
+    vi.mocked(booksApi.catalogSearch)
       .mockRejectedValueOnce(new Error('search failed'))
-      .mockResolvedValueOnce({
-        candidates: [candidate],
-        hasMore: false,
-        limit: 5,
-        page: 1,
-        totalItems: 1,
-      });
+      .mockResolvedValueOnce(response());
     const view = renderPanel();
 
     fireEvent.change(view.getByTestId('book-search-input'), { target: { value: 'Dune' } });
     fireEvent.click(view.getByTestId('book-search-submit'));
     expect(await view.findByText('요청을 처리하지 못했습니다. 다시 시도해 주세요.')).toBeVisible();
-    fireEvent.click(view.getByRole('button', { name: '다시 시도' }));
+    fireEvent.click(view.getByRole('button', { name: '수집 결과 확인' }));
 
     expect(await view.findByTestId('book-candidate-save')).toBeVisible();
     expect(view.getByTestId('book-search-input')).toHaveValue('Dune');
-    expect(booksApi.searchCandidates).toHaveBeenCalledTimes(2);
+    expect(booksApi.catalogSearch).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(booksApi.catalogSearch).mock.calls[1][0].intent).toBe('REBUILD');
   });
 });

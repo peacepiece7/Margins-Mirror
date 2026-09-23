@@ -1,4 +1,4 @@
-import { deleteJson, getJson, patchJson, postJson } from '@/lib/api-client';
+import { deleteJson, getJson, patchJson, postJson, putJson } from '@/lib/api-client';
 import { postStream } from '@/lib/sse-client';
 import type {
   AiMessageResponse,
@@ -24,7 +24,11 @@ export const debatesApi = {
     return getJson(`/api/books/${bookId}/reading-session`);
   },
 
-  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse | null> {
+  ensureReadingSession(bookId: number): Promise<BookReadingSessionResponse> {
+    return putJson(`/api/books/${bookId}/reading-session`, {});
+  },
+
+  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse> {
     return getJson(`/api/reading-sessions/${sessionId}`);
   },
 

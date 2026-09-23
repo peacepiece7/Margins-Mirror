@@ -78,10 +78,11 @@ public class ReflectionQuestionGenerator {
             ? List.of()
             : response.getQuestions();
         QuestionDto suggestion = suggestions == null || suggestions.isEmpty() ? null : suggestions.get(0);
-        boolean ordinaryFallback = generation != null
-            && generation.fallbackUsed()
-            && generation.languageValidationOutcome() == null;
-        AiLanguageValidationOutcome validation = ordinaryFallback
+        boolean providerFallback = generation != null && generation.fallbackUsed();
+        if (providerFallback) {
+            suggestion = null;
+        }
+        AiLanguageValidationOutcome validation = providerFallback
             ? null
             : suggestion == null
                 ? AiLanguageValidationOutcome.UNKNOWN

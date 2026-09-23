@@ -147,9 +147,10 @@ export function ReflectionMarkdownEditor({
           []
         </Button>
         <Button
-          className="ml-auto rounded border border-stone-300 bg-white px-3 py-1.5 text-xs font-medium text-stone-700"
+          className="ml-auto px-3 py-1.5 text-xs"
           onClick={() => setPreview((current) => !current)}
           type="button"
+          variant="outline"
         >
           {preview ? 'Write' : 'Preview'}
         </Button>

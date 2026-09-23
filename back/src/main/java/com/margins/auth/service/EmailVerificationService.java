@@ -41,12 +41,27 @@ public class EmailVerificationService {
     private final EmailVerificationAbuseProperties abuseProperties;
 
     public EmailVerificationResponse issueCode(String email, String botChallengeToken, String clientIp) {
+        return issueCode(email, botChallengeToken, clientIp, true);
+    }
+
+    public EmailVerificationResponse issueCodeAfterVerifiedBotChallenge(String email, String clientIp) {
+        return issueCode(email, null, clientIp, false);
+    }
+
+    private EmailVerificationResponse issueCode(
+        String email,
+        String botChallengeToken,
+        String clientIp,
+        boolean verifyBotChallenge
+    ) {
         String normalizedEmail = normalizeEmail(email);
         if (userMapper.findByEmail(normalizedEmail).isPresent()) {
             throw new ApiException(ApiErrorCode.AUTH_EMAIL_ALREADY_REGISTERED);
         }
         rateLimitService.precheck(normalizedEmail, clientIp);
-        botChallengeVerifier.verify(botChallengeToken, clientIp);
+        if (verifyBotChallenge) {
+            botChallengeVerifier.verify(botChallengeToken, clientIp);
+        }
         rateLimitService.reserve(normalizedEmail, clientIp);
         String code = "%06d".formatted(RANDOM.nextInt(1_000_000));
         int ttlSeconds = Math.max(60, properties.getTtlSeconds());

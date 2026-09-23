@@ -1,7 +1,6 @@
-import { createReadStream, createWriteStream } from 'node:fs';
+import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { access, chmod, mkdir, readFile, readdir, rm, stat } from 'node:fs/promises';
-import { get } from 'node:https';
+import { access, readFile, readdir, stat } from 'node:fs/promises';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -10,12 +9,6 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, '..');
 const frontRoot = join(repoRoot, 'front');
 const backRoot = join(repoRoot, 'back');
-const toolsDir = join(repoRoot, '.tools');
-const gradleVersion = process.env.MARGINS_GRADLE_VERSION || '8.10.2';
-const gradleName = `gradle-${gradleVersion}`;
-const gradleRoot = join(toolsDir, gradleName);
-const gradleZip = join(toolsDir, `${gradleName}-bin.zip`);
-const gradleUrl = `https://services.gradle.org/distributions/${gradleName}-bin.zip`;
 
 const command = process.argv[2] || 'help';
 const args = process.argv.slice(3);
@@ -31,9 +24,9 @@ function usesWindowsCommandShell(cmd) {
   return process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
 }
 
-/** 캐시된 tool 디렉터리 아래의 운영체제별 Gradle launcher 경로를 반환한다. */
+/** 현재 backend가 고정한 Gradle wrapper 경로를 반환한다. */
 function gradleBin() {
-  return join(gradleRoot, 'bin', process.platform === 'win32' ? 'gradle.bat' : 'gradle');
+  return join(backRoot, process.platform === 'win32' ? 'gradlew.bat' : 'gradlew');
 }
 
 /** 호출자가 try/catch를 쓰지 않아도 되도록 로컬 경로 존재 여부를 확인한다. */
@@ -125,58 +118,10 @@ function schemaMigrationVersion(file) {
   return match[1];
 }
 
-/** 배포 호스트의 redirect를 따라가며 tool archive를 다운로드한다. */
-async function download(url, outputPath) {
-  await mkdir(dirname(outputPath), { recursive: true });
-  await new Promise((resolveDownload, rejectDownload) => {
-    const request = get(url, (response) => {
-      if ([301, 302, 303, 307, 308].includes(response.statusCode || 0) && response.headers.location) {
-        response.resume();
-        download(response.headers.location, outputPath).then(resolveDownload, rejectDownload);
-        return;
-      }
-
-      if (response.statusCode !== 200) {
-        response.resume();
-        rejectDownload(new Error(`Download failed with HTTP ${response.statusCode}: ${url}`));
-        return;
-      }
-
-      const file = createWriteStream(outputPath);
-      response.pipe(file);
-      file.on('finish', () => {
-        file.close(resolveDownload);
-      });
-      file.on('error', rejectDownload);
-    });
-
-    request.on('error', rejectDownload);
-  });
-}
-
-/** 고정된 Gradle 배포본이 로컬에 있고 실행 가능한지 보장한다. */
+/** 고정된 Gradle wrapper가 있는지 확인한다. */
 async function ensureGradle() {
-  if (await exists(gradleBin())) {
-    if (process.platform !== 'win32') {
-      await chmod(gradleBin(), 0o755);
-    }
-    return;
-  }
-
-  await mkdir(toolsDir, { recursive: true });
-  if (!(await exists(gradleZip))) {
-    console.log(`Downloading ${gradleUrl}`);
-    await download(gradleUrl, gradleZip);
-  }
-
-  console.log(`Extracting ${gradleZip}`);
-  await rm(gradleRoot, { recursive: true, force: true });
-  await run('jar', ['xf', gradleZip], { cwd: toolsDir });
   if (!(await exists(gradleBin()))) {
-    throw new Error(`Gradle executable was not found after setup: ${gradleBin()}`);
-  }
-  if (process.platform !== 'win32') {
-    await chmod(gradleBin(), 0o755);
+    throw new Error(`Gradle wrapper was not found: ${gradleBin()}`);
   }
 }
 
@@ -248,7 +193,7 @@ async function doctor() {
   }
 }
 
-/** 프론트엔드 의존성, Playwright browser, 캐시된 Gradle 배포본을 설치한다. */
+/** 프론트엔드 의존성과 Playwright browser를 설치한다. */
 async function install() {
   await doctor();
   await ensureGradle();

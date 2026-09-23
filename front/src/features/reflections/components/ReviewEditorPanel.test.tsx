@@ -8,10 +8,6 @@ import { ReviewEditorPanel } from './ReviewEditorPanel';
 const saveMutate = vi.fn();
 
 vi.mock('../queries', () => ({
-  useEnsureReflectionSessionMutation: () => ({
-    isPending: false,
-    mutate: vi.fn(),
-  }),
   useReflectionTimelineForBook: () => ({
     sessionId: 1,
     sessions: { isLoading: false },

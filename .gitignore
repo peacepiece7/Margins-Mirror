@@ -14,6 +14,20 @@ back/bin/
 *.tsbuildinfo
 test-results/
 playwright-report/
+mobile/.expo/
+mobile/dist-test/
+mobile/web-build/
+mobile/ios/
+mobile/android/
+mobile/expo-env.d.ts
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.pem
+*.key
+google-services.json
+GoogleService-Info.plist
 infra/artifacts/
 harness/artifacts/
 
@@ -22,6 +36,7 @@ harness/artifacts/
 .env.*
 env
 local-secrets/
+*.env.local
 !.env.example
 
 # Logs

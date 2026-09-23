@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { translationCatalog } from '@/lib/i18n';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
 import type {
   DiscussionGuideProjectionResponse,
   FacilitatorDiscussionQuestion,
@@ -28,13 +28,7 @@ const sourceLabelKeys = {
   ANSWER: 'reflectionSourceAnswer',
 } as const;
 
-type Translate = (key: keyof typeof translationCatalog.en) => string;
-
-function currentTranslations(): Translate {
-  const locale =
-    typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ko';
-  return (key) => translationCatalog[locale][key];
-}
+type Translate = (key: TranslationKey) => string;
 
 function localizedStageLabel(stage: string, t: Translate) {
   const key = stageLabels[stage as keyof typeof stageLabels];
@@ -133,7 +127,7 @@ export function DiscussionGuideProjectionPreview({
 }: {
   projection: DiscussionGuideProjectionResponse;
 }) {
-  const t = currentTranslations();
+  const { t } = useI18n();
   const facilitator = projection.projection === 'FACILITATOR';
 
   return (

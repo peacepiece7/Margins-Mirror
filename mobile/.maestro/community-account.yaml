@@ -1,0 +1,37 @@
+appId: cloud.margins.mobile
+env:
+  TEST_COMMENT: ${MARGINS_MAESTRO_REVIEW_COMMENT}
+  TEST_DISPLAY_NAME: ${MARGINS_MAESTRO_UPDATED_DISPLAY_NAME}
+  TEST_PASSWORD: ${MARGINS_MAESTRO_PASSWORD}
+  TEST_USERNAME: ${MARGINS_MAESTRO_USERNAME}
+---
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: open-public-reviews
+- assertVisible:
+    id: reviews-screen
+- tapOn:
+    id: public-review-open
+    index: 0
+- assertVisible:
+    id: review-detail-screen
+- tapOn: "Add a thoughtful comment"
+- inputText: ${TEST_COMMENT}
+- tapOn:
+    id: review-comment-submit
+- assertVisible: ${TEST_COMMENT}
+- back
+- tapOn:
+    id: global-navigation-account
+- assertVisible:
+    id: account-screen
+- tapOn: "Display name"
+- eraseText
+- inputText: ${TEST_DISPLAY_NAME}
+- tapOn: "Save"
+- assertVisible: "Profile saved."
+- stopApp
+- launchApp
+- tapOn:
+    id: global-navigation-account
+- assertVisible: ${TEST_DISPLAY_NAME}

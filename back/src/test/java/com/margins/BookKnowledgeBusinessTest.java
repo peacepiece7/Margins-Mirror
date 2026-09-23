@@ -33,6 +33,7 @@ import com.margins.book.model.BookKnowledgeRecord;
 import com.margins.book.model.BookKnowledgeStatus;
 import com.margins.book.model.BookRecord;
 import com.margins.common.error.ApiErrorCode;
+import com.margins.testsupport.TestSecurityContextSupport;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
@@ -166,6 +167,104 @@ class BookKnowledgeBusinessTest {
 
         assertThat(resolved.record().getId()).isEqualTo(12L);
         assertThat(resolved.refreshPending()).isTrue();
+        verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+    }
+
+    @Test
+    void explicitRegenerationReturnsPendingClaimBeforeProviderWorkRuns() {
+        BookRecord book = book();
+        BookKnowledgeRecord current = ready(
+            13L,
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            LocalDateTime.now().minusDays(2),
+            false
+        );
+        when(bookMapper.findByIdForUser(1L, 7L)).thenReturn(book);
+        when(localeResolver.resolve(7L)).thenReturn(GenerationLocale.KO);
+        when(knowledgeMapper.findByIdentityAndPromptVersion(
+            "isbn",
+            "9781234567890",
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            "ko"
+        )).thenReturn(current);
+        when(knowledgeMapper.claimGeneration(eq(13L), anyString(), eq("ko"), eq(120)))
+            .thenReturn(1);
+        when(knowledgeMapper.findLatestReadyByIdentity("isbn", "9781234567890", "ko"))
+            .thenReturn(current);
+        when(aiProvider.analyzeBookKnowledgeWithMetadata(any()))
+            .thenReturn(success(analyzed(), false));
+        when(knowledgeMapper.renewGenerationClaim(eq(13L), anyString(), eq("ko")))
+            .thenReturn(1);
+        when(knowledgeMapper.completeGeneration(any())).thenReturn(1);
+
+        TestSecurityContextSupport.loginAs(7L, "reader");
+        try {
+            BookKnowledgeBusiness.RegenerationRequest request =
+                business.requestRegeneration(1L);
+
+            assertThat(request.knowledge().isRefreshPending()).isTrue();
+            assertThat(request.work()).isNotNull();
+            verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+
+            business.completeRegeneration(request.work());
+        } finally {
+            TestSecurityContextSupport.clear();
+        }
+
+        verify(aiProvider).analyzeBookKnowledgeWithMetadata(any());
+        verify(knowledgeMapper).completeGeneration(any());
+    }
+
+    @Test
+    void queuedRegenerationSkipsProviderAfterAnotherRequestReclaimsTheLease() {
+        BookKnowledgeBusiness.RegenerationWork work = new BookKnowledgeBusiness.RegenerationWork(
+            book(),
+            ready(15L, BookKnowledgeBusiness.PROMPT_VERSION, LocalDateTime.now(), false),
+            "expired-claim",
+            GenerationLocale.KO
+        );
+        when(knowledgeMapper.renewGenerationClaim(15L, "expired-claim", "ko")).thenReturn(0);
+
+        business.completeRegeneration(work);
+
+        verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+        verify(knowledgeMapper, never()).completeGeneration(any());
+    }
+
+    @Test
+    void explicitRegenerationWithActiveClaimDoesNotCreateBackgroundWork() {
+        BookRecord book = book();
+        BookKnowledgeRecord current = ready(
+            14L,
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            LocalDateTime.now().minusDays(2),
+            false
+        );
+        current.setGenerationClaimToken("active-claim");
+        current.setGenerationClaimedAt(LocalDateTime.now().minusSeconds(5));
+        when(bookMapper.findByIdForUser(1L, 7L)).thenReturn(book);
+        when(localeResolver.resolve(7L)).thenReturn(GenerationLocale.KO);
+        when(knowledgeMapper.findByIdentityAndPromptVersion(
+            "isbn",
+            "9781234567890",
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            "ko"
+        )).thenReturn(current);
+        when(knowledgeMapper.claimGeneration(eq(14L), anyString(), eq("ko"), eq(120)))
+            .thenReturn(0);
+        when(knowledgeMapper.hasActiveGenerationClaim(14L, "ko", 120)).thenReturn(true);
+
+        TestSecurityContextSupport.loginAs(7L, "reader");
+        try {
+            BookKnowledgeBusiness.RegenerationRequest request =
+                business.requestRegeneration(1L);
+
+            assertThat(request.knowledge().isRefreshPending()).isTrue();
+            assertThat(request.work()).isNull();
+        } finally {
+            TestSecurityContextSupport.clear();
+        }
+
         verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
     }
 
@@ -378,6 +477,46 @@ class BookKnowledgeBusinessTest {
         verify(bookMapper).findByIdForUser(1L, 7L);
         verify(localeResolver, times(1)).resolve(7L);
         verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+    }
+
+    @Test
+    void readsNestedKnowledgeJsonWithoutDroppingDiscussionData() {
+        BookRecord book = book();
+        BookKnowledgeRecord current = ready(
+            41L, BookKnowledgeBusiness.PROMPT_VERSION, LocalDateTime.now(), false
+        );
+        current.setDiscussionPointsJson(
+            "[{\"id\":\"point-1\",\"question\":\"질문\",\"rationale\":\"근거\","
+                + "\"recommendedPersonaKeys\":[\"journalist\",\"writer\"]}]"
+        );
+        current.setRecommendedPersonasJson(
+            "[{\"discussionPointId\":\"point-1\","
+                + "\"personaKeys\":[\"journalist\",\"writer\"]}]"
+        );
+        when(bookMapper.findByIdForUser(1L, 7L)).thenReturn(book);
+        when(localeResolver.resolve(7L)).thenReturn(GenerationLocale.KO);
+        when(knowledgeMapper.findByIdentityAndPromptVersion(
+            "isbn", "9781234567890", BookKnowledgeBusiness.PROMPT_VERSION, "ko"
+        )).thenReturn(current);
+
+        TestSecurityContextSupport.loginAs(7L, "reader");
+        try {
+            BookKnowledgeDto result = business.findForBook(1L);
+
+            assertThat(result.getDiscussionPoints()).singleElement().satisfies(point -> {
+                assertThat(point.getId()).isEqualTo("point-1");
+                assertThat(point.getQuestion()).isEqualTo("질문");
+                assertThat(point.getRationale()).isEqualTo("근거");
+                assertThat(point.getRecommendedPersonaKeys())
+                    .containsExactly("journalist", "writer");
+            });
+            assertThat(result.getRecommendedPersonas()).singleElement().satisfies(persona -> {
+                assertThat(persona.getDiscussionPointId()).isEqualTo("point-1");
+                assertThat(persona.getPersonaKeys()).containsExactly("journalist", "writer");
+            });
+        } finally {
+            TestSecurityContextSupport.clear();
+        }
     }
 
     @Test

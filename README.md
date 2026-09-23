@@ -6,6 +6,8 @@
 
 Margins는 책을 발견하고 기록한 뒤, AI 질문과 여러 관점의 페르소나 토론을 통해 독서를 확장하는 풀스택 웹 애플리케이션입니다. AI가 독후감을 대신 작성하는 대신, 사용자가 남긴 Reflection과 답변을 근거로 다시 질문하고 생각을 발전시키도록 설계했습니다.
 
+이 공개본은 Margins `dev`의 `f71b599506ad2ffcda2e02e40df0ef5c7cc89ffe` (2026-09-23 확인)를 기준으로 갱신했습니다. 최신 웹·API·DB 코드와 Expo/React Native 모바일 앱 소스가 포함됩니다. 책 검색과 독서 흐름, 모바일 인증·화면, 공개 Terms 경로가 반영되어 있습니다. Terms 화면은 현재 게시 준비 상태이며 약관 수락이나 강제를 제공하지 않습니다.
+
 **Live Demo:** [https://margins.cloud](https://margins.cloud)
 
 ## Product walkthrough
@@ -24,7 +26,7 @@ Margins는 책을 발견하고 기록한 뒤, AI 질문과 여러 관점의 페�
 
 - 사용자 행동: 책을 검색하거나 직접 등록하고, 읽기 상태와 별점을 관리합니다.
 - 시스템 동작: React Query가 서버 상태를 동기화하고 MySQL이 사용자별 서재 상태를 보존합니다.
-- 기술 포인트: 외부 도서 검색 결과와 사용자가 저장한 도서 레코드를 분리해 외부 API 실패가 개인 기록에 영향을 주지 않도록 구성했습니다.
+- 기술 포인트: 공용 판본 카탈로그와 개인 서재를 분리하고, 검색 snapshot·출처별 상태·DB thumbnail을 관리해 외부 API 실패가 개인 기록에 영향을 주지 않도록 구성했습니다.
 
 ### 03. Book Knowledge와 독서 맥락
 
@@ -66,6 +68,12 @@ Margins는 책을 발견하고 기록한 뒤, AI 질문과 여러 관점의 페�
 - 시스템 동작: Moderator가 주제 적합성을 판단하고, Director가 다음 진행을 결정하며, Persona는 실제 가치가 있을 때만 호출됩니다.
 - 기술 포인트: moderation decision, 대화 message, 사용된 guide version과 최종 refinement를 영속화해 중단 후에도 같은 상태에서 재개합니다.
 
+### 08. iOS·Android 모바일 앱 소스
+
+- 사용자 행동: 서재, Reflection, 토론, 복습을 native 화면에서 이어갑니다.
+- 시스템 동작: Expo Router가 공개/보호 경로를 분리하고, backend의 동일한 독서 기록을 다시 읽습니다.
+- 기술 포인트: access token은 메모리에, 회전형 refresh token은 SecureStore에 보관하며 REST/SSE 실패 후에는 서버의 저장 상태로 복구합니다. 이 공개본은 앱 소스와 비기기 검증만 포함합니다.
+
 ## Product AI architecture
 
 Margins의 AI 기능은 자유 대화형 chatbot보다 사용자의 기록을 보존하고 발전시키는 domain workflow에 가깝습니다.
@@ -94,6 +102,7 @@ flowchart LR
 ```mermaid
 flowchart TD
     U[Browser] --> N[Nginx]
+    A[Expo mobile app] --> B[Spring Boot API]
     N --> F[React + TypeScript SPA]
     N --> B[Spring Boot API]
     F -->|REST and SSE| B
@@ -108,6 +117,7 @@ flowchart TD
 | Layer | Responsibilities | Main technologies |
 | --- | --- | --- |
 | Frontend | 사용자 workflow, 서버 상태, 인증 session, streaming UI | React, TypeScript, TanStack Query, Zustand, Vite |
+| Mobile | iOS/Android 화면, 보안 저장소 기반 session, native navigation | Expo SDK 57, React Native, Expo Router |
 | Backend | 인증, domain orchestration, AI provider boundary, validation | Java 21, Spring Boot, Spring Security, MyBatis |
 | Database | versioned reflection, discussion state, audit event, migration | MySQL, versioned SQL migration |
 | Runtime | TLS entry point, reverse proxy, service lifecycle, backup·smoke check | Ubuntu, Raspberry Pi, Nginx, systemd, Docker |
@@ -130,7 +140,12 @@ Slack은 대화형 gateway, Kanban과 GitHub Issue/PR은 durable work state로 �
 - `front/`: React application, feature modules, unit/component/E2E tests
 - `back/`: Spring Boot API, domain services, security and provider adapters
 - `db/`: MySQL schema, query, deterministic local/E2E fixtures
+- `mobile/`: Expo/React Native 앱, 단위 테스트와 native flow 정의
 - `docs/architecture.md`: 공개용 architecture overview
 - `.github/workflows/ci.yml`: 공개 mirror용 최소 CI
 
-이 저장소는 포트폴리오 검토를 위해 정리한 공개 스냅샷입니다. 비공개 원본의 Git 이력, 운영 credential·host 설정, 내부 작업 기록과 배포 runbook은 포함하지 않습니다.
+## 공개 범위와 검증
+
+이 저장소는 포트폴리오 검토용 소스 스냅샷입니다. 비공개 원본의 Git 이력, 실제 credential·host 설정, 내부 작업 기록, 운영 배포 스크립트와 runbook은 포함하지 않습니다. `.env.example`의 계정·비밀번호는 로컬 개발 예시이며 인터넷에 노출된 환경에서 사용하면 안 됩니다. CI는 공개 파일 경계와 일반적인 secret 형식을 검사하고 웹·모바일 품질 검사를 실행합니다. 모바일 native 기기 실행 및 서명 검증 결과는 이 공개본에 포함되지 않습니다.
+
+로컬 검증은 `npm run audit:public`, `npm run quality`, `npm run test:back`, `npm run test:front`, `npm run quality:mobile`을 사용할 수 있습니다. 필요한 의존성은 `front/`와 `mobile/`에서 각각 `npm ci`로 설치합니다. 백엔드와 DB의 로컬 실행 방법은 `npm run local:doctor`와 `npm run local:install`에서 확인할 수 있습니다.

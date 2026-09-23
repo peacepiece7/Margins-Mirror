@@ -76,7 +76,7 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
 
   if (!timeline.isFetching && !reflectionId) {
     return (
-      <section className="grid gap-4">
+      <section className="web-reflection-page web-reflection-interview grid gap-4">
         <ReflectionLoopProgress active="interview" bookId={bookId} />
         <div className="rounded border border-stone-300 bg-white p-6">
           <h2 className="text-xl font-semibold">{t('reflectionInterviewMissingTitle')}</h2>
@@ -170,13 +170,17 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
   }
 
   return (
-    <section aria-busy={pending} className="grid gap-5" {...testAttr('reflection-interview-page')}>
+    <section
+      aria-busy={pending}
+      className="web-reflection-page web-reflection-interview grid gap-5"
+      {...testAttr('reflection-interview-page')}
+    >
       <ReflectionLoopProgress active="interview" bookId={bookId} paths={paths} />
       <header className="grid gap-2">
         <p className="text-xs font-semibold tracking-[0.18em] text-stone-500">ADAPTIVE INTERVIEW</p>
-        <h2 className="text-2xl font-semibold tracking-tight">한 번에 한 질문씩 생각을 넓혀요</h2>
+        <h2 className="text-2xl font-semibold tracking-tight">{t('reflectionInterviewTitle')}</h2>
         <p className="max-w-3xl text-sm leading-6 text-stone-600">
-          최소 3개 답변부터 발제안을 만들 수 있고, 5개를 권장하며 질문은 최대 7개까지 이어집니다.
+          {t('reflectionInterviewDescription')}
         </p>
       </header>
 
@@ -254,18 +258,34 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
             <p className="mt-1 text-3xl font-semibold">
               {data?.answeredCount ?? 0}
               <span className="ml-1 text-base font-normal text-stone-500">
-                / 목표 {data?.targetAnswers ?? 5}
+                /{' '}
+                {t('reflectionInterviewTarget').replace(
+                  '{count}',
+                  String(data?.targetAnswers ?? 5),
+                )}
               </span>
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Badge variant="outline">최소 {data?.minimumAnswers ?? 3}</Badge>
-            <Badge variant="outline">생성 {data?.generatedCount ?? 0}/7</Badge>
-            <Badge variant="outline">건너뜀 {data?.skippedCount ?? 0}</Badge>
+            <Badge variant="outline">
+              {t('reflectionInterviewMinimum').replace(
+                '{count}',
+                String(data?.minimumAnswers ?? 3),
+              )}
+            </Badge>
+            <Badge variant="outline">
+              {t('reflectionInterviewGenerated').replace(
+                '{count}',
+                String(data?.generatedCount ?? 0),
+              )}
+            </Badge>
+            <Badge variant="outline">
+              {t('reflectionInterviewSkipped').replace('{count}', String(data?.skippedCount ?? 0))}
+            </Badge>
           </div>
         </div>
         <div
-          aria-label={`답변 목표 진행률 ${progress}%`}
+          aria-label={t('reflectionInterviewProgressAria').replace('{progress}', String(progress))}
           aria-valuemax={100}
           aria-valuemin={0}
           aria-valuenow={progress}
@@ -283,10 +303,9 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
         <section className="grid gap-4 rounded border border-stone-300 bg-white p-4 sm:p-6">
           <div>
             <p className="text-xs font-semibold tracking-[0.14em] text-stone-500">ANSWER HISTORY</p>
-            <h3 className="mt-1 text-lg font-semibold">이전 답변을 다듬을 수 있어요</h3>
+            <h3 className="mt-1 text-lg font-semibold">{t('reflectionInterviewHistoryTitle')}</h3>
             <p className="mt-2 text-sm leading-6 text-stone-600">
-              표현만 고치면 같은 인터뷰 흐름에 반영하고, 생각이 달라졌다면 해당 지점부터 새 질문
-              흐름을 시작합니다. 기존 발제안과 토론 기록은 그대로 보존됩니다.
+              {t('reflectionInterviewHistoryDescription')}
             </p>
           </div>
           <ol className="grid gap-3">
@@ -298,12 +317,17 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
                   key={savedAnswer.answerRevisionId}
                 >
                   <div>
-                    <p className="text-xs font-semibold text-stone-500">질문</p>
+                    <p className="text-xs font-semibold text-stone-500">
+                      {t('reflectionInterviewQuestionLabel')}
+                    </p>
                     <p className="mt-1 text-sm font-medium leading-6">{savedAnswer.question}</p>
                   </div>
                   {editing ? (
                     <Textarea
-                      aria-label={`${savedAnswer.question} 답변 수정`}
+                      aria-label={t('reflectionInterviewEditAnswerLabel').replace(
+                        '{question}',
+                        savedAnswer.question,
+                      )}
                       className="min-h-32 resize-y bg-white leading-7"
                       disabled={pending}
                       maxLength={12000}
@@ -323,7 +347,7 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
                           onClick={() => saveAnswerRevision(savedAnswer, 'WORDING_ONLY')}
                           type="button"
                         >
-                          표현만 다듬기
+                          {t('reflectionInterviewEditWording')}
                         </Button>
                         <Button
                           disabled={pending || !editingAnswer.trim()}
@@ -331,7 +355,7 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
                           type="button"
                           variant="outline"
                         >
-                          여기서 다시 답하기
+                          {t('reflectionInterviewRestartHere')}
                         </Button>
                         <Button
                           disabled={pending}
@@ -339,21 +363,29 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
                           type="button"
                           variant="ghost"
                         >
-                          취소
+                          {t('cancel')}
                         </Button>
                       </>
                     ) : (
                       <Button
-                        aria-label={`${savedAnswer.question} 답변 수정`}
+                        aria-label={t('reflectionInterviewEditAnswerLabel').replace(
+                          '{question}',
+                          savedAnswer.question,
+                        )}
                         disabled={pending}
                         onClick={() => beginAnswerEdit(savedAnswer)}
                         type="button"
                         variant="outline"
                       >
-                        답변 수정
+                        {t('reflectionInterviewEditAnswer')}
                       </Button>
                     )}
-                    <span className="text-xs text-stone-500">version {savedAnswer.version}</span>
+                    <span className="text-xs text-stone-500">
+                      {t('reflectionInterviewAnswerVersion').replace(
+                        '{version}',
+                        String(savedAnswer.version),
+                      )}
+                    </span>
                   </div>
                 </li>
               );
@@ -365,11 +397,14 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
       {question ? (
         <section
           className="grid gap-5 rounded border border-stone-300 bg-white p-4 sm:p-6"
+          data-ui="reflection-interview-question"
           {...testAttr('reflection-interview-question')}
         >
           <div className="flex flex-wrap items-center gap-2">
             <Badge>{question.coverageArea.replaceAll('_', ' ')}</Badge>
-            <Badge variant="outline">민감도 {question.sensitivity}</Badge>
+            <Badge variant="outline">
+              {t('reflectionSensitivity')} {question.sensitivity}
+            </Badge>
             <Badge variant="outline">{question.sourceType}</Badge>
             <SourceFreshnessBadges
               fallback={question.sourceFallback}
@@ -381,23 +416,23 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
             <h3 className="text-xl font-semibold leading-8">{question.question}</h3>
             <div className="mt-3 border-l-2 border-stone-300 pl-3 text-sm leading-6 text-stone-500">
               <p className="line-clamp-3 break-words" title={question.sourceExcerpt}>
-                근거: {question.sourceExcerpt}
+                {t('reflectionInterviewEvidence')}: {question.sourceExcerpt}
               </p>
               <a
                 className="mt-1 inline-flex min-h-11 items-center font-medium text-stone-900 underline underline-offset-4"
                 href={`/book/${bookId}/reflection#reflection-revision-${data.sourceRevisionId}`}
               >
-                원문 revision 보기
+                {t('reflectionInterviewViewSource')}
               </a>
             </div>
           </div>
           <Textarea
-            aria-label="인터뷰 답변"
+            aria-label={t('reflectionInterviewAnswerLabel')}
             className="min-h-40 resize-y bg-stone-50 leading-7"
             disabled={pending}
             maxLength={12000}
             onChange={(event) => setAnswer(event.target.value)}
-            placeholder="완성된 문장이 아니어도 괜찮아요. 지금 떠오르는 근거나 질문부터 적어보세요."
+            placeholder={t('reflectionInterviewAnswerPlaceholder')}
             ref={answerRef}
             value={answer}
             {...testAttr('reflection-interview-answer')}
@@ -411,13 +446,13 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
                 variant="outline"
               >
                 {respond.isPending && respond.variables?.mode === 'BOOK_ONLY'
-                  ? '질문 바꾸는 중…'
-                  : '책 이야기만 하기'}
+                  ? t('reflectionInterviewBookOnlyPending')
+                  : t('reflectionInterviewBookOnly')}
               </Button>
               <Button disabled={pending} onClick={() => send('SKIP')} type="button" variant="ghost">
                 {respond.isPending && respond.variables?.mode === 'SKIP'
-                  ? '건너뛰는 중…'
-                  : '건너뛰기'}
+                  ? t('reflectionInterviewSkipPending')
+                  : t('reflectionInterviewSkip')}
               </Button>
             </div>
             <Button
@@ -426,20 +461,22 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
               type="button"
             >
               {respond.isPending && respond.variables?.mode === 'ANSWER'
-                ? '답변 저장 중…'
-                : '답변 저장하고 다음'}
+                ? t('reflectionInterviewAnswerPending')
+                : t('reflectionInterviewAnswerNext')}
             </Button>
           </div>
         </section>
       ) : (
         <section className="rounded border border-stone-300 bg-white p-6">
           <h3 className="font-semibold">
-            {data?.maxReached ? '질문을 모두 살펴봤어요' : '다음 질문을 준비하고 있어요'}
+            {data?.maxReached
+              ? t('reflectionInterviewQuestionsComplete')
+              : t('reflectionInterviewQuestionPreparing')}
           </h3>
           <p className="mt-2 text-sm text-stone-600">
             {data?.canGenerateGuide
-              ? '지금까지의 답변으로 발제안을 만들 수 있습니다.'
-              : '발제안을 만들려면 답변 3개가 필요합니다.'}
+              ? t('reflectionInterviewGuideReady')
+              : t('reflectionInterviewGuideNeedsAnswers')}
           </p>
           {data && !data.maxReached && !data.guideId ? (
             <Button
@@ -451,10 +488,10 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
               {...testAttr('reflection-continue-interview')}
             >
               {continueInterview.isPending
-                ? '질문 준비 중…'
+                ? t('reflectionInterviewContinuePending')
                 : data.canGenerateGuide
-                  ? '질문 더 이어가기'
-                  : '다음 질문 다시 준비하기'}
+                  ? t('reflectionInterviewContinueMore')
+                  : t('reflectionInterviewContinueRetry')}
             </Button>
           ) : null}
         </section>
@@ -467,11 +504,9 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
         >
           <div>
             <p className="text-xs font-semibold tracking-[0.14em] text-stone-500">GUIDE BRIEF</p>
-            <h3 className="mt-1 text-lg font-semibold">어떤 대화를 준비할까요?</h3>
+            <h3 className="mt-1 text-lg font-semibold">{t('reflectionInterviewBriefTitle')}</h3>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-stone-600">
-              이 설정은 발제안 version에 함께 저장됩니다. 비공개 답변을 참고하더라도 답변 원문은
-              발제안에 표시되지 않습니다. 모든 참여 형태는 AI가 진행을 돕고, 소그룹은 여러 사람이
-              함께 답하는 형식만 뜻합니다.
+              {t('reflectionInterviewBriefDescription')}
             </p>
           </div>
           <GuideBriefFields disabled={pending} onChange={setGuideBrief} value={guideBrief} />
@@ -495,10 +530,10 @@ export function ReflectionInterviewPanel({ bookId }: { bookId: number }) {
           {...testAttr('reflection-create-guide')}
         >
           {createGuide.isPending
-            ? '발제안 만드는 중…'
+            ? t('reflectionInterviewGuideCreating')
             : data?.guideId
-              ? '발제안 보기'
-              : '발제안 만들기'}
+              ? t('reflectionInterviewGuideView')
+              : t('reflectionInterviewGuideCreate')}
         </Button>
       </div>
     </section>

@@ -1,8 +1,48 @@
-import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  queryOptions,
+  type QueryClient,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import { sessionKeys } from '@/lib/query-keys';
+import {
+  invalidateReadingSessionTimeline,
+  writeReadingSessionTimeline,
+} from '@/lib/reading-session-cache';
 
 import { readingSessionsApi, type SessionHighlightInput } from './api';
+
+type TimelineMutationState = { overlapped: boolean; pending: number };
+const timelineMutationStates = new WeakMap<QueryClient, Map<number, TimelineMutationState>>();
+
+function beginTimelineMutation(queryClient: QueryClient, sessionId: number) {
+  let bySession = timelineMutationStates.get(queryClient);
+  if (!bySession) {
+    bySession = new Map();
+    timelineMutationStates.set(queryClient, bySession);
+  }
+  const state = bySession.get(sessionId) ?? { overlapped: false, pending: 0 };
+  state.pending += 1;
+  if (state.pending > 1) {
+    state.overlapped = true;
+  }
+  bySession.set(sessionId, state);
+  return state;
+}
+
+function finishTimelineMutation(
+  queryClient: QueryClient,
+  sessionId: number,
+  state: TimelineMutationState | undefined,
+) {
+  if (!state) return false;
+  state.pending -= 1;
+  if (state.pending > 0) return false;
+  timelineMutationStates.get(queryClient)?.delete(sessionId);
+  return state.overlapped;
+}
 
 export const sessionQueryOptions = {
   latest: () =>
@@ -23,17 +63,8 @@ export function useSessionTimelineQuery(sessionId?: number) {
   return useQuery({ ...sessionQueryOptions.timeline(sessionId ?? 0), enabled: Boolean(sessionId) });
 }
 
-function useInvalidateSession() {
-  const queryClient = useQueryClient();
-  return async (sessionId?: number) => {
-    await queryClient.invalidateQueries({ queryKey: sessionKeys.latest() });
-    if (sessionId)
-      await queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(sessionId) });
-  };
-}
-
 export function useCreateHighlightMutation() {
-  const invalidate = useInvalidateSession();
+  const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({
       sessionId,
@@ -42,6 +73,13 @@ export function useCreateHighlightMutation() {
       sessionId: number;
       highlight: SessionHighlightInput;
     }) => readingSessionsApi.createHighlight(sessionId, highlight),
-    onSuccess: (timeline) => invalidate(timeline.sessionId),
+    onMutate: ({ sessionId }) => beginTimelineMutation(queryClient, sessionId),
+    onSuccess: (timeline, _input, state) =>
+      state?.overlapped ? undefined : writeReadingSessionTimeline(queryClient, timeline),
+    onSettled: async (_timeline, _error, { sessionId }, state) => {
+      if (finishTimelineMutation(queryClient, sessionId, state)) {
+        await invalidateReadingSessionTimeline(queryClient, sessionId);
+      }
+    },
   });
 }

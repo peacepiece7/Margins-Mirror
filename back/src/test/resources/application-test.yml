@@ -8,6 +8,10 @@ spring:
     password: margins-pass
 
 margins:
+  catalog:
+    worker-enabled: false
+    metadata-sources: []
+    cover-sources: []
   privacy:
     enforcement-enabled: true
   mail:

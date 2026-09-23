@@ -1,5 +1,5 @@
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { MemoryCard } from '@/types/api/memory-card';
 import { testAttr } from '@/utils/testAttrs';
 
@@ -38,11 +38,10 @@ export function CardList({
             )}
             {card.memo && <p className="mt-1 break-words text-sm text-stone-500">{card.memo}</p>}
             <label className="mt-3 flex min-h-11 w-fit items-center gap-2 rounded border border-stone-300 px-3 py-2 text-sm font-medium">
-              <Input
+              <Checkbox
                 checked={card.memorized}
                 disabled={savingMemorizedCardIds.has(card.cardId)}
-                onChange={(event) => onMemorizedChange(card, event.target.checked)}
-                type="checkbox"
+                onCheckedChange={(checked) => onMemorizedChange(card, checked === true)}
                 {...testAttr('memory-card-memorized-toggle')}
               />
               {labels.memorized}
@@ -50,23 +49,26 @@ export function CardList({
           </div>
           <div className="grid grid-cols-2 gap-2 md:flex">
             <Button
-              className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium"
+              className="min-h-11 px-3 py-2"
               onClick={() => onOpen(card)}
               type="button"
+              variant="outline"
             >
               {labels.open}
             </Button>
             <Button
-              className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium"
+              className="min-h-11 px-3 py-2"
               onClick={() => onEdit(card)}
               type="button"
+              variant="outline"
             >
               {labels.edit}
             </Button>
             <Button
-              className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-red-700"
+              className="min-h-11 px-3 py-2"
               onClick={() => onDelete(card)}
               type="button"
+              variant="destructive"
             >
               {labels.delete}
             </Button>

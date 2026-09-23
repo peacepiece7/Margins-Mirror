@@ -1,0 +1,563 @@
+/* Web UX board: compact global chrome with route-owned work surfaces. */
+
+.web-app-header {
+  position: sticky;
+  z-index: 40;
+  top: 0;
+  min-width: 0;
+  border-bottom: 1px solid #ded8cc;
+  background: rgba(250, 249, 245, 0.96);
+  backdrop-filter: blur(12px);
+}
+
+.web-app-header-inner {
+  display: flex;
+  align-items: stretch;
+  width: min(100%, 90rem);
+  min-height: 3.5rem;
+  margin: 0 auto;
+  padding-inline: clamp(0.75rem, 2vw, 1.5rem);
+}
+
+.web-app-wordmark {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  padding-right: clamp(1rem, 3vw, 2.75rem);
+  color: #27231e;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-decoration: none;
+}
+
+.web-global-nav,
+.web-global-destinations,
+.web-global-actions {
+  display: flex;
+  align-items: stretch;
+}
+
+.web-global-nav {
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: space-between;
+}
+
+.web-global-destinations {
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.web-global-destinations::-webkit-scrollbar {
+  display: none;
+}
+
+.web-global-link[data-slot='button'] {
+  position: relative;
+  height: 3.5rem;
+  padding: 0 0.9rem;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #6d675e;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.web-global-link[data-slot='button']::after {
+  position: absolute;
+  right: 0.8rem;
+  bottom: -1px;
+  left: 0.8rem;
+  height: 2px;
+  background: transparent;
+  content: '';
+}
+
+.web-global-link[data-slot='button']:hover,
+.web-global-link[data-slot='button'][aria-current='page'] {
+  background: rgba(190, 141, 68, 0.07);
+  color: #2a251f;
+}
+
+.web-global-link[data-slot='button'][aria-current='page']::after {
+  background: #b6813d;
+}
+
+.web-global-actions {
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.2rem;
+  padding-left: 0.75rem;
+}
+
+.web-global-language-button[data-slot='button'] {
+  min-width: 4.25rem;
+  height: 2rem;
+  padding-inline: 0.65rem;
+  border: 1px solid #d7d0c4;
+  border-radius: 999px;
+  background: transparent;
+  color: #625c53;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.web-global-language-button[data-slot='button']:hover,
+.web-global-language-button[data-slot='button']:focus-visible {
+  border-color: #b6813d;
+  background: #f4eee3;
+  color: #2a251f;
+}
+
+.web-global-icon-button[data-slot='button'] {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: #777067;
+}
+
+.web-global-icon-button[data-slot='button']:hover,
+.web-global-icon-button[data-slot='button']:focus-visible {
+  border-color: #d7cbb9;
+  background: #f4eee3;
+  color: #2a251f;
+}
+
+.blueprint-reading-workspace.blueprint-workspace {
+  padding: 0;
+  background: #f4f2ed;
+}
+
+.blueprint-reading-workspace .blueprint-workspace-frame {
+  width: 100%;
+  max-width: none;
+  min-height: calc(100dvh - 3.5rem);
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: #f4f2ed;
+  box-shadow: none;
+}
+
+.web-workspace-grid {
+  display: grid;
+  grid-template-columns: 10.5rem minmax(0, 1fr) 15.5rem;
+  align-items: start;
+  width: min(100%, 90rem);
+  margin: 0 auto;
+  padding-top: 1rem;
+  padding-bottom: 1.5rem;
+}
+
+.web-workspace-primary-rail,
+.web-workflow-rail {
+  position: sticky;
+  top: 4.5rem;
+  min-width: 0;
+  border: 1px solid #ded8cc;
+  background: rgba(249, 247, 242, 0.88);
+}
+
+.web-workspace-primary-rail {
+  padding: 1rem 0.7rem;
+  border-right: 0;
+}
+
+.web-workflow-rail {
+  padding: 1rem;
+  border-left: 0;
+}
+
+.web-rail-heading {
+  display: grid;
+  gap: 0.1rem;
+  margin-bottom: 0.75rem;
+  padding: 0 0.45rem 0.75rem;
+  border-bottom: 1px solid #e3ddd2;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+}
+
+.web-workspace-primary-rail .blueprint-page-nav {
+  width: 100%;
+}
+
+.web-workspace-primary-rail .web-rail-link[data-slot='button'] {
+  width: 100%;
+  justify-content: flex-start;
+  padding: 0.55rem 0.65rem;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: #716a61;
+  font-size: 0.78rem;
+  text-decoration: none;
+}
+
+.web-workspace-primary-rail .web-rail-link[data-slot='button']:hover {
+  border-left-color: #c9b89d;
+  background: #f3eee5;
+  color: #2a251f;
+}
+
+.web-workspace-primary-rail .web-rail-link.is-active[data-slot='button'] {
+  border-left-color: #b6813d;
+  background: #f7ead4;
+  color: #2a251f;
+  font-weight: 700;
+}
+
+.web-book-rail {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e3ddd2;
+}
+
+.web-book-rail-back {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.5rem;
+  padding-inline: 0.5rem;
+  color: #625c53;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.web-workspace-main {
+  align-content: start;
+  min-height: calc(100dvh - 5.5rem);
+  padding: 1.15rem clamp(1rem, 2.2vw, 2rem) 2rem;
+  border: 1px solid #ded8cc;
+  background: rgba(252, 251, 248, 0.94);
+}
+
+.web-workspace-main > [data-slot='breadcrumb'] {
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid #ece7de;
+}
+
+.web-workflow-rail h2 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.web-workflow-rail > p {
+  margin-top: 0.45rem;
+  color: #777067;
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.web-workflow-rail ol {
+  display: grid;
+  gap: 0;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.web-workflow-rail li {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr);
+  align-items: center;
+  min-height: 2.4rem;
+  border-top: 1px solid #e7e1d7;
+  color: #8a8379;
+  font-size: 0.75rem;
+}
+
+.web-workflow-rail li > span {
+  color: #aa906b;
+  font-family: var(--font-mono);
+  font-size: 0.62rem;
+}
+
+.web-workflow-rail li.is-active {
+  margin-inline: -1rem;
+  padding-inline: 1rem;
+  border-color: #e3cda9;
+  background: #f7ead4;
+  color: #2a251f;
+}
+
+/* Authentication follows the dark focused frames from the web board. */
+
+.auth-dark-shell {
+  max-width: none;
+  background: #141310;
+  color: #eee7dc;
+}
+
+.auth-dark-shell .blueprint-auth-card {
+  width: min(100%, 34rem);
+  margin: 0 auto;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border-color: #4b4132;
+  border-radius: 0;
+  background: #171613;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.25);
+}
+
+.auth-dark-shell-wide .blueprint-auth-card {
+  width: min(100%, 48rem);
+}
+
+.auth-dark-shell .blueprint-auth-card::before {
+  right: 0;
+  left: 0;
+  width: auto;
+  border-color: #b6813d;
+}
+
+.auth-form-wordmark {
+  color: #f1eadf;
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-form-eyebrow {
+  margin-top: clamp(2.5rem, 7vw, 4.5rem);
+  color: #bd8a43;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.auth-dark-shell .blueprint-auth-card h1 {
+  max-width: 12em;
+  margin-top: 0.65rem;
+  color: #f4eee4;
+  line-height: 1.02;
+}
+
+.auth-dark-shell
+  :is([class~='text-stone-500'], [class~='text-stone-600'], [class~='text-stone-700']) {
+  color: #aaa196;
+}
+
+.auth-dark-shell .blueprint-auth-card :is(input, select, textarea) {
+  border-color: #4f473c;
+  border-radius: 0;
+  background: #191815;
+  color: #f2ebe0;
+}
+
+.auth-dark-shell .blueprint-auth-card :is(input, select, textarea):focus {
+  border-color: #b6813d;
+  box-shadow: 0 0 0 1px #b6813d;
+}
+
+.auth-dark-shell .blueprint-auth-tabs [data-slot='tabs-list'],
+.auth-dark-shell [data-slot='toggle-group'] {
+  border-color: #4f473c;
+  border-radius: 0;
+  background: #191815;
+}
+
+.auth-dark-shell .blueprint-auth-tabs [data-slot='tabs-trigger'] {
+  border-radius: 0;
+  color: #aaa196;
+}
+
+.auth-dark-shell .blueprint-auth-tabs [data-slot='tabs-trigger'][data-state='active'] {
+  background: #b6813d;
+  color: #17130e;
+}
+
+.auth-dark-shell .blueprint-auth-card button[type='submit'] {
+  min-height: 2.75rem;
+  border-color: #b6813d;
+  border-radius: 0;
+  background: #b6813d;
+  color: #17130e;
+}
+
+.auth-dark-shell .blueprint-auth-card button[type='submit']:hover {
+  background: #ca9952;
+}
+
+.auth-dark-shell .blueprint-auth-card button[type='button'],
+.auth-dark-shell .blueprint-auth-card a {
+  border-radius: 0;
+}
+
+.auth-dark-shell .blueprint-auth-card > button[type='button'] {
+  border-color: #4f473c;
+  background: transparent;
+  color: #d5cec3;
+}
+
+.auth-dark-shell .blueprint-auth-card a {
+  color: #bd8a43;
+}
+
+.auth-dark-shell [data-slot='toggle-group-item'] {
+  color: #aaa196;
+}
+
+.auth-dark-shell [data-slot='toggle-group-item'][data-state='on'] {
+  background: #eee7dc;
+  color: #17130e;
+}
+
+@media (max-width: 1024px) {
+  .web-workspace-grid {
+    grid-template-columns: 10rem minmax(0, 1fr);
+  }
+
+  .web-workflow-rail {
+    position: static;
+    grid-row: 1;
+    grid-column: 1 / -1;
+    margin-bottom: 0.75rem;
+    border-left: 1px solid #ded8cc;
+  }
+
+  .web-workflow-rail > p {
+    max-width: 40rem;
+  }
+
+  .web-workflow-rail ol {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin-top: 0.75rem;
+  }
+
+  .web-workflow-rail li {
+    grid-template-columns: 1fr;
+    gap: 0.25rem;
+    padding: 0.55rem;
+    border-top: 1px solid #e7e1d7;
+    border-left: 1px solid #e7e1d7;
+  }
+
+  .web-workflow-rail li:first-child {
+    border-left: 0;
+  }
+
+  .web-workflow-rail li.is-active {
+    margin: 0;
+    padding: 0.55rem;
+  }
+
+  .web-workspace-primary-rail {
+    top: 4.5rem;
+    grid-row: 2;
+  }
+
+  .web-workspace-main {
+    grid-row: 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .web-app-header-inner {
+    position: relative;
+    flex-wrap: wrap;
+    padding-top: 0.35rem;
+  }
+
+  .web-app-wordmark {
+    width: 100%;
+    min-height: 2.5rem;
+    padding-right: 10.5rem;
+  }
+
+  .web-global-nav {
+    flex: 1 0 100%;
+    width: 100%;
+    border-top: 1px solid #ece7df;
+  }
+
+  .web-global-destinations {
+    flex: 1 1 auto;
+  }
+
+  .web-global-link[data-slot='button'] {
+    height: 2.8rem;
+    padding-inline: 0.65rem;
+  }
+
+  .web-global-actions {
+    position: absolute;
+    top: 0.6rem;
+    right: 0.75rem;
+    padding-left: 0;
+  }
+
+  .web-workspace-grid {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 0.5rem;
+  }
+
+  .web-workflow-rail {
+    grid-row: 1;
+    grid-column: 1;
+    overflow: hidden;
+  }
+
+  .web-workflow-rail ol {
+    grid-template-columns: repeat(6, minmax(6rem, 1fr));
+    overflow-x: auto;
+  }
+
+  .web-workspace-primary-rail {
+    position: static;
+    grid-row: 2;
+    grid-column: 1;
+    padding: 0.6rem;
+    border-right: 1px solid #ded8cc;
+  }
+
+  .web-rail-heading {
+    display: none;
+  }
+
+  .web-workspace-primary-rail .blueprint-page-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .web-workspace-primary-rail .web-rail-link[data-slot='button'] {
+    justify-content: center;
+    border-bottom: 2px solid transparent;
+    border-left: 0;
+    text-align: center;
+  }
+
+  .web-workspace-primary-rail .web-rail-link.is-active[data-slot='button'] {
+    border-bottom-color: #b6813d;
+    border-left: 0;
+  }
+
+  .web-book-rail {
+    margin-top: 0.5rem;
+    padding-top: 0.5rem;
+  }
+
+  .web-book-rail-back {
+    justify-content: center;
+  }
+
+  .web-workspace-main {
+    grid-row: 3;
+    grid-column: 1;
+    min-height: 0;
+    padding: 1rem 0.75rem 1.5rem;
+  }
+
+  .auth-dark-shell .blueprint-auth-card {
+    padding: 1.25rem;
+  }
+}

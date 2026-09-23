@@ -38,6 +38,7 @@ export function DebateEntryPanel({ bookId }: { bookId: number }) {
   return (
     <div
       className="rounded border border-stone-300 bg-white p-4 sm:p-5"
+      data-ui="book-debate-entry"
       {...testAttr('book-debate-entry')}
     >
       <h3 className="font-semibold">{t('debateEntryTitle')}</h3>
@@ -76,6 +77,7 @@ export function DebateEntryPanel({ bookId }: { bookId: number }) {
                 )
               }
               type="button"
+              variant={selected ? 'default' : 'secondary'}
               {...testAttr('debate-participant-toggle')}
             >
               {localizedPersonaDisplayName(persona, locale)}

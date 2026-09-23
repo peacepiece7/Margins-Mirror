@@ -5,6 +5,7 @@ import { PublicLandingPage } from '@/features/landing/components/PublicLandingPa
 import { MemoryCardApp } from '@/features/memory-cards/components/MemoryCardApp';
 import { BookLibraryPanel } from '@/features/books/components/BookLibraryPanel';
 import { BookSearchPanel } from '@/features/books/components/BookSearchPanel';
+import { CatalogOperationsPanel } from '@/features/books/components/CatalogOperationsPanel';
 
 import { AuthenticatedAppShell } from './authenticated-app-shell';
 import { PremiumRoute } from './premium-route';
@@ -31,8 +32,12 @@ import { PrivacyPage } from '@/features/privacy/components/PrivacyPage';
 import { PrivacyHistoryPage } from '@/features/privacy/components/PrivacyHistoryPage';
 import { ConsentPage } from '@/features/privacy/components/ConsentPage';
 import { ContactPage } from '@/features/contact/components/ContactPage';
+import { TermsPage } from '@/features/service-terms/components/TermsPage';
+import { TermsHistoryPage } from '@/features/service-terms/components/TermsHistoryPage';
 
 export const router = createBrowserRouter([
+  { path: '/terms', element: <TermsPage /> },
+  { path: '/terms/history', element: <TermsHistoryPage /> },
   { path: '/privacy', element: <PrivacyPage /> },
   { path: '/privacy/history', element: <PrivacyHistoryPage /> },
   { path: '/consent', element: <ConsentPage /> },
@@ -62,6 +67,7 @@ export const router = createBrowserRouter([
         ),
       },
       { path: 'book', element: <Navigate replace to="/book/discover" /> },
+      { path: 'book/catalog-operations', element: <CatalogOperationsPanel /> },
       {
         path: 'book/discover',
         element: (

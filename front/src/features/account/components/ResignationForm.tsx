@@ -56,7 +56,7 @@ export function ResignationForm() {
   });
 
   return (
-    <form className="mt-5 grid gap-4 border-t border-red-200 pt-4" onSubmit={submit}>
+    <form className="mt-5 grid gap-4 border-t border-destructive/20 pt-4" onSubmit={submit}>
       {form.formState.errors.root?.server?.message && (
         <Alert variant="destructive">
           <AlertDescription>{form.formState.errors.root.server.message}</AlertDescription>

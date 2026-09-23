@@ -17,6 +17,7 @@ public interface SessionSearchMapper {
         SELECT *
         FROM (
           SELECT
+            rs.book_id AS book_id,
             rs.id AS session_id,
             rs.id AS source_id,
             'session' AS result_type,
@@ -35,6 +36,7 @@ public interface SessionSearchMapper {
             )
           UNION ALL
           SELECT
+            rs.book_id AS book_id,
             rs.id AS session_id,
             st.id AS source_id,
             'tag' AS result_type,
@@ -50,6 +52,7 @@ public interface SessionSearchMapper {
             AND LOWER(st.label) LIKE CONCAT('%', LOWER(#{query}), '%')
           UNION ALL
           SELECT
+            rs.book_id AS book_id,
             rs.id AS session_id,
             h.id AS source_id,
             'highlight' AS result_type,
@@ -65,6 +68,7 @@ public interface SessionSearchMapper {
             AND LOWER(CONCAT_WS(' ', h.quote_text, h.note, h.location_label)) LIKE CONCAT('%', LOWER(#{query}), '%')
           UNION ALL
           SELECT
+            rs.book_id AS book_id,
             rs.id AS session_id,
             si.id AS source_id,
             'insight' AS result_type,
@@ -80,6 +84,7 @@ public interface SessionSearchMapper {
             AND LOWER(CONCAT_WS(' ', si.insight_type, si.title, si.content, si.evidence)) LIKE CONCAT('%', LOWER(#{query}), '%')
           UNION ALL
           SELECT
+            rs.book_id AS book_id,
             rs.id AS session_id,
             m.id AS source_id,
             'message' AS result_type,

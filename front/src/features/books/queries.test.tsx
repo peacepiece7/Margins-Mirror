@@ -6,8 +6,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { bookKeys } from '@/lib/query-keys';
 import { booksApi } from './api';
 import {
+  useBookQuery,
   useBookKnowledgeQuery,
   useBookSearchInfiniteQuery,
+  useBooksQuery,
   useRegenerateBookKnowledgeMutation,
   useUpdateBookMutation,
 } from './queries';
@@ -18,8 +20,25 @@ beforeEach(() => {
 });
 
 describe('book query mutations', () => {
-  it('invalidates the related book and lists without touching another detail', async () => {
+  it('resolves a direct detail route independently of the bounded Library page', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.spyOn(booksApi, 'savedBooks').mockResolvedValue({
+      books: [{ bookId: 51, title: 'Beyond the first page', author: 'Reader' }],
+    });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useBookQuery(51), { wrapper });
+
+    await waitFor(() => expect(result.current.data?.bookId).toBe(51));
+    expect(booksApi.savedBooks).toHaveBeenCalledOnce();
+    expect(client.getQueryData(bookKeys.detail(51))).toMatchObject({ bookId: 51 });
+  });
+
+  it('resets paged lists and invalidates only the related detail', async () => {
     const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+    const resetQueries = vi.spyOn(client, 'resetQueries');
     client.setQueryData(bookKeys.list(), { books: [] });
     client.setQueryData(bookKeys.detail(7), { bookId: 7 });
     client.setQueryData(bookKeys.detail(8), { bookId: 8 });
@@ -35,13 +54,71 @@ describe('book query mutations', () => {
 
     await act(() => result.current.mutateAsync({ bookId: 7, title: 'Updated', author: 'Reader' }));
 
-    expect(client.getQueryState(bookKeys.list())?.isInvalidated).toBe(true);
+    expect(resetQueries).toHaveBeenCalledWith({ queryKey: bookKeys.lists() });
     expect(client.getQueryState(bookKeys.detail(7))?.isInvalidated).toBe(true);
     expect(client.getQueryState(bookKeys.detail(8))?.isInvalidated).toBe(false);
   });
 });
 
 describe('Book Knowledge mutation', () => {
+  it('polls accepted knowledge until background regeneration finishes', async () => {
+    vi.useFakeTimers();
+    const pendingKnowledge = {
+      discussionPoints: [],
+      fallbackUsed: false,
+      famousQuotes: [],
+      generationLocale: 'en' as const,
+      keywords: [],
+      knowledgeId: 7,
+      recommendedPersonas: [],
+      refreshPending: true,
+      stale: false,
+      status: 'ready',
+      themes: [],
+      title: 'Existing knowledge',
+      version: 'book-knowledge-v1',
+    };
+    const completedKnowledge = {
+      ...pendingKnowledge,
+      refreshPending: false,
+      title: 'Regenerated knowledge',
+    };
+    vi.spyOn(booksApi, 'knowledge')
+      .mockResolvedValueOnce(pendingKnowledge)
+      .mockResolvedValue(completedKnowledge);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    try {
+      const { result } = renderHook(() => useBookKnowledgeQuery(7), { wrapper });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+        await Promise.resolve();
+      });
+      expect(result.current.data).toMatchObject({ refreshPending: true });
+      expect(booksApi.knowledge).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_001);
+        await Promise.resolve();
+      });
+      expect(result.current.data).toMatchObject({
+        refreshPending: false,
+        title: 'Regenerated knowledge',
+      });
+      expect(booksApi.knowledge).toHaveBeenCalledTimes(2);
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(4_000);
+      });
+      expect(booksApi.knowledge).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('replaces the exact knowledge cache after explicit regeneration', async () => {
     const client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
     const knowledge = {
@@ -190,5 +267,36 @@ describe('book candidate infinite query', () => {
     expect(booksApi.searchCandidates).toHaveBeenNthCalledWith(1, 'book', 1, 5);
     expect(booksApi.searchCandidates).toHaveBeenNthCalledWith(2, 'book', 2, 5);
     expect(fetchedPages).toBe(2);
+  });
+});
+
+describe('Library infinite query', () => {
+  it('loads only the first page until the caller requests the next cursor', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.spyOn(booksApi, 'books')
+      .mockResolvedValueOnce({
+        books: [{ author: 'Reader', bookId: 1, title: 'First page' }],
+        nextCursor: '50',
+      })
+      .mockResolvedValueOnce({
+        books: [{ author: 'Reader', bookId: 51, title: 'Second page' }],
+      });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useBooksQuery({ stage: 'REFLECT' }), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(booksApi.books).toHaveBeenCalledOnce();
+    expect(booksApi.books).toHaveBeenCalledWith({ stage: 'REFLECT' }, undefined);
+
+    let fetchedBooks = 0;
+    await act(async () => {
+      const fetched = await result.current.fetchNextPage();
+      fetchedBooks = fetched.data?.pages.flatMap((page) => page.books).length ?? 0;
+    });
+
+    expect(booksApi.books).toHaveBeenNthCalledWith(2, { stage: 'REFLECT' }, '50');
+    expect(fetchedBooks).toBe(2);
   });
 });

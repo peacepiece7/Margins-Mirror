@@ -12,6 +12,8 @@ import com.margins.book.service.BookService;
 import com.margins.common.dto.ApiResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -60,6 +62,7 @@ public class BookController {
     }
 
     @PostMapping("/{bookId}/knowledge/regenerate")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public ApiResponse<BookKnowledgeDto> regenerateBookKnowledge(@PathVariable Long bookId) {
         return ApiResponse.ok(bookService.regenerateBookKnowledge(bookId));
     }

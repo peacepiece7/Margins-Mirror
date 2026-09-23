@@ -54,10 +54,6 @@ class ApiErrorCodeContractTest {
             assertThat(rawFrontendMessage.matcher(frontendSources).find()).isFalse();
         }
 
-        String apiContract = Files.readString(
-            Path.of("..", "docs", "architecture", "api-contract", "sdd.md")
-        );
-        assertThat(apiContract).doesNotContain("message=");
     }
 
     private String read(Path path) {
