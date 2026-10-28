@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-import { translationCatalog } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 
 const steps = [
@@ -22,14 +22,12 @@ export function ReflectionLoopProgress({
   bookId: number;
   paths?: Partial<Record<ReflectionLoopStep, string>>;
 }) {
-  const locale =
-    typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ko';
-  const t = translationCatalog[locale];
+  const { t } = useI18n();
   const activeIndex = steps.findIndex((step) => step.id === active);
   return (
     <nav
-      aria-label={t.reflectionProgressLabel}
-      className="overflow-hidden rounded border border-stone-300 bg-white p-1 sm:p-2"
+      aria-label={t('reflectionProgressLabel')}
+      className="web-reflection-progress overflow-hidden rounded border border-stone-300 bg-white p-1 sm:p-2"
       {...testAttr('reflection-loop-progress')}
     >
       <ol className="grid min-w-0 grid-cols-5 gap-1">
@@ -40,12 +38,12 @@ export function ReflectionLoopProgress({
             <>
               <span
                 className={`text-[0.62rem] font-semibold tracking-[0.12em] sm:text-[0.68rem] sm:tracking-[0.16em] ${
-                  index === activeIndex ? 'text-stone-200' : 'text-stone-500'
+                  index === activeIndex ? 'text-stone-200' : 'text-muted-foreground'
                 }`}
               >
                 {String(index + 1).padStart(2, '0')}
               </span>
-              <span className="text-xs font-medium sm:text-sm">{t[step.label]}</span>
+              <span className="text-xs font-medium sm:text-sm">{t(step.label)}</span>
             </>
           );
           const className = `flex min-h-14 min-w-0 flex-col justify-center rounded px-1 py-2 sm:px-3 ${

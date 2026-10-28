@@ -42,10 +42,73 @@ export interface SaveBookResponse {
   statusStartedAt?: string;
   statusFinishedAt?: string;
   updatedAt?: string;
+  loop?: LibraryLoopSummary;
+  recentRevisions?: LibraryRevisionSummary[];
+  threadVersion?: string;
 }
 
 export interface BookListResponse {
   books: SaveBookResponse[];
+  nextCursor?: string;
+  summary?: LibrarySummary | null;
+}
+
+export type LibraryLoopStage = 'REFLECT' | 'INTERVIEW' | 'GUIDE' | 'DISCUSS' | 'REFINE';
+
+export interface LibraryContinueLocator {
+  kind: LibraryLoopStage;
+  href: string;
+}
+
+export interface LibraryLoopSummary {
+  stage: LibraryLoopStage;
+  reflectionId?: number;
+  currentRevisionId?: number;
+  currentRevisionNumber?: number;
+  currentRevisionAt?: string;
+  interviewId?: number;
+  answeredCount: number;
+  targetCount: number;
+  guideId?: number;
+  runId?: number;
+  runStatus?: string;
+  continueLocator: LibraryContinueLocator;
+}
+
+export interface LibraryRevisionSummary {
+  revisionId: number;
+  version: number;
+  revisionSource: string;
+  createdAt: string;
+}
+
+export interface LibraryThreadItem {
+  book: SaveBookResponse;
+  loop: LibraryLoopSummary;
+  recentRevisions: LibraryRevisionSummary[];
+  version: string;
+}
+
+export interface LibraryThreadResponse {
+  threads: LibraryThreadItem[];
+  nextCursor?: string;
+  summary?: LibrarySummary | null;
+}
+
+export interface LibraryActivitySummary {
+  bookId: number;
+  bookTitle: string;
+  bookAuthor?: string;
+  revisionId: number;
+  version: number;
+  revisionSource: string;
+  createdAt: string;
+}
+
+export interface LibrarySummary {
+  shelfCounts: Partial<Record<'all' | 'want_to_read' | 'reading' | 'read' | 'dnf', number>>;
+  stageCounts: Partial<Record<LibraryLoopStage, number>>;
+  recentActivity: LibraryActivitySummary[];
 }
 
 export interface BookKnowledgeDiscussionPoint {
@@ -78,4 +141,15 @@ export interface BookKnowledge {
   stale?: boolean;
   fallbackUsed?: boolean;
   refreshPending?: boolean;
+}
+
+export interface BookBackground {
+  summary: string | null;
+  revision: number;
+  updatedAt: string | null;
+}
+
+export interface UpdateBookBackground {
+  summary: string | null;
+  expectedRevision: number;
 }

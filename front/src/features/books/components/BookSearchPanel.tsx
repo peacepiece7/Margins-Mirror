@@ -1,115 +1,160 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
-
-import { AiProcessingNotice } from '@/components/ui/ai-processing-notice';
+import { useQuery } from '@tanstack/react-query';
+import { Link, useNavigate } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { useFlashAlert } from '@/components/ui/flash-alert';
 import { apiErrorMessage } from '@/lib/api-error-i18n';
 import { useAuthenticatedSessionGuard } from '@/lib/authenticated-session-guard';
 import { useI18n } from '@/lib/i18n';
-import {
-  QUESTION_AI_NOTICE_DISMISS_DAYS,
-  QUESTION_AI_NOTICE_COOKIE_KEY,
-} from '@/lib/dismissible-notice';
-import type { BookCandidate } from '@/types/api/book';
-
-import {
-  useBookSearchCommand,
-  useBookSearchInfiniteQuery,
-  useSaveBookMutation,
-  useSaveManualBookMutation,
-} from '../queries';
-import { bookPath } from '../routes';
+import { bookKeys } from '@/lib/query-keys';
+import { testAttr } from '@/utils/testAttrs';
+import { booksApi } from '../api';
+import { useCatalogSearch } from '../catalog-queries';
+import { useSaveManualBookMutation } from '../queries';
 import { useBookSelectionStore } from '../selection-store';
-import { BookSearchPage } from './BookSearchPage';
-
-const candidateLimit = 5;
+import { useBookPagination } from '../use-book-pagination';
+import { CatalogSearchForm } from './CatalogSearchForm';
+import { CatalogCandidateCard } from './CatalogCandidateCard';
+import { BookSearchState } from './BookSearchState';
+import { ManualBookForm } from './ManualBookForm';
 
 export function BookSearchPanel() {
-  const { t } = useI18n();
-  const { show: showFlashAlert } = useFlashAlert();
+  const { t, locale } = useI18n();
+  const catalog = useCatalogSearch();
+  const { search, first, candidates, collection } = catalog;
+  const manual = useSaveManualBookMutation();
   const navigate = useNavigate();
-  const isCurrentSession = useAuthenticatedSessionGuard();
-  const command = useBookSearchCommand();
-  const loadMoreElement = useRef<HTMLDivElement | null>(null);
-  const search = useBookSearchInfiniteQuery(command.query, candidateLimit, Boolean(command.query));
-  const saveBook = useSaveBookMutation();
-  const saveManualBook = useSaveManualBookMutation();
-  const selectBook = useBookSelectionStore((state) => state.selectBook);
-  const saving = saveBook.isPending || saveManualBook.isPending;
-  const candidates = useMemo(
-    () => search.data?.pages.flatMap((result) => result.candidates) ?? [],
-    [search.data],
-  );
-  const lastSearchPage = search.data?.pages.at(-1);
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = search;
-  const setLoadMoreRef = useCallback((node: HTMLDivElement | null) => {
-    loadMoreElement.current = node;
-  }, []);
-
-  useEffect(() => {
-    const target = loadMoreElement.current;
-    if (!target || !hasNextPage || isFetchingNextPage) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) void fetchNextPage();
-      },
-      { rootMargin: '240px 0px' },
-    );
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
-
-  function handleSaveSuccess(bookId: number) {
-    if (!isCurrentSession()) return;
-    showFlashAlert({ message: t('bookAdded'), variant: 'success' });
-    selectBook(bookId);
-    navigate(bookPath('book-list'));
-  }
-
-  function handleSaveError(error: unknown) {
-    if (!isCurrentSession()) return;
-    showFlashAlert({ message: apiErrorMessage(error, t), variant: 'destructive' });
-  }
-
-  function saveCandidate(candidate: BookCandidate) {
-    saveBook.mutate(candidate, {
-      onSuccess: (book) => handleSaveSuccess(book.bookId),
-      onError: handleSaveError,
-    });
-  }
-
+  const currentSession = useAuthenticatedSessionGuard();
+  const selectBook = useBookSelectionStore((s) => s.selectBook);
+  const flash = useFlashAlert();
+  const loadMore = useBookPagination(search);
+  const capabilities = useQuery({
+    queryKey: bookKeys.catalogCapabilities(),
+    queryFn: ({ signal }) => booksApi.catalogCapabilities(signal),
+    staleTime: 60_000,
+  });
+  const date = (value: string) =>
+    new Intl.DateTimeFormat(locale, { dateStyle: 'medium' }).format(new Date(value));
   return (
-    <div className="grid gap-3">
-      <AiProcessingNotice
-        action={t('aiActionBookSearch')}
-        dismissDays={QUESTION_AI_NOTICE_DISMISS_DAYS}
-        storageKey={QUESTION_AI_NOTICE_COOKIE_KEY}
-      />
-      <BookSearchPage
-        candidateHasMore={Boolean(hasNextPage)}
-        candidateTotalItems={lastSearchPage?.totalItems}
-        candidates={candidates}
-        error={search.isError}
-        loadMoreRef={setLoadMoreRef}
-        loading={search.isLoading}
-        loadingMore={isFetchingNextPage}
-        onClear={command.clear}
-        onManualSubmit={async ({ title, author }) => {
+    <section className="web-discover-page grid gap-5" {...testAttr('book-search-page')}>
+      <Card className="web-discover-search rounded border border-stone-300 bg-stone-50/95 p-4 ring-0 sm:p-5">
+        <CardContent className="p-0">
+          <h2 className="font-display text-3xl font-semibold">{t('searchHeading')}</h2>
+          <p className="mt-2 text-sm leading-6 text-stone-600">{t('catalogHint')}</p>
+          <CatalogSearchForm
+            active={catalog.request}
+            onSearch={catalog.submit}
+            onFilterChange={catalog.filter}
+            onClear={catalog.clear}
+          />
+        </CardContent>
+      </Card>
+      {search.isLoading && <BookSearchState state="pending" />}
+      {search.isError && (
+        <div
+          role="alert"
+          className="grid gap-2 rounded border border-destructive/20 p-4 text-sm text-destructive"
+        >
+          {apiErrorMessage(search.error, t)}
+          <Button variant="outline" onClick={catalog.rebuild}>
+            {t('catalogRefreshView')}
+          </Button>
+        </div>
+      )}
+      {first && (
+        <div
+          className="grid gap-2 text-sm text-stone-600"
+          aria-live="polite"
+          {...testAttr('catalog-status')}
+        >
+          {collection?.state === 'COLLECTING' && <p>{t('catalogCollecting')}</p>}
+          {collection?.lastOutcome === 'PARTIAL' && <p>{t('catalogPartial')}</p>}
+          {first.freshness === 'STALE' && <p>{t('catalogStale')}</p>}
+          {(first.resultState === 'UNAVAILABLE' ||
+            (!candidates.length &&
+              collection?.state === 'IDLE' &&
+              collection.lastOutcome === 'FAILED')) && <p>{t('catalogUnavailable')}</p>}
+          {!candidates.length && collection?.state === 'IDLE' && first.resultState === 'EMPTY' && (
+            <p>{t('catalogEmpty')}</p>
+          )}
+          {first.lastUpdatedAt && (
+            <p className="text-xs">
+              {t('catalogUpdated')}: {date(first.lastUpdatedAt)}
+              {first.revalidateAfter && (
+                <>
+                  {' '}
+                  · {t('catalogRevalidate')}: {date(first.revalidateAfter)}
+                </>
+              )}
+            </p>
+          )}
+          {(catalog.hasUpdates || collection?.state === 'COLLECTING' || catalog.pollError) && (
+            <Button variant="outline" onClick={catalog.rebuild}>
+              {t(catalog.hasUpdates ? 'catalogUpdates' : 'catalogRefreshView')}
+            </Button>
+          )}
+        </div>
+      )}
+      <div className="web-discover-results grid gap-3" {...testAttr('book-candidate-list')}>
+        {candidates.map((candidate) => (
+          <CatalogCandidateCard
+            key={candidate.catalogBookId}
+            candidate={candidate}
+            onSaved={(id) => {
+              selectBook(id);
+              flash.show({ message: t('bookAdded'), variant: 'success' });
+              navigate('/book/library');
+            }}
+          />
+        ))}
+      </div>
+      {search.hasNextPage && (
+        <div ref={loadMore}>
+          <Button
+            variant="outline"
+            loading={search.isFetchingNextPage}
+            disabled={search.isFetchingNextPage}
+            onClick={() => void search.fetchNextPage()}
+            {...testAttr('book-candidate-load-more')}
+          >
+            {t('catalogMore')}
+          </Button>
+        </div>
+      )}
+      {first?.truncated && <p className="text-xs text-stone-500">{t('catalogTruncated')}</p>}
+      {!search.hasNextPage && collection?.canExtend && collection.state === 'IDLE' && (
+        <Button
+          variant="outline"
+          onClick={catalog.extend}
+          disabled={search.isFetching || catalog.extending}
+        >
+          {t('catalogExtend')}
+        </Button>
+      )}
+      {catalog.extendError && <p role="alert">{apiErrorMessage(catalog.extendError, t)}</p>}
+      <ManualBookForm
+        saving={manual.isPending}
+        onSubmit={async (values) => {
           try {
-            const book = await saveManualBook.mutateAsync({ title, author });
-            if (!isCurrentSession()) return;
-            handleSaveSuccess(book.bookId);
+            const book = await manual.mutateAsync(values);
+            if (!currentSession()) return;
+            selectBook(book.bookId);
+            flash.show({ message: t('bookAdded'), variant: 'success' });
+            navigate('/book/library');
           } catch (error) {
-            if (!isCurrentSession()) return;
-            handleSaveError(error);
+            if (currentSession())
+              flash.show({ message: apiErrorMessage(error, t), variant: 'destructive' });
           }
         }}
-        onRetry={() => void search.refetch()}
-        onSaveCandidate={saveCandidate}
-        onSearch={command.commit}
-        query={command.query}
-        saving={saving}
       />
-    </div>
+      {capabilities.data?.operator && (
+        <Link
+          className="text-sm text-stone-500 underline underline-offset-4"
+          to="/book/catalog-operations"
+        >
+          {t('catalogOps')}
+        </Link>
+      )}
+    </section>
   );
 }

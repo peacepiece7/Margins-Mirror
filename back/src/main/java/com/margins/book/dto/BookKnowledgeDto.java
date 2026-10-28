@@ -3,6 +3,7 @@ package com.margins.book.dto;
 import java.util.List;
 import lombok.Builder;
 import lombok.Value;
+import lombok.extern.jackson.Jacksonized;
 
 @Value
 @Builder
@@ -27,6 +28,7 @@ public class BookKnowledgeDto {
 
     @Value
     @Builder
+    @Jacksonized
     public static class DiscussionPointDto {
         String id;
         String question;
@@ -36,6 +38,7 @@ public class BookKnowledgeDto {
 
     @Value
     @Builder
+    @Jacksonized
     public static class RecommendedPersonaDto {
         String discussionPointId;
         List<String> personaKeys;

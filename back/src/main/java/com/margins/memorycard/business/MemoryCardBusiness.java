@@ -1,6 +1,7 @@
 package com.margins.memorycard.business;
 
 import com.margins.auth.support.AuthContext;
+import com.margins.book.mapper.BookMapper;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
 import com.margins.memorycard.dto.BulkMemoryCardGroupRequest;
@@ -35,9 +36,18 @@ public class MemoryCardBusiness {
     private static final int MAX_CARDS = 500;
 
     private final MemoryCardMapper memoryCardMapper;
+    private final BookMapper bookMapper;
 
     public MemoryCardGroupListResponse groups() {
-        List<MemoryCardGroupDto> groups = memoryCardMapper.findGroups(currentUserId()).stream()
+        return groups(null);
+    }
+
+    public MemoryCardGroupListResponse groups(Long bookId) {
+        Long userId = currentUserId();
+        if (bookId != null) {
+            requireOwnedBook(bookId, userId);
+        }
+        List<MemoryCardGroupDto> groups = memoryCardMapper.findGroups(userId, bookId).stream()
             .map((record) -> toGroupDto(record, null))
             .toList();
         return MemoryCardGroupListResponse.builder().groups(groups).build();
@@ -50,8 +60,13 @@ public class MemoryCardBusiness {
 
     @Transactional
     public MemoryCardGroupDto createGroup(CreateMemoryCardGroupRequest request) {
+        Long userId = currentUserId();
+        if (request.getBookId() != null) {
+            requireOwnedBook(request.getBookId(), userId);
+        }
         MemoryCardGroupRecord record = MemoryCardGroupRecord.builder()
-            .userId(currentUserId())
+            .userId(userId)
+            .bookId(request.getBookId())
             .title(cleanRequired(request.getTitle(), "group.title", 255))
             .description(cleanOptional(request.getDescription(), 1000))
             .sourceLabel(cleanOptional(request.getSourceLabel(), 255))
@@ -99,7 +114,8 @@ public class MemoryCardBusiness {
     @Transactional
     public MemoryCardListResponse createCard(Long groupId, CreateMemoryCardRequest request) {
         requireGroup(groupId);
-        insertCard(groupId, request, memoryCardMapper.maxPosition(groupId) + 1);
+        MemoryCardRecord record = recordFromInput(groupId, request, memoryCardMapper.maxPosition(groupId) + 1, "");
+        insertCard(record);
         memoryCardMapper.touchGroup(groupId);
         return cards(groupId);
     }
@@ -107,7 +123,7 @@ public class MemoryCardBusiness {
     @Transactional
     public MemoryCardListResponse updateCard(Long cardId, UpdateMemoryCardRequest request) {
         MemoryCardRecord existing = requireOwnedCard(cardId);
-        MemoryCardRecord update = recordFromInput(existing.getGroupId(), request, existing.getPosition());
+        MemoryCardRecord update = recordFromInput(existing.getGroupId(), request, existing.getPosition(), "");
         update.setId(cardId);
         if (memoryCardMapper.updateCard(update) <= 0) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Memory card could not be updated");
@@ -146,89 +162,83 @@ public class MemoryCardBusiness {
 
     @Transactional
     public MemoryCardGroupDto bulkCreateGroup(BulkMemoryCardGroupRequest request) {
-        validateBulk(request);
+        String policy = duplicatePolicy(request.getDuplicatePolicy());
+        List<MemoryCardRecord> upload = prepareBulkCards(request, policy);
         MemoryCardGroupDto created = createGroup(request.getGroup());
-        applyBulkCards(created.getGroupId(), request);
+        applyBulkCards(created.getGroupId(), upload, policy);
         return group(created.getGroupId());
     }
 
     @Transactional
     public MemoryCardListResponse bulkCards(Long groupId, BulkMemoryCardRequest request) {
         requireGroup(groupId);
-        validateBulk(request);
-        applyBulkCards(groupId, request);
+        String policy = duplicatePolicy(request.getDuplicatePolicy());
+        List<MemoryCardRecord> upload = prepareBulkCards(request, policy);
+        applyBulkCards(groupId, upload, policy);
         return cards(groupId);
     }
 
-    private void applyBulkCards(Long groupId, BulkMemoryCardRequest request) {
-        String policy = duplicatePolicy(request.getDuplicatePolicy());
-        List<MemoryCardInputDto> upload = normalizedUploadCards(request.getCards(), policy);
+    private void applyBulkCards(Long groupId, List<MemoryCardRecord> upload, String policy) {
         Map<String, MemoryCardRecord> existingByFront = new LinkedHashMap<>();
         for (MemoryCardRecord card : memoryCardMapper.findCards(groupId)) {
             existingByFront.putIfAbsent(frontKey(card.getFrontText()), card);
         }
 
         int nextPosition = memoryCardMapper.maxPosition(groupId) + 1;
-        for (MemoryCardInputDto input : upload) {
-            MemoryCardRecord existing = existingByFront.get(frontKey(input.getFrontText()));
+        for (MemoryCardRecord card : upload) {
+            MemoryCardRecord existing = existingByFront.get(frontKey(card.getFrontText()));
             if (existing != null && "remove".equals(policy)) {
                 continue;
             }
+            card.setGroupId(groupId);
             if (existing != null && "replace".equals(policy)) {
-                MemoryCardRecord update = recordFromInput(groupId, input, existing.getPosition());
-                update.setId(existing.getId());
-                memoryCardMapper.updateCard(update);
+                card.setId(existing.getId());
+                card.setPosition(existing.getPosition());
+                memoryCardMapper.updateCard(card);
                 continue;
             }
-            insertCard(groupId, input, nextPosition++);
+            card.setPosition(nextPosition++);
+            insertCard(card);
         }
         memoryCardMapper.touchGroup(groupId);
     }
 
-    private void insertCard(Long groupId, MemoryCardInputDto input, int position) {
-        MemoryCardRecord record = recordFromInput(groupId, input, position);
+    private void insertCard(MemoryCardRecord record) {
         if (memoryCardMapper.insertCard(record) <= 0) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Memory card could not be saved");
         }
     }
 
-    private MemoryCardRecord recordFromInput(Long groupId, MemoryCardInputDto input, int position) {
+    private MemoryCardRecord recordFromInput(Long groupId, MemoryCardInputDto input, int position, String fieldPrefix) {
         return MemoryCardRecord.builder()
             .groupId(groupId)
-            .frontText(cleanRequired(input.getFrontText(), "frontText", 200))
-            .backText(cleanRequired(input.getBackText(), "backText", 500))
-            .exampleText(cleanOptional(input.getExampleText(), 1000))
-            .memo(cleanOptional(input.getMemo(), 1000))
+            .frontText(cleanRequired(input.getFrontText(), fieldPrefix + "frontText", 200))
+            .backText(cleanRequired(input.getBackText(), fieldPrefix + "backText", 500))
+            .exampleText(cleanOptionalWithName(input.getExampleText(), fieldPrefix.isEmpty() ? "field" : fieldPrefix + "exampleText", 1000))
+            .memo(cleanOptionalWithName(input.getMemo(), fieldPrefix.isEmpty() ? "field" : fieldPrefix + "memo", 1000))
             .memorized(false)
             .position(position)
             .testData(true)
             .build();
     }
 
-    private void validateBulk(BulkMemoryCardRequest request) {
-        duplicatePolicy(request.getDuplicatePolicy());
+    private List<MemoryCardRecord> prepareBulkCards(BulkMemoryCardRequest request, String policy) {
         if (request.getCards() == null || request.getCards().isEmpty()) {
             throw new ApiException(ApiErrorCode.COMMON_BAD_REQUEST, "cards is required");
         }
         if (request.getCards().size() > MAX_CARDS) {
             throw new ApiException(ApiErrorCode.COMMON_BAD_REQUEST, "cards must contain 1 to 500 items");
         }
-        for (int index = 0; index < request.getCards().size(); index += 1) {
-            MemoryCardInputDto card = request.getCards().get(index);
-            cleanRequired(card.getFrontText(), "cards[" + index + "].frontText", 200);
-            cleanRequired(card.getBackText(), "cards[" + index + "].backText", 500);
-            cleanOptionalWithName(card.getExampleText(), "cards[" + index + "].exampleText", 1000);
-            cleanOptionalWithName(card.getMemo(), "cards[" + index + "].memo", 1000);
+        List<MemoryCardRecord> cards = new ArrayList<>();
+        for (int index = 0; index < request.getCards().size(); index++) {
+            cards.add(recordFromInput(null, request.getCards().get(index), 0, "cards[" + index + "]."));
         }
-    }
-
-    private List<MemoryCardInputDto> normalizedUploadCards(List<MemoryCardInputDto> cards, String policy) {
         if ("ignore".equals(policy)) {
-            return new ArrayList<>(cards);
+            return cards;
         }
 
-        Map<String, MemoryCardInputDto> byFront = new LinkedHashMap<>();
-        for (MemoryCardInputDto card : cards) {
+        Map<String, MemoryCardRecord> byFront = new LinkedHashMap<>();
+        for (MemoryCardRecord card : cards) {
             String key = frontKey(card.getFrontText());
             if ("remove".equals(policy) && byFront.containsKey(key)) {
                 continue;
@@ -244,6 +254,12 @@ public class MemoryCardBusiness {
             throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Memory card group not found");
         }
         return group;
+    }
+
+    private void requireOwnedBook(Long bookId, Long userId) {
+        if (bookMapper.findByIdForUser(bookId, userId) == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book was not found");
+        }
     }
 
     private MemoryCardRecord requireOwnedCard(Long cardId) {
@@ -301,6 +317,7 @@ public class MemoryCardBusiness {
     private MemoryCardGroupDto toGroupDto(MemoryCardGroupRecord record, List<MemoryCardDto> cards) {
         return MemoryCardGroupDto.builder()
             .groupId(record.getId())
+            .bookId(record.getBookId())
             .title(record.getTitle())
             .description(record.getDescription())
             .sourceLabel(record.getSourceLabel())

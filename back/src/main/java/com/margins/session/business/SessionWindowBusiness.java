@@ -38,8 +38,9 @@ import com.margins.session.mapper.SessionWindowMapper;
 import com.margins.session.mapper.SessionWindowPersonaMapper;
 import com.margins.session.model.SessionWindowContext;
 import com.margins.session.model.SessionWindowRecord;
-import java.util.List;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
@@ -54,14 +55,9 @@ import org.springframework.transaction.annotation.Transactional;
 @Component
 @RequiredArgsConstructor
 public class SessionWindowBusiness {
-
-    /** 윈도우/세션 소유권을 검사하기 전에 현재 독자를 확인한다. */
+    /** primitive ID 요구는 null principal의 ownership 통과를 막는다. */
     private long currentUserId() {
         return AuthContext.requireUserId();
-    }
-
-    private AiTraceContext traceContext(SessionWindowContext context) {
-        return new AiTraceContext(context.getUserId(), context.getSessionId());
     }
 
     private static final String OPEN_STATUS = "open";
@@ -141,14 +137,14 @@ public class SessionWindowBusiness {
     private List<Long> validatePersonaSelection(List<Long> requestedIds) {
         if (requestedIds == null || requestedIds.isEmpty()) return List.of();
         List<Long> ids = new ArrayList<>(requestedIds);
-        if (ids.stream().anyMatch(Objects::isNull) || ids.size() > MAX_BATCH_PERSONAS || ids.size() != ids.stream().distinct().count()) {
+        if (ids.contains(null) || ids.size() > MAX_BATCH_PERSONAS || new HashSet<>(ids).size() != ids.size()) {
             throw new ApiException(ApiErrorCode.COMMON_BAD_REQUEST, "At most two distinct personas may be selected");
         }
-        ids.forEach((id) -> {
+        for (Long id : ids) {
             if (personaMapper.findActiveByIdForUser(id, currentUserId()) == null) {
                 throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Persona not found");
             }
-        });
+        }
         return List.copyOf(ids);
     }
 
@@ -236,7 +232,7 @@ public class SessionWindowBusiness {
         SessionWindowContext context = requireWindowContext(windowId);
         GenerationLocale locale = resolveLocale(context.getUserId());
         validateQuestionForWindow(request.getQuestionId(), windowId, context);
-        Long userId = resolveUserId(request.getUserId(), context);
+        Long userId = context.getUserId();
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -260,33 +256,20 @@ public class SessionWindowBusiness {
         AiGenerationResult<AiMessageResponse> generation = aiProvider.answerWindowMessageWithMetadata(
             windowId, providerRequest, task
         );
+        AiTraceContext traceContext = new AiTraceContext(context.getUserId(), context.getSessionId());
         generation = validateMessageGeneration(
             generation,
             locale,
             false,
             context.isTestData(),
-            traceContext(context)
+            traceContext
         );
-        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
+        generationObserver.observe(generation, null, context.isTestData(), traceContext);
         AiMessageResponse aiResponse = requireGenerated(generation);
-        MessageRecord aiMessage = insertMessage(MessageRecord.builder()
-            .sessionId(context.getSessionId())
-            .windowId(windowId)
-            .userId(userId)
-            .parentMessageId(userMessage.getId())
-            .role(aiResponse.getRole())
-            .content(aiResponse.getContent())
-            .aiModel(aiResponse.getAiModel())
-            .questionId(request.getQuestionId())
-            .contextSnapshot(aiResponse.getContextSnapshot())
-            .tokenUsage(aiResponse.getTokenUsage())
-            .streamingStatus(COMPLETE_STREAMING_STATUS)
-            .generationLocale(locale.value())
-            .languageValidationOutcome(outcomeName(generation))
-            .testData(true)
-            .build());
-
-        return copyWithPersistedMessageId(aiResponse, aiMessage.getId());
+        return insertAiResponse(
+            windowId, context, userMessage, aiResponse, null, locale,
+            generation.languageValidationOutcome()
+        );
     }
 
     /** AI 델타를 호출자에게 스트리밍하되 완료 뒤 최종 응답은 저장한다. */
@@ -294,7 +277,7 @@ public class SessionWindowBusiness {
         SessionWindowContext context = requireWindowContext(windowId);
         GenerationLocale locale = resolveLocale(context.getUserId());
         validateQuestionForWindow(request.getQuestionId(), windowId, context);
-        Long userId = resolveUserId(request.getUserId(), context);
+        Long userId = context.getUserId();
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -318,33 +301,20 @@ public class SessionWindowBusiness {
         AiGenerationResult<AiMessageResponse> generation = aiProvider.streamWindowMessageWithMetadata(
             windowId, providerRequest, deltaConsumer, task
         );
+        AiTraceContext traceContext = new AiTraceContext(context.getUserId(), context.getSessionId());
         generation = validateMessageGeneration(
             generation,
             locale,
             true,
             context.isTestData(),
-            traceContext(context)
+            traceContext
         );
-        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
+        generationObserver.observe(generation, null, context.isTestData(), traceContext);
         AiMessageResponse aiResponse = requireGenerated(generation);
-        MessageRecord aiMessage = insertMessage(MessageRecord.builder()
-            .sessionId(context.getSessionId())
-            .windowId(windowId)
-            .userId(userId)
-            .parentMessageId(userMessage.getId())
-            .role(aiResponse.getRole())
-            .content(aiResponse.getContent())
-            .aiModel(aiResponse.getAiModel())
-            .questionId(request.getQuestionId())
-            .contextSnapshot(aiResponse.getContextSnapshot())
-            .tokenUsage(aiResponse.getTokenUsage())
-            .streamingStatus(COMPLETE_STREAMING_STATUS)
-            .generationLocale(locale.value())
-            .languageValidationOutcome(outcomeName(generation))
-            .testData(true)
-            .build());
-
-        return copyWithPersistedMessageId(aiResponse, aiMessage.getId());
+        return insertAiResponse(
+            windowId, context, userMessage, aiResponse, null, locale,
+            generation.languageValidationOutcome()
+        );
     }
 
     /** 접근 가능한 윈도우 하나의 활성 질문을 나열한다. */
@@ -365,7 +335,7 @@ public class SessionWindowBusiness {
             .status(ACTIVE_STATUS)
             .build();
 
-        insertQuestion(context, windowId, question);
+        insertQuestion(context, windowId, question, null, null);
         return questions(windowId);
     }
 
@@ -379,9 +349,15 @@ public class SessionWindowBusiness {
         AiGenerationResult<QuestionListResponse> generation = aiProvider.suggestQuestionsWithMetadata(
             windowId, request, task
         );
-        AiLanguageValidationOutcome validation = isOrdinaryFallback(generation)
-            ? null
-            : validateQuestions(locale, generation.value());
+        AiLanguageValidationOutcome validation = null;
+        if (!isOrdinaryFallback(generation)) {
+            QuestionListResponse value = generation.value();
+            validation = value == null || value.getQuestions() == null
+                ? AiLanguageValidationOutcome.UNKNOWN
+                : languageValidator.validateUnits(
+                    locale, value.getQuestions().stream().map(QuestionDto::getQuestionText).toList()
+                );
+        }
         if (validation == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
             generation = generation.withValue(
                 localizedQuestionFallback(locale), "FALLBACK", true, validation
@@ -389,7 +365,8 @@ public class SessionWindowBusiness {
         } else if (validation != null) {
             generation = generation.withLanguageValidation(validation);
         }
-        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
+        AiTraceContext traceContext = new AiTraceContext(context.getUserId(), context.getSessionId());
+        generationObserver.observe(generation, null, context.isTestData(), traceContext);
         QuestionListResponse suggestions = requireGenerated(generation);
         AiLanguageValidationOutcome questionValidation = generation.languageValidationOutcome();
 
@@ -404,7 +381,13 @@ public class SessionWindowBusiness {
 
     /** 답변이 없는 질문만 소프트 삭제한다. */
     public QuestionDto deleteQuestion(Long questionId) {
-        QuestionRecord record = requireDeletableQuestion(questionId);
+        QuestionRecord record = questionMapper.findActiveById(questionId, currentUserId());
+        if (record == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Question not found");
+        }
+        if (questionMapper.countActiveUserAnswers(questionId) > 0) {
+            throw new ApiException(ApiErrorCode.SESSION_ANSWERED_QUESTION_DELETE_CONFLICT);
+        }
         requireUpdated(questionMapper.softDelete(questionId, currentUserId()), "Question not found");
         return toQuestionDto(record);
     }
@@ -418,7 +401,7 @@ public class SessionWindowBusiness {
         if (blocksPersona(moderation)) {
             return debateTurn(moderation, List.of());
         }
-        Long userId = resolveUserId(request.getUserId(), context);
+        Long userId = context.getUserId();
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -440,33 +423,20 @@ public class SessionWindowBusiness {
             providerRequest,
             locale
         );
+        AiTraceContext traceContext = new AiTraceContext(context.getUserId(), context.getSessionId());
         generation = validateMessageGeneration(
             generation,
             locale,
             false,
             context.isTestData(),
-            traceContext(context)
+            traceContext
         );
-        generationObserver.observe(generation, null, context.isTestData(), traceContext(context));
+        generationObserver.observe(generation, null, context.isTestData(), traceContext);
         AiMessageResponse aiResponse = requireGenerated(generation);
-        MessageRecord aiMessage = insertMessage(MessageRecord.builder()
-            .sessionId(context.getSessionId())
-            .windowId(windowId)
-            .userId(userId)
-            .parentMessageId(userMessage.getId())
-            .role(aiResponse.getRole())
-            .content(aiResponse.getContent())
-            .aiModel(aiResponse.getAiModel())
-            .personaId(request.getPersonaId())
-            .contextSnapshot(aiResponse.getContextSnapshot())
-            .tokenUsage(aiResponse.getTokenUsage())
-            .streamingStatus(COMPLETE_STREAMING_STATUS)
-            .generationLocale(locale.value())
-            .languageValidationOutcome(outcomeName(generation))
-            .testData(true)
-            .build());
-
-        AiMessageResponse persistedResponse = copyWithPersistedMessageId(aiResponse, aiMessage.getId());
+        AiMessageResponse persistedResponse = insertAiResponse(
+            windowId, context, userMessage, aiResponse, request.getPersonaId(), locale,
+            generation.languageValidationOutcome()
+        );
         return debateTurn(finalizeAllowed(moderation, userMessage.getId()), List.of(persistedResponse));
     }
 
@@ -479,7 +449,7 @@ public class SessionWindowBusiness {
         if (blocksPersona(moderation)) {
             return debateTurn(moderation, List.of());
         }
-        Long userId = resolveUserId(request.getUserId(), context);
+        Long userId = context.getUserId();
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -504,17 +474,18 @@ public class SessionWindowBusiness {
             locale
         );
         ValidatedPersonaBatch validated = validatePersonaBatch(generation, locale);
+        AiTraceContext traceContext = new AiTraceContext(context.getUserId(), context.getSessionId());
         generationObserver.observe(
             validated.generation(),
             null,
             context.isTestData(),
-            traceContext(context)
+            traceContext
         );
         requireGenerated(validated.generation());
 
         List<AiMessageResponse> persistedResponses = validated.items().stream()
-            .map((item) -> insertPersonaDebateResponse(
-                windowId, context, userId, userMessage, item.response(),
+            .map((item) -> insertAiResponse(
+                windowId, context, userMessage, item.response(), item.response().getPersonaId(),
                 locale, item.validationOutcome()
             ))
             .toList();
@@ -540,7 +511,9 @@ public class SessionWindowBusiness {
         return blocksPersona(moderation);
     }
 
-    private DebateTurnResponse persistGuidedTurn(
+    /** Guided turn의 message row를 하나의 짧은 transaction으로 저장한다. */
+    @Transactional
+    public DebateTurnResponse persistGuidedTurnAtomically(
         Long windowId,
         Long questionId,
         String content,
@@ -554,7 +527,7 @@ public class SessionWindowBusiness {
         if (decision == null || decision.displayContent() == null || decision.generationLocale() == null) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Director response is incomplete");
         }
-        Long userId = resolveUserId(null, context);
+        Long userId = context.getUserId();
         MessageRecord userMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
@@ -596,18 +569,6 @@ public class SessionWindowBusiness {
         return debateTurn(finalized, List.of(response));
     }
 
-    /** Guided turn의 provider 결과 없이 message row만 짧은 transaction으로 저장한다. */
-    @Transactional
-    public DebateTurnResponse persistGuidedTurnAtomically(
-        Long windowId,
-        Long questionId,
-        String content,
-        DirectorDecision decision,
-        ModerationEventRecord moderation
-    ) {
-        return persistGuidedTurn(windowId, questionId, content, decision, moderation);
-    }
-
     /** Director가 고른 Persona의 provider 결과를 기존 reader message에 연결한다. */
     @Transactional
     public DebateTurnResponse persistGuidedPersonaResponse(
@@ -645,19 +606,12 @@ public class SessionWindowBusiness {
                 : generated.languageValidationOutcome().name())
             .testData(context.isTestData())
             .build());
-        AiMessageResponse persisted = copyWithPersistedMessageId(
-            AiMessageResponse.builder()
-                .windowId(windowId)
-                .personaId(personaId)
-                .role(response.getRole() == null ? "assistant" : response.getRole())
-                .content(response.getContent())
-                .streamingReady(response.isStreamingReady())
-                .aiModel(response.getAiModel())
-                .contextSnapshot(response.getContextSnapshot())
-                .tokenUsage(response.getTokenUsage())
-                .build(),
-            aiMessage.getId()
-        );
+        AiMessageResponse persisted = response.toBuilder()
+            .messageId(aiMessage.getId())
+            .windowId(windowId)
+            .personaId(personaId)
+            .role(aiMessage.getRole())
+            .build();
         return debateTurn(null, List.of(persisted));
     }
 
@@ -681,7 +635,7 @@ public class SessionWindowBusiness {
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
-            .userId(resolveUserId(null, context))
+            .userId(context.getUserId())
             .parentMessageId(null)
             .role(response.getRole() == null ? "assistant" : response.getRole())
             .content(response.getContent())
@@ -697,19 +651,12 @@ public class SessionWindowBusiness {
                 : generated.languageValidationOutcome().name())
             .testData(context.isTestData())
             .build());
-        AiMessageResponse persisted = copyWithPersistedMessageId(
-            AiMessageResponse.builder()
-                .windowId(windowId)
-                .personaId(personaId)
-                .role(response.getRole() == null ? "assistant" : response.getRole())
-                .content(response.getContent())
-                .streamingReady(response.isStreamingReady())
-                .aiModel(response.getAiModel())
-                .contextSnapshot(response.getContextSnapshot())
-                .tokenUsage(response.getTokenUsage())
-                .build(),
-            aiMessage.getId()
-        );
+        AiMessageResponse persisted = response.toBuilder()
+            .messageId(aiMessage.getId())
+            .windowId(windowId)
+            .personaId(personaId)
+            .role(aiMessage.getRole())
+            .build();
         return debateTurn(null, List.of(persisted));
     }
 
@@ -734,14 +681,15 @@ public class SessionWindowBusiness {
             providerRequest,
             locale
         );
+        AiTraceContext traceContext = new AiTraceContext(context.getUserId(), context.getSessionId());
         generation = validateMessageGeneration(
             generation,
             locale,
             false,
             context.isTestData(),
-            traceContext(context)
+            traceContext
         );
-        generationObserver.observe(generation, depth, context.isTestData(), traceContext(context));
+        generationObserver.observe(generation, depth, context.isTestData(), traceContext);
         if (generation == null
             || generation.value() == null
             || generation.fallbackUsed()
@@ -787,7 +735,7 @@ public class SessionWindowBusiness {
         DebateMessageRequest request,
         GenerationLocale locale
     ) {
-        AiGenerationTask task = personaTask(locale);
+        AiGenerationTask task = new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1", locale);
         AiGenerationResult<AiMessageResponse> generation;
         long metadataStartedAt = System.nanoTime();
         try {
@@ -810,7 +758,7 @@ public class SessionWindowBusiness {
         List<DebateMessageRequest> requests,
         GenerationLocale locale
     ) {
-        AiGenerationTask task = personaTask(locale);
+        AiGenerationTask task = new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1", locale);
         AiGenerationResult<List<AiMessageResponse>> generation;
         long metadataStartedAt = System.nanoTime();
         try {
@@ -826,10 +774,6 @@ public class SessionWindowBusiness {
         return generation == null
             ? AiGenerationResult.failure(task, "unknown", "unknown", elapsedMillis(metadataStartedAt))
             : generation;
-    }
-
-    private AiGenerationTask personaTask(GenerationLocale locale) {
-        return new AiGenerationTask("PERSONA", "persona-response-v1", "text-v1", locale);
     }
 
     private <T> T requireGenerated(AiGenerationResult<T> generation) {
@@ -883,21 +827,13 @@ public class SessionWindowBusiness {
         return context;
     }
 
-    /** 클라이언트가 보낸 사용자 식별자보다 윈도우 소유자를 우선한다. */
-    private Long resolveUserId(Long ignoredRequestUserId, SessionWindowContext context) {
-        if (context.getUserId() != null) {
-            return context.getUserId();
-        }
-        return currentUserId();
-    }
-
     /** 참조된 질문이 메시지와 같은 세션 윈도우에 속하는지 확인한다. */
     private void validateQuestionForWindow(Long questionId, Long windowId, SessionWindowContext context) {
         if (questionId == null) {
             return;
         }
 
-        QuestionRecord question = questionMapper.findActiveById(questionId, resolveUserId(null, context));
+        QuestionRecord question = questionMapper.findActiveById(questionId, context.getUserId());
         if (question == null
             || !context.getSessionId().equals(question.getSessionId())
             || !windowId.equals(question.getWindowId())) {
@@ -925,7 +861,6 @@ public class SessionWindowBusiness {
             throw new ApiException(ApiErrorCode.COMMON_BAD_REQUEST, "At most two personas can reply together");
         }
         return distinctIds.stream()
-            .distinct()
             .map(this::requireActivePersona)
             .toList();
     }
@@ -937,40 +872,26 @@ public class SessionWindowBusiness {
         return record;
     }
 
-    /** 저장된 메시지 식별자를 붙인 AI 응답을 반환한다. */
-    private AiMessageResponse copyWithPersistedMessageId(AiMessageResponse response, Long messageId) {
-        return AiMessageResponse.builder()
-            .messageId(messageId)
-            .windowId(response.getWindowId())
-            .personaId(response.getPersonaId())
-            .role(response.getRole())
-            .content(response.getContent())
-            .streamingReady(response.isStreamingReady())
-            .aiModel(response.getAiModel())
-            .contextSnapshot(response.getContextSnapshot())
-            .tokenUsage(response.getTokenUsage())
-            .build();
-    }
-
-    /** 공유 사용자 토론 메시지에 연결된 persona 응답 하나를 저장한다. */
-    private AiMessageResponse insertPersonaDebateResponse(
+    /** 독자 메시지에 연결된 AI 응답을 저장하고 실제 저장 ID를 반환한다. */
+    private AiMessageResponse insertAiResponse(
         Long windowId,
         SessionWindowContext context,
-        Long userId,
         MessageRecord userMessage,
         AiMessageResponse aiResponse,
+        Long personaId,
         GenerationLocale locale,
         AiLanguageValidationOutcome validationOutcome
     ) {
         MessageRecord aiMessage = insertMessage(MessageRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
-            .userId(userId)
+            .userId(context.getUserId())
             .parentMessageId(userMessage.getId())
             .role(aiResponse.getRole())
             .content(aiResponse.getContent())
             .aiModel(aiResponse.getAiModel())
-            .personaId(aiResponse.getPersonaId())
+            .personaId(personaId)
+            .questionId(userMessage.getQuestionId())
             .contextSnapshot(aiResponse.getContextSnapshot())
             .tokenUsage(aiResponse.getTokenUsage())
             .streamingStatus(COMPLETE_STREAMING_STATUS)
@@ -981,14 +902,10 @@ public class SessionWindowBusiness {
             .testData(true)
             .build());
 
-        return copyWithPersistedMessageId(aiResponse, aiMessage.getId());
+        return aiResponse.toBuilder().messageId(aiMessage.getId()).build();
     }
 
     /** 생성되었거나 독자가 작성한 질문을 대상 윈도우에 저장한다. */
-    private QuestionDto insertQuestion(SessionWindowContext context, Long windowId, QuestionDto suggestion) {
-        return insertQuestion(context, windowId, suggestion, null, null);
-    }
-
     private QuestionDto insertQuestion(
         SessionWindowContext context,
         Long windowId,
@@ -999,7 +916,7 @@ public class SessionWindowBusiness {
         QuestionRecord record = QuestionRecord.builder()
             .sessionId(context.getSessionId())
             .windowId(windowId)
-            .userId(resolveUserId(null, context))
+            .userId(context.getUserId())
             .questionText(suggestion.getQuestionText())
             .questionType(suggestion.getQuestionType() == null ? "reflection" : suggestion.getQuestionType())
             .status(ACTIVE_STATUS)
@@ -1062,24 +979,25 @@ public class SessionWindowBusiness {
                 locale,
                 response.getContent()
             );
-            if (itemOutcome == AiLanguageValidationOutcome.KNOWN_MISMATCH) {
-                items.add(new ValidatedPersonaMessage(
-                    localizedMessageFallback(response, locale),
-                    itemOutcome
-                ));
-                replaced = true;
-            } else {
-                items.add(new ValidatedPersonaMessage(response, itemOutcome));
-                matched = matched || itemOutcome == AiLanguageValidationOutcome.MATCH;
-            }
+            boolean mismatch = itemOutcome == AiLanguageValidationOutcome.KNOWN_MISMATCH;
+            AiMessageResponse validatedResponse = mismatch
+                ? localizedMessageFallback(response, locale)
+                : response;
+            items.add(new ValidatedPersonaMessage(validatedResponse, itemOutcome));
+            replaced |= mismatch;
+            matched |= itemOutcome == AiLanguageValidationOutcome.MATCH;
+        }
+        AiLanguageValidationOutcome aggregateOutcome = matched
+            ? AiLanguageValidationOutcome.MATCH
+            : AiLanguageValidationOutcome.UNKNOWN;
+        if (replaced) {
+            aggregateOutcome = AiLanguageValidationOutcome.KNOWN_MISMATCH;
         }
         AiGenerationResult<List<AiMessageResponse>> aggregate = generation.withValue(
             items.stream().map(ValidatedPersonaMessage::response).toList(),
             replaced ? "FALLBACK" : generation.outcome(),
             replaced || generation.fallbackUsed(),
-            replaced
-                ? AiLanguageValidationOutcome.KNOWN_MISMATCH
-                : matched ? AiLanguageValidationOutcome.MATCH : AiLanguageValidationOutcome.UNKNOWN
+            aggregateOutcome
         );
         return new ValidatedPersonaBatch(aggregate, List.copyOf(items));
     }
@@ -1102,19 +1020,6 @@ public class SessionWindowBusiness {
             && generation.languageValidationOutcome() == null;
     }
 
-    private AiLanguageValidationOutcome validateQuestions(
-        GenerationLocale locale,
-        QuestionListResponse response
-    ) {
-        if (response == null || response.getQuestions() == null) {
-            return AiLanguageValidationOutcome.UNKNOWN;
-        }
-        return languageValidator.validateUnits(
-            locale,
-            response.getQuestions().stream().map(QuestionDto::getQuestionText).toList()
-        );
-    }
-
     private QuestionListResponse localizedQuestionFallback(GenerationLocale locale) {
         String text = locale == GenerationLocale.KO
             ? "이 장면에서 가장 중요하게 느껴진 선택은 무엇인가요?"
@@ -1125,24 +1030,15 @@ public class SessionWindowBusiness {
     }
 
     private AiMessageResponse localizedMessageFallback(AiMessageResponse source, GenerationLocale locale) {
-        return AiMessageResponse.builder()
-            .windowId(source.getWindowId())
-            .personaId(source.getPersonaId())
+        return source.toBuilder()
+            .messageId(null)
             .role(source.getRole() == null ? "assistant" : source.getRole())
             .content(locale == GenerationLocale.KO
                 ? "지금 남은 생각을 한 문장으로 더 들려주세요."
                 : "Tell me one more sentence about the thought that remains with you.")
             .streamingReady(true)
             .aiModel("placeholder")
-            .contextSnapshot(source.getContextSnapshot())
-            .tokenUsage(source.getTokenUsage())
             .build();
-    }
-
-    private String outcomeName(AiGenerationResult<?> generation) {
-        return generation.languageValidationOutcome() == null
-            ? null
-            : generation.languageValidationOutcome().name();
     }
 
     private GenerationLocale resolveLocale(Long userId) {
@@ -1150,18 +1046,6 @@ public class SessionWindowBusiness {
             throw new IllegalStateException("GenerationLocaleResolver is required");
         }
         return generationLocaleResolver.resolve(userId);
-    }
-
-    /** 이미 참조하는 사용자 답변이 없을 때만 질문 삭제를 허용한다. */
-    private QuestionRecord requireDeletableQuestion(Long questionId) {
-        QuestionRecord record = questionMapper.findActiveById(questionId, currentUserId());
-        if (record == null) {
-            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Question not found");
-        }
-        if (questionMapper.countActiveUserAnswers(questionId) > 0) {
-            throw new ApiException(ApiErrorCode.SESSION_ANSWERED_QUESTION_DELETE_CONFLICT);
-        }
-        return record;
     }
 
     /** 매퍼 갱신 누락을 API 찾을 수 없음/충돌 동작으로 변환한다. */

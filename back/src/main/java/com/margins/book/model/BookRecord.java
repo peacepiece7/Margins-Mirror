@@ -21,6 +21,9 @@ public class BookRecord {
     private Integer publishedYear;
     private String languageCode;
     private String description;
+    private String backgroundSummary;
+    private int backgroundRevision;
+    private LocalDateTime backgroundUpdatedAt;
     private String source;
     private String sourceRef;
     private String coverImageUrl;

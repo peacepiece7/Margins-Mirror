@@ -56,8 +56,13 @@ import com.margins.session.model.SessionInsightRecord;
 import com.margins.session.model.SessionSearchResultRecord;
 import com.margins.session.model.SessionTagRecord;
 import com.margins.session.model.SessionWindowRecord;
+import com.margins.session.model.SessionWindowPersonaSelection;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -71,10 +76,10 @@ import org.springframework.stereotype.Component;
 public class ReadingSessionBusiness {
     private static final String QUESTION_ANSWER_INSIGHT_TYPE = "question_answer";
 
-    /** 모든 세션 조회와 변경에서 인증된 독자를 확인한다. */
     private long currentUserId() {
         return AuthContext.requireUserId();
     }
+
     private final ReadingSessionMapper readingSessionMapper;
     private final SessionWindowMapper sessionWindowMapper;
     private final SessionHighlightMapper sessionHighlightMapper;
@@ -113,39 +118,57 @@ public class ReadingSessionBusiness {
         this.reflectionLoopProperties = reflectionLoopProperties;
     }
 
-    /** 책 저장 이후 commit된 이벤트에서 호출되어 기존 session을 먼저 선택하거나 만든다. */
+    /**
+     * 책 저장 이벤트와 명시적 활성화 요청이 공유하는 멱등 session ensure다.
+     * 서비스 transaction 안에서 소유 book row를 먼저 잠가 동시 insert를 직렬화한다.
+     */
     public ReadingSessionRecord ensureForBook(Long bookId, Long userId) {
-        ReadingSessionRecord existing = readingSessionMapper.findFirstByBookIdAndUserId(bookId, userId);
+        Boolean testData = readingSessionMapper.lockActiveBookTestData(bookId, userId);
+        if (testData == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book not found");
+        }
+        ReadingSessionRecord existing = readingSessionMapper.findCurrentByBookIdAndUserId(bookId, userId);
         if (existing != null) {
             return existing;
         }
-        if (readingSessionMapper.countActiveBookById(bookId, userId) <= 0) {
-            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book not found");
+        existing = readingSessionMapper.findLatestCreatedByBookIdAndUserId(bookId, userId);
+        if (existing != null) {
+            requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(bookId, userId, existing.getId()));
+            return existing;
         }
         ReadingSessionRecord record = ReadingSessionRecord.builder()
             .userId(userId)
             .bookId(bookId)
             .title("Book " + bookId + " reflection")
-            .testData(readingSessionMapper.findBookTestData(bookId, userId))
+            .testData(testData)
             .build();
         requireInserted(readingSessionMapper.insert(record), "Reading session could not be saved");
+        requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(bookId, userId, record.getId()));
         return record;
+    }
+
+    /** 현재 사용자 소유 책의 session locator만 만들거나 재사용한다. */
+    public BookReadingSessionResponse ensureForBook(Long bookId) {
+        return toBookReadingSessionResponse(ensureForBook(bookId, currentUserId()));
     }
 
     /** 현재 사용자가 소유한 책에 대해서만 수동 세션을 만든다. */
     public CreateReadingSessionResponse create(CreateReadingSessionRequest request) {
-        if (readingSessionMapper.countActiveBookById(request.getBookId(), currentUserId()) <= 0) {
+        long userId = currentUserId();
+        Boolean testData = readingSessionMapper.lockActiveBookTestData(request.getBookId(), userId);
+        if (testData == null) {
             throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Book not found");
         }
 
         ReadingSessionRecord record = ReadingSessionRecord.builder()
-            .userId(currentUserId())
+            .userId(userId)
             .bookId(request.getBookId())
             .title(request.getTitle())
-            .testData(true)
+            .testData(testData)
             .build();
 
         requireInserted(readingSessionMapper.insert(record), "Reading session could not be saved");
+        requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(request.getBookId(), userId, record.getId()));
 
         return CreateReadingSessionResponse.builder()
             .sessionId(record.getId())
@@ -162,15 +185,23 @@ public class ReadingSessionBusiness {
 
     /** 매퍼에서 현재 사용자 소유권을 강제하며 세션 timeline 하나를 복원한다. */
     public ReadingSessionTimelineResponse findTimeline(Long sessionId) {
-        return toTimeline(readingSessionMapper.findByIdAndUserId(sessionId, currentUserId()));
+        return toTimeline(requireSession(sessionId));
     }
 
-    /** 접근 가능한 책의 최신 세션을 식별자와 표시 제목으로만 투영한다. */
+    /** 접근 가능한 책의 현재 세션을 식별자와 표시 제목으로만 투영한다. */
     public BookReadingSessionResponse findForBook(Long bookId) {
-        ReadingSessionRecord session = readingSessionMapper.findFirstByBookIdAndUserId(bookId, currentUserId());
+        long userId = currentUserId();
+        ReadingSessionRecord session = readingSessionMapper.findCurrentByBookIdAndUserId(bookId, userId);
+        if (session == null) {
+            session = readingSessionMapper.findLatestCreatedByBookIdAndUserId(bookId, userId);
+        }
         if (session == null) {
             return null;
         }
+        return toBookReadingSessionResponse(session);
+    }
+
+    private BookReadingSessionResponse toBookReadingSessionResponse(ReadingSessionRecord session) {
         return BookReadingSessionResponse.builder()
             .sessionId(session.getId())
             .title(session.getTitle())
@@ -247,18 +278,36 @@ public class ReadingSessionBusiness {
         return reviewCommentsResponse(insightId);
     }
 
-
     /** 감사용 연결 레코드는 보존하면서 사용자 목록에서 세션을 보관 처리한다. */
     public void archive(Long sessionId) {
-        requireUpdated(readingSessionMapper.softDelete(sessionId, currentUserId()));
+        long userId = currentUserId();
+        ReadingSessionRecord session = readingSessionMapper.lockByIdAndUserId(sessionId, userId);
+        if (session == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Reading session not found");
+        }
+        ReadingSessionRecord current = readingSessionMapper.findCurrentByBookIdAndUserId(session.getBookId(), userId);
+        if (current == null) {
+            current = readingSessionMapper.findLatestCreatedByBookIdAndUserId(session.getBookId(), userId);
+        }
+        requireUpdated(readingSessionMapper.softDelete(sessionId, userId), "Reading session not found");
+        if (current != null && current.getId().equals(sessionId)) {
+            ReadingSessionRecord replacement = readingSessionMapper.findLatestCreatedByBookIdAndUserId(
+                session.getBookId(),
+                userId
+            );
+            requireCurrentUpdated(readingSessionMapper.updateCurrentForBook(
+                session.getBookId(),
+                userId,
+                replacement == null ? null : replacement.getId()
+            ));
+        }
     }
 
     /** 독자에게 보이는 세션 제목을 바꾸고 수정된 timeline을 반환한다. */
     public ReadingSessionTimelineResponse updateTitle(Long sessionId, UpdateReadingSessionTitleRequest request) {
-        requireUpdated(readingSessionMapper.updateTitle(sessionId, currentUserId(), request.getTitle()));
+        requireUpdated(readingSessionMapper.updateTitle(sessionId, currentUserId(), request.getTitle()), "Reading session not found");
         return findTimeline(sessionId);
     }
-
 
     /** 세션 timeline 안에 인용문 또는 메모를 지속 가능한 리뷰 근거로 저장한다. */
     public ReadingSessionTimelineResponse createHighlight(Long sessionId, CreateSessionHighlightRequest request) {
@@ -328,8 +377,8 @@ public class ReadingSessionBusiness {
     /** 선택적 공개 여부와 함께 독자가 정리한 리뷰 또는 takeaway를 저장한다. */
     public ReadingSessionTimelineResponse createInsight(Long sessionId, CreateSessionInsightRequest request) {
         requireSession(sessionId);
-        rejectReservedQuestionAnswerType(request.getInsightType());
-        if (reflectionLoopEnabled() && "reflection".equals(normalizeInsightType(request.getInsightType()))) {
+        String insightType = normalizeInsightType(request.getInsightType());
+        if (reflectionLoopEnabled() && "reflection".equals(insightType)) {
             reflectionBusiness.createLegacy(sessionId, toReflectionRequest(
                 request.getContent(),
                 request.getTitle(),
@@ -344,7 +393,7 @@ public class ReadingSessionBusiness {
         SessionInsightRecord record = SessionInsightRecord.builder()
             .sessionId(sessionId)
             .userId(currentUserId())
-            .insightType(normalizeInsightType(request.getInsightType()))
+            .insightType(insightType)
             .title(trimToNull(request.getTitle()))
             .content(request.getContent().trim())
             .evidence(trimToNull(request.getEvidence()))
@@ -372,9 +421,8 @@ public class ReadingSessionBusiness {
         if (existing.getQuestionId() != null) {
             throw new ApiException(ApiErrorCode.SESSION_QUESTION_ANSWER_ROUTE_REQUIRED);
         }
-        rejectReservedQuestionAnswerType(request.getInsightType());
+        String targetType = normalizeInsightType(request.getInsightType());
         if (reflectionLoopEnabled()) {
-            String targetType = normalizeInsightType(request.getInsightType());
             if ("reflection".equals(existing.getInsightType()) && !"reflection".equals(targetType)) {
                 throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Primary Reflection type cannot be changed");
             }
@@ -395,7 +443,7 @@ public class ReadingSessionBusiness {
             sessionId,
             insightId,
             currentUserId(),
-            normalizeInsightType(request.getInsightType()),
+            targetType,
             trimToNull(request.getTitle()),
             request.getContent().trim(),
             trimToNull(request.getEvidence()),
@@ -479,9 +527,14 @@ public class ReadingSessionBusiness {
             return null;
         }
 
-        List<SessionWindowTimelineDto> windows = sessionWindowMapper.findBySessionId(session.getId())
+        List<SessionWindowRecord> windowRecords = sessionWindowMapper.findBySessionId(session.getId());
+        Map<Long, List<Long>> personaIdsByWindow = personaIdsByWindow(windowRecords);
+        List<SessionWindowTimelineDto> windows = windowRecords
             .stream()
-            .map(this::toWindowDto)
+            .map(record -> toWindowDto(
+                record,
+                personaIdsByWindow.getOrDefault(record.getId(), List.of())
+            ))
             .toList();
         List<SessionMessageDto> messages = messageMapper.findBySessionId(session.getId())
             .stream()
@@ -510,7 +563,27 @@ public class ReadingSessionBusiness {
                 .map(moderationBusiness::toDto)
                 .toList();
 
-        ReadingSessionStatsDto stats = toStats(windows, questions, messages, insights);
+        Set<Long> answeredQuestionIds = new HashSet<>();
+        for (SessionMessageDto message : messages) {
+            if ("user".equals(message.getRole()) && message.getQuestionId() != null) {
+                answeredQuestionIds.add(message.getQuestionId());
+            }
+        }
+        for (SessionInsightDto insight : insights) {
+            if (QUESTION_ANSWER_INSIGHT_TYPE.equals(insight.getInsightType()) && insight.getQuestionId() != null) {
+                answeredQuestionIds.add(insight.getQuestionId());
+            }
+        }
+        ReadingSessionStatsDto stats = ReadingSessionStatsDto.builder()
+            .windowCount(windows.size())
+            .questionCount(questions.size())
+            .answeredQuestionCount(answeredQuestionIds.size())
+            .messageCount(messages.size())
+            .personaResponseCount((int) messages.stream()
+                .filter(message -> message.getPersonaId() != null).count())
+            .personaCount((int) messages.stream().map(SessionMessageDto::getPersonaId)
+                .filter(Objects::nonNull).distinct().count())
+            .build();
 
         return ReadingSessionTimelineResponse.builder()
             .sessionId(session.getId())
@@ -519,15 +592,7 @@ public class ReadingSessionBusiness {
             .bookAuthor(session.getBookAuthor())
             .title(session.getTitle())
             .stats(stats)
-            .nextActions(toNextActions(
-                session,
-                windows,
-                questions,
-                messages,
-                insights,
-                highlights,
-                stats
-            ))
+            .nextActions(toNextActions(windows, questions, answeredQuestionIds, highlights, stats))
             .windows(windows)
             .highlights(highlights)
             .tags(tags)
@@ -540,11 +605,9 @@ public class ReadingSessionBusiness {
 
     /** 누락된 진행도, 열린 질문, 근거, 토론 상태를 바탕으로 다음 독자 행동을 제안한다. */
     private List<ReadingSessionNextActionDto> toNextActions(
-        ReadingSessionRecord session,
         List<SessionWindowTimelineDto> windows,
         List<QuestionDto> questions,
-        List<SessionMessageDto> messages,
-        List<SessionInsightDto> insights,
+        Set<Long> answeredQuestionIds,
         List<SessionHighlightDto> highlights,
         ReadingSessionStatsDto stats
     ) {
@@ -560,8 +623,9 @@ public class ReadingSessionBusiness {
             .findFirst()
             .orElse(null);
 
-
-        QuestionDto openQuestion = firstOpenQuestion(questions, messages, insights);
+        QuestionDto openQuestion = questions.stream()
+            .filter(question -> !answeredQuestionIds.contains(question.getQuestionId()))
+            .findFirst().orElse(null);
         if (questions.isEmpty()) {
             actions.add(nextAction(
                 "generate_questions",
@@ -600,15 +664,10 @@ public class ReadingSessionBusiness {
             ));
         }
 
-
         return actions;
     }
 
     /** 영향 행이 없는 변경을 비즈니스 경계에서 API 404/500 의미로 변환한다. */
-    private void requireUpdated(int updatedRows) {
-        requireUpdated(updatedRows, "Reading session not found");
-    }
-
     private void requireUpdated(int updatedRows, String reason) {
         if (updatedRows <= 0) {
             throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, reason);
@@ -618,6 +677,15 @@ public class ReadingSessionBusiness {
     private void requireInserted(int insertedRows, String reason) {
         if (insertedRows <= 0) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, reason);
+        }
+    }
+
+    private void requireCurrentUpdated(int updatedRows) {
+        if (updatedRows <= 0) {
+            throw new ApiException(
+                ApiErrorCode.COMMON_INTERNAL_ERROR,
+                "Reading session current pointer could not be updated"
+            );
         }
     }
 
@@ -649,29 +717,6 @@ public class ReadingSessionBusiness {
             .build();
     }
 
-    /** 사용자 메시지와 question id를 비교해 첫 미답변 프롬프트를 찾는다. */
-    private QuestionDto firstOpenQuestion(
-        List<QuestionDto> questions,
-        List<SessionMessageDto> messages,
-        List<SessionInsightDto> insights
-    ) {
-        java.util.Set<Long> answeredQuestionIds = messages.stream()
-            .filter((message) -> "user".equals(message.getRole()))
-            .map(SessionMessageDto::getQuestionId)
-            .filter(Objects::nonNull)
-            .collect(java.util.stream.Collectors.toSet());
-        insights.stream()
-            .filter((insight) -> QUESTION_ANSWER_INSIGHT_TYPE.equals(insight.getInsightType()))
-            .map(SessionInsightDto::getQuestionId)
-            .filter(Objects::nonNull)
-            .forEach(answeredQuestionIds::add);
-
-        return questions.stream()
-            .filter((question) -> !answeredQuestionIds.contains(question.getQuestionId()))
-            .findFirst()
-            .orElse(null);
-    }
-
     /** 작업 공간 UI가 바로 소비하는 다음 행동 descriptor 하나를 만든다. */
     private ReadingSessionNextActionDto nextAction(
         String actionId,
@@ -689,44 +734,14 @@ public class ReadingSessionBusiness {
             .build();
     }
 
-    /** 응답 내부 일관성을 유지하도록 로드된 timeline 행에서 세션 통계를 계산한다. */
-    private ReadingSessionStatsDto toStats(
-        List<SessionWindowTimelineDto> windows,
-        List<QuestionDto> questions,
-        List<SessionMessageDto> messages,
-        List<SessionInsightDto> insights
-    ) {
-        java.util.Set<Long> answeredQuestionIds = messages.stream()
-            .filter((message) -> "user".equals(message.getRole()))
-            .map(SessionMessageDto::getQuestionId)
-            .filter(Objects::nonNull)
-            .collect(java.util.stream.Collectors.toSet());
-        insights.stream()
-            .filter((insight) -> QUESTION_ANSWER_INSIGHT_TYPE.equals(insight.getInsightType()))
-            .map(SessionInsightDto::getQuestionId)
-            .filter(Objects::nonNull)
-            .forEach(answeredQuestionIds::add);
-        long personaResponses = messages.stream()
-            .filter((message) -> message.getPersonaId() != null)
-            .count();
-        long personas = messages.stream()
-            .map(SessionMessageDto::getPersonaId)
-            .filter(Objects::nonNull)
-            .distinct()
-            .count();
-
-        return ReadingSessionStatsDto.builder()
-            .windowCount(windows.size())
-            .questionCount(questions.size())
-            .answeredQuestionCount(answeredQuestionIds.size())
-            .messageCount(messages.size())
-            .personaResponseCount((int) personaResponses)
-            .personaCount((int) personas)
-            .build();
-    }
-
     /** 리뷰/takeaway 행에서 쓰는 현재 기본값으로 인사이트 유형을 정규화한다. */
     private String normalizeInsightType(String value) {
+        if (QUESTION_ANSWER_INSIGHT_TYPE.equalsIgnoreCase(value == null ? "" : value.trim())) {
+            throw new ApiException(
+                ApiErrorCode.SESSION_QUESTION_ANSWER_TYPE_INVALID,
+                "Question answers must use the question answer endpoint"
+            );
+        }
         String trimmed = trimToNull(value);
         return trimmed == null ? "takeaway" : trimmed;
     }
@@ -760,7 +775,21 @@ public class ReadingSessionBusiness {
     }
 
     /** 저장된 윈도우 행을 timeline 윈도우 DTO로 매핑한다. */
-    private SessionWindowTimelineDto toWindowDto(SessionWindowRecord record) {
+    private Map<Long, List<Long>> personaIdsByWindow(List<SessionWindowRecord> windows) {
+        if (sessionWindowPersonaMapper == null || windows.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, List<Long>> personaIdsByWindow = new LinkedHashMap<>();
+        for (SessionWindowPersonaSelection selection : sessionWindowPersonaMapper.findByWindowIds(
+            windows.stream().map(SessionWindowRecord::getId).toList()
+        )) {
+            personaIdsByWindow.computeIfAbsent(selection.getWindowId(), ignored -> new java.util.ArrayList<>())
+                .add(selection.getPersonaId());
+        }
+        return personaIdsByWindow;
+    }
+
+    private SessionWindowTimelineDto toWindowDto(SessionWindowRecord record, List<Long> personaIds) {
         return SessionWindowTimelineDto.builder()
             .windowId(record.getId())
             .sessionId(record.getSessionId())
@@ -769,7 +798,7 @@ public class ReadingSessionBusiness {
             .title(record.getTitle())
             .position(record.getPosition())
             .status(record.getStatus())
-            .personaIds(sessionWindowPersonaMapper == null ? List.of() : sessionWindowPersonaMapper.findPersonaIds(record.getId()))
+            .personaIds(personaIds)
             .build();
     }
 
@@ -833,17 +862,6 @@ public class ReadingSessionBusiness {
             .build();
     }
 
-    private void rejectReservedQuestionAnswerType(String insightType) {
-        if (QUESTION_ANSWER_INSIGHT_TYPE.equalsIgnoreCase(
-            insightType == null ? "" : insightType.trim()
-        )) {
-            throw new ApiException(
-                ApiErrorCode.SESSION_QUESTION_ANSWER_TYPE_INVALID,
-                "Question answers must use the question answer endpoint"
-            );
-        }
-    }
-
     /** 공개 리뷰 조회 행을 탐색 카드 DTO로 매핑한다. */
     private PublicReviewDto toPublicReviewDto(PublicReviewRecord record) {
         return PublicReviewDto.builder()
@@ -880,6 +898,7 @@ public class ReadingSessionBusiness {
     /** 검색 결과 행을 프론트엔드 기억 검색 DTO로 매핑한다. */
     private SessionSearchResultDto toSearchResultDto(SessionSearchResultRecord record) {
         return SessionSearchResultDto.builder()
+            .bookId(record.getBookId())
             .sessionId(record.getSessionId())
             .sourceId(record.getSourceId())
             .resultType(record.getResultType())

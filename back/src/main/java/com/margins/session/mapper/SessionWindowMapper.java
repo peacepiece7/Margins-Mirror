@@ -69,6 +69,8 @@ public interface SessionWindowMapper {
           b.author AS bookAuthor,
           b.isbn AS bookIsbn,
           b.raw_metadata AS bookRawMetadata
+          , b.background_summary AS bookBackgroundSummary
+          , b.background_revision AS bookBackgroundRevision
           , b.reading_status AS bookReadingStatus
           , b.rating AS bookRating
           , sw.context_snapshot AS windowContextSnapshot

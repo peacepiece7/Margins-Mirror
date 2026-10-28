@@ -31,6 +31,8 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-security'
     implementation 'org.springframework.boot:spring-boot-starter-oauth2-client'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.apache.httpcomponents.client5:httpclient5'
+    implementation 'org.jsoup:jsoup:1.23.2'
     implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
     implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.6.0'
     implementation 'io.opentelemetry:opentelemetry-api'
@@ -49,7 +51,7 @@ dependencies {
 
 tasks.named('test') {
     useJUnitPlatform {
-        excludeTags 'integration'
+        excludeTags 'integration', 'live'
     }
     systemProperty 'spring.profiles.active', 'test'
     environment 'MARGINS_BOOK_SEARCH_AI_FALLBACK_ENABLED', 'true'
@@ -61,6 +63,7 @@ tasks.register('integrationTest', Test) {
     group = 'verification'
     useJUnitPlatform {
         includeTags 'integration'
+        excludeTags 'live'
     }
     testClassesDirs = sourceSets.test.output.classesDirs
     classpath = sourceSets.test.runtimeClasspath
@@ -69,6 +72,17 @@ tasks.register('integrationTest', Test) {
     environment 'MARGINS_MAIL_VERIFICATION_ENABLED', 'false'
     maxParallelForks = 1
     shouldRunAfter test
+}
+
+tasks.register('liveIntegrationTest', Test) {
+    description = 'Explicit operator-only live provider checks; excluded from local verification.'
+    group = 'verification'
+    useJUnitPlatform { includeTags 'live' }
+    testClassesDirs = sourceSets.test.output.classesDirs
+    classpath = sourceSets.test.runtimeClasspath
+    systemProperty 'spring.profiles.active', 'test'
+    environment 'LANGFUSE_INTEGRATION_TEST_ENABLED', 'true'
+    maxParallelForks = 1
 }
 
 tasks.register('reflectionGuideQuality', Test) {

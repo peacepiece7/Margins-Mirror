@@ -226,6 +226,19 @@ public interface BookKnowledgeMapper {
 
     @Update("""
         UPDATE book_knowledge
+        SET generation_claimed_at = CURRENT_TIMESTAMP(6)
+        WHERE id = #{knowledgeId}
+          AND generation_claim_token = #{claimToken}
+          AND generation_locale = #{generationLocale}
+        """)
+    int renewGenerationClaim(
+        @Param("knowledgeId") Long knowledgeId,
+        @Param("claimToken") String claimToken,
+        @Param("generationLocale") String generationLocale
+    );
+
+    @Update("""
+        UPDATE book_knowledge
         SET title = #{title},
             author = #{author},
             summary = #{summary},

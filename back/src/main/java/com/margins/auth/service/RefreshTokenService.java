@@ -13,6 +13,7 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 리프레시 토큰 수명주기를 관리하는 서비스다.
@@ -48,6 +49,7 @@ public class RefreshTokenService {
     }
 
     /** 사용된 refresh token을 폐기하고 같은 회전 흐름에서 새 토큰을 발급한다. */
+    @Transactional
     public Optional<RotationResult> rotate(String rawToken, UserLookup lookup) {
         Optional<RefreshTokenRecord> existing = refreshTokenMapper.findActiveByTokenHash(hash(rawToken));
         if (existing.isEmpty()) {
@@ -55,7 +57,9 @@ public class RefreshTokenService {
         }
 
         RefreshTokenRecord record = existing.get();
-        refreshTokenMapper.revokeByJti(record.getJti());
+        if (refreshTokenMapper.revokeByJti(record.getJti()) != 1) {
+            return Optional.empty();
+        }
         return lookup.findById(record.getUserId())
             .map(user -> new RotationResult(user, issue(user)));
     }

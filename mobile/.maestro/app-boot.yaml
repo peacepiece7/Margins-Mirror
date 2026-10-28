@@ -1,0 +1,19 @@
+appId: cloud.margins.mobile
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- assertVisible:
+    id: product-introduction-steps
+- scrollUntilVisible:
+    element:
+      id: memory-card-introduction
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- assertVisible:
+    id: memory-card-introduction
+- assertNotVisible: "Your reading room"

@@ -16,6 +16,7 @@ public interface MemoryCardMapper {
     String GROUP_COLUMNS = """
         id,
         user_id AS userId,
+        book_id AS bookId,
         title,
         description,
         source_label AS sourceLabel,
@@ -40,9 +41,11 @@ public interface MemoryCardMapper {
         """;
 
     @Select("""
+        <script>
         SELECT
           g.id,
           g.user_id AS userId,
+          g.book_id AS bookId,
           g.title,
           g.description,
           g.source_label AS sourceLabel,
@@ -54,10 +57,21 @@ public interface MemoryCardMapper {
         LEFT JOIN memory_cards c ON c.group_id = g.id AND c.deleted_at IS NULL
         WHERE g.user_id = #{userId}
           AND g.deleted_at IS NULL
+          <if test="bookId != null">
+            AND g.book_id = #{bookId}
+          </if>
         GROUP BY g.id
         ORDER BY g.updated_at DESC, g.id DESC
+        </script>
         """)
-    List<MemoryCardGroupRecord> findGroups(Long userId);
+    List<MemoryCardGroupRecord> findGroups(
+        @Param("userId") Long userId,
+        @Param("bookId") Long bookId
+    );
+
+    default List<MemoryCardGroupRecord> findGroups(Long userId) {
+        return findGroups(userId, null);
+    }
 
     @Select("""
         SELECT
@@ -71,8 +85,8 @@ public interface MemoryCardMapper {
     MemoryCardGroupRecord findGroup(@Param("groupId") Long groupId, @Param("userId") Long userId);
 
     @Insert("""
-        INSERT INTO memory_card_groups (user_id, title, description, source_label, is_test_data)
-        VALUES (#{userId}, #{title}, #{description}, #{sourceLabel}, #{testData})
+        INSERT INTO memory_card_groups (user_id, book_id, title, description, source_label, is_test_data)
+        VALUES (#{userId}, #{bookId}, #{title}, #{description}, #{sourceLabel}, #{testData})
         """)
     @Options(useGeneratedKeys = true, keyProperty = "id")
     int insertGroup(MemoryCardGroupRecord record);

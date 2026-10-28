@@ -58,6 +58,26 @@ class AccountLifecycleIntegrationTest extends AbstractMySqlIntegrationTest {
         Instant now = Instant.now();
         jdbc.update("INSERT INTO books(user_id,title,source,is_test_data) VALUES(?,?,'integration',TRUE)",
             userId, "erased activity");
+        Long bookId = jdbc.queryForObject(
+            "SELECT id FROM books WHERE user_id=? AND title=?",
+            Long.class,
+            userId,
+            "erased activity"
+        );
+        jdbc.update("""
+            INSERT INTO memory_card_groups(user_id,book_id,title,is_test_data)
+            VALUES(?,?,?,TRUE)
+            """, userId, bookId, "erased book cards");
+        Long groupId = jdbc.queryForObject(
+            "SELECT id FROM memory_card_groups WHERE user_id=? AND book_id=?",
+            Long.class,
+            userId,
+            bookId
+        );
+        jdbc.update("""
+            INSERT INTO memory_cards(group_id,front_text,back_text,is_test_data)
+            VALUES(?,?,?,TRUE)
+            """, groupId, "front", "back");
         jdbc.update("""
             UPDATE users SET account_status='RESIGNED',resigned_at=?,
               personal_data_purge_scheduled_at=?,erase_activity_on_purge=TRUE WHERE id=?
@@ -67,6 +87,16 @@ class AccountLifecycleIntegrationTest extends AbstractMySqlIntegrationTest {
 
         assertThat(accountMapper.findUserById(userId)).isPresent()
             .get().extracting(value -> value.getAccountStatus()).isEqualTo("PURGED");
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM memory_card_groups WHERE user_id=?",
+            Integer.class,
+            userId
+        )).isZero();
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM memory_cards WHERE group_id=?",
+            Integer.class,
+            groupId
+        )).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM books WHERE user_id=?", Integer.class, userId)).isZero();
     }
 

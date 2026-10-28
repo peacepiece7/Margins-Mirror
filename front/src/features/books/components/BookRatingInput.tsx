@@ -40,12 +40,12 @@ export function BookRatingInput({
 
   return (
     <div className="flex flex-wrap items-center gap-2" role="group" {...testAttr(testId)}>
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-0.5" data-ui="book-rating-stars">
         {[1, 2, 3, 4, 5].map((starValue) => {
           const fill = starFill(starValue, currentRating);
 
           return (
-            <div className="relative h-7 w-7" key={starValue}>
+            <div className="relative h-7 w-7" data-ui="book-rating-star" key={starValue}>
               <StarShape className="pointer-events-none absolute inset-0 h-7 w-7 text-stone-300" />
               {fill !== 'empty' && (
                 <span
@@ -82,7 +82,7 @@ export function BookRatingInput({
       </div>
       <Button
         aria-label={t('shelfRatingClear')}
-        className="size-7 rounded border border-stone-300 p-0 text-stone-600 disabled:opacity-50"
+        className="size-7 rounded border border-stone-300 p-0 text-stone-600"
         disabled={disabled || rating === undefined}
         onClick={() => onChange(undefined)}
         type="button"

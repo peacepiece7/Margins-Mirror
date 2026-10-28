@@ -1,0 +1,118 @@
+/* Public reviews and Book Detail keep their own index/utility composition. */
+
+.web-public-reviews-body {
+  display: grid;
+  align-items: start;
+  gap: 1rem;
+  min-width: 0;
+}
+
+.web-public-reviews-body:has(.web-public-review-index) {
+  grid-template-columns: 13rem minmax(0, 1fr);
+}
+
+.web-public-review-index {
+  position: sticky;
+  top: 4.5rem;
+  padding: 1rem 0.75rem;
+  border: 1px solid #ded8cc;
+  background: #f8f5ee;
+}
+
+.web-public-review-index nav {
+  display: grid;
+  gap: 0.2rem;
+  margin-top: 0.8rem;
+}
+
+.web-public-review-index a {
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.55rem;
+  border-left: 2px solid transparent;
+  color: #625c53;
+  font-size: 0.74rem;
+  text-decoration: none;
+}
+
+.web-public-review-index a:hover,
+.web-public-review-index a:focus-visible {
+  border-left-color: #b6813d;
+  background: #f2e5d1;
+}
+
+.web-public-review-index small {
+  color: #91897f;
+  font-size: 0.65rem;
+}
+
+.web-public-review-card {
+  scroll-margin-top: 5rem;
+}
+
+.web-book-detail-workspace {
+  grid-template-columns: minmax(0, 1fr) 21rem;
+  align-items: start;
+}
+
+.web-book-detail-workspace > .web-current-book-summary {
+  grid-column: 1 / -1;
+}
+
+.web-book-detail-workspace > .web-book-detail-page,
+.web-book-detail-workspace > [data-ui='book-question-panel'] {
+  grid-column: 1;
+}
+
+.web-book-detail-workspace > [data-ui='book-debate-entry'] {
+  position: sticky;
+  top: 4.5rem;
+  grid-row: 2 / span 2;
+  grid-column: 2;
+}
+
+.web-book-question-list {
+  max-height: 38rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+.web-book-question-text {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 1100px) {
+  .web-book-detail-workspace {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .web-book-detail-workspace > .web-current-book-summary,
+  .web-book-detail-workspace > .web-book-detail-page,
+  .web-book-detail-workspace > [data-ui='book-question-panel'],
+  .web-book-detail-workspace > [data-ui='book-debate-entry'] {
+    position: static;
+    grid-row: auto;
+    grid-column: 1;
+  }
+}
+
+@media (max-width: 768px) {
+  .web-public-reviews-body:has(.web-public-review-index) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .web-public-review-index {
+    position: static;
+  }
+
+  .web-public-review-index nav {
+    display: flex;
+    overflow-x: auto;
+  }
+
+  .web-public-review-index a {
+    flex: 0 0 min(13rem, 78vw);
+    border-bottom: 2px solid transparent;
+    border-left: 0;
+  }
+}

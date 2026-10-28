@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useReflectionTimelineForBook, useSaveAnswerMutation } from '../queries';
 import { QuestionAnswerEditorPage } from './QuestionAnswerEditorPage';
+import { DeveloperDraftControl } from './DeveloperDraftControl';
 
 export function QuestionAnswerEditorPanel({
   bookId,
@@ -37,6 +38,17 @@ export function QuestionAnswerEditorPanel({
       hasExistingAnswer={Boolean(existing)}
       loading={timeline.isFetching || save.isPending}
       questionText={question?.questionText ?? ''}
+      developerDraftControl={
+        <DeveloperDraftControl
+          bookId={bookId}
+          draftKey={questionId}
+          context={answer}
+          disabled={timeline.isFetching || save.isPending}
+          onGenerated={setAnswer}
+          subject={question?.questionText}
+          target="QUESTION_ANSWER"
+        />
+      }
       onAnswerChange={setAnswer}
       onCancel={() => navigate(`/book/${bookId}`)}
       onSubmit={submit}

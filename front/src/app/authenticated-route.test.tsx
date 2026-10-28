@@ -142,7 +142,7 @@ describe('authenticated route composition', () => {
     renderGate('/login');
 
     expect(screen.getByTestId('login-form')).toBeVisible();
-    expect(screen.getByTestId('google-login-submit')).toHaveClass('bg-white', 'text-stone-800');
+    expect(screen.getByTestId('google-login-submit')).toHaveAttribute('data-variant', 'outline');
     expect(screen.getByTestId('google-login-submit').querySelector('svg')).toBeInTheDocument();
     expect(screen.getByRole('tablist')).toHaveClass('min-h-11', 'gap-1');
     expect(screen.getByTestId('auth-mode-login')).toHaveClass(
@@ -278,11 +278,9 @@ describe('authenticated route composition', () => {
     });
     fireEvent.click(screen.getByTestId('login-submit'));
 
-    expect(await screen.findByTestId('login-error')).toHaveClass(
-      'border-red-300',
-      'bg-red-50',
-      'text-red-800',
-    );
+    const error = await screen.findByTestId('login-error');
+    expect(error).toHaveAttribute('data-slot', 'alert');
+    expect(error).toHaveClass('text-destructive');
   });
 
   it('renders duplicate-check failures once in the field error area', async () => {
@@ -342,6 +340,74 @@ describe('authenticated route composition', () => {
     expect(authApi.requestEmailVerification).toHaveBeenCalledTimes(1);
     expect(authApi.requestEmailVerification).toHaveBeenCalledWith('reader@example.com', '');
     expect(authApi.createRegistrationIntent).not.toHaveBeenCalled();
+  });
+
+  it('ignores an availability response after the email changes and permits a new check', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
+    vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
+    let resolveCheck!: (value: { email: string; available: boolean }) => void;
+    vi.mocked(authApi.checkEmailAvailability)
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveCheck = resolve;
+        }),
+      )
+      .mockResolvedValue({ email: 'new@example.com', available: true });
+    renderGate('/login?mode=register');
+    const email = await screen.findByTestId('register-email-input');
+    fireEvent.change(email, { target: { value: 'old@example.com' } });
+    const check = screen.getByTestId('register-email-check-submit');
+    fireEvent.click(check);
+    fireEvent.click(check);
+    await waitFor(() => expect(authApi.checkEmailAvailability).toHaveBeenCalledTimes(1));
+    fireEvent.change(email, { target: { value: 'new@example.com' } });
+    await act(async () => resolveCheck({ email: 'old@example.com', available: true }));
+    expect(screen.queryByTestId('register-email-check-message')).not.toBeInTheDocument();
+    expect(screen.getByTestId('register-email-code-submit')).toBeDisabled();
+    fireEvent.click(screen.getByTestId('register-email-check-submit'));
+    expect(await screen.findByTestId('register-email-check-message')).toBeVisible();
+    expect(authApi.checkEmailAvailability).toHaveBeenLastCalledWith('new@example.com');
+  });
+
+  it('does not autofill an old email OTP after switching auth modes', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
+    vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
+    vi.mocked(authApi.checkEmailAvailability).mockResolvedValue({
+      email: 'old@example.com',
+      available: true,
+    });
+    let resolveSend!: (value: {
+      email: string;
+      expiresInSeconds: number;
+      resendAfterSeconds: number;
+      devVerificationCode: string;
+    }) => void;
+    vi.mocked(authApi.requestEmailVerification).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSend = resolve;
+      }),
+    );
+    renderGate('/login?mode=register');
+    fireEvent.change(await screen.findByTestId('register-email-input'), {
+      target: { value: 'old@example.com' },
+    });
+    fireEvent.click(screen.getByTestId('register-email-check-submit'));
+    await screen.findByTestId('register-email-check-message');
+    fireEvent.click(screen.getByTestId('register-email-code-submit'));
+    await waitFor(() => expect(authApi.requestEmailVerification).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByTestId('auth-mode-login'));
+    fireEvent.click(screen.getByTestId('auth-mode-register'));
+    await act(async () =>
+      resolveSend({
+        email: 'old@example.com',
+        expiresInSeconds: 300,
+        resendAfterSeconds: 60,
+        devVerificationCode: '123456',
+      }),
+    );
+    expect(screen.getByTestId('register-email-code-input')).toHaveValue('');
+    expect(screen.queryByTestId('register-email-code-message')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('register-email-code-resend-timer')).not.toBeInTheDocument();
   });
 
   it('requires explicit consent continuation before enabling signup', async () => {
@@ -450,6 +516,75 @@ describe('authenticated route composition', () => {
     expect(screen.getByTestId('login-password-input')).toBeVisible();
     expect(screen.getByTestId('register-password-confirm-input')).toBeVisible();
     expect(screen.getByTestId('register-submit')).toBeEnabled();
+  });
+
+  it.each(['success', 'failure'] as const)(
+    'ignores a late OTP confirmation %s after editing the code',
+    async (outcome) => {
+      vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
+      vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
+      vi.mocked(authApi.checkEmailAvailability).mockResolvedValue({
+        email: 'reader@example.com',
+        available: true,
+      });
+      let resolveConfirm!: (value: { email: string; verified: boolean }) => void;
+      let rejectConfirm!: (error: Error) => void;
+      vi.mocked(authApi.confirmEmailVerification)
+        .mockReturnValueOnce(
+          new Promise((resolve, reject) => {
+            resolveConfirm = resolve;
+            rejectConfirm = reject;
+          }),
+        )
+        .mockResolvedValue({ email: 'reader@example.com', verified: true });
+      renderGate('/login?mode=register');
+      fireEvent.change(await screen.findByTestId('register-email-input'), {
+        target: { value: 'reader@example.com' },
+      });
+      fireEvent.click(screen.getByTestId('register-email-check-submit'));
+      await screen.findByTestId('register-email-check-message');
+      const code = screen.getByTestId('register-email-code-input');
+      fireEvent.change(code, { target: { value: '123456' } });
+      fireEvent.click(screen.getByTestId('register-email-code-confirm-submit'));
+      await waitFor(() => expect(authApi.confirmEmailVerification).toHaveBeenCalledTimes(1));
+      fireEvent.change(code, { target: { value: '654321' } });
+      await act(async () => {
+        if (outcome === 'success') resolveConfirm({ email: 'reader@example.com', verified: true });
+        else rejectConfirm(new Error('private detail'));
+      });
+      expect(code).toHaveValue('654321');
+      expect(code).toBeEnabled();
+      expect(screen.queryByTestId('register-privacy-consent')).not.toBeInTheDocument();
+      expect(screen.getByTestId('register-email-code-error')).toBeEmptyDOMElement();
+      fireEvent.click(screen.getByTestId('register-email-code-confirm-submit'));
+      expect(await screen.findByTestId('register-privacy-consent')).toBeVisible();
+      expect(authApi.confirmEmailVerification).toHaveBeenLastCalledWith(
+        'reader@example.com',
+        '654321',
+      );
+    },
+  );
+
+  it('keeps the server Retry-After cooldown after a rate-limited verification send', async () => {
+    vi.mocked(authSessionService.readAuthSession).mockReturnValue(undefined);
+    vi.mocked(authSessionService.shouldAttemptBootstrapRefresh).mockReturnValue(false);
+    vi.mocked(authApi.checkEmailAvailability).mockResolvedValue({
+      email: 'reader@example.com',
+      available: true,
+    });
+    vi.mocked(authApi.requestEmailVerification).mockRejectedValueOnce(
+      new ApiRequestError('AUTH_EMAIL_VERIFICATION_RATE_LIMITED', 429, [], undefined, 17),
+    );
+    renderGate('/login?mode=register');
+    fireEvent.change(await screen.findByTestId('register-email-input'), {
+      target: { value: 'reader@example.com' },
+    });
+    fireEvent.click(screen.getByTestId('register-email-check-submit'));
+    await screen.findByTestId('register-email-check-message');
+    fireEvent.click(screen.getByTestId('register-email-code-submit'));
+    expect(await screen.findByTestId('register-email-code-resend-timer')).toHaveTextContent('17s');
+    expect(screen.getByTestId('register-email-error')).not.toBeEmptyDOMElement();
+    expect(screen.queryByText('AUTH_EMAIL_VERIFICATION_RATE_LIMITED')).not.toBeInTheDocument();
   });
 
   it('redirects authenticated root to the Library route', async () => {
@@ -562,6 +697,38 @@ describe('authenticated route composition', () => {
     expect(queryClient.getQueryData(bookKeys.list())).toBeUndefined();
     expect(await screen.findByTestId('login-form')).toBeVisible();
     expect(screen.getByTestId('location-probe')).toHaveTextContent('/login');
+  });
+
+  it('finishes logout when selected-session browser storage is unavailable', async () => {
+    const session = {
+      userId: 1,
+      username: 'reader',
+      displayName: 'Reader',
+      authMode: 'password',
+      accessToken: 'test-token',
+      accessTokenExpiresInSeconds: 3600,
+    } as const;
+    let currentSession: typeof session | undefined = session;
+    vi.mocked(authSessionService.readAuthSession).mockImplementation(() => currentSession);
+    vi.mocked(authSessionService.clearAuthSession).mockImplementation(() => {
+      currentSession = undefined;
+    });
+    vi.mocked(authApi.logout).mockResolvedValue(undefined);
+    renderGate('/book/library');
+    const removeItem = vi.spyOn(Storage.prototype, 'removeItem').mockImplementation(() => {
+      throw new DOMException('Storage unavailable', 'SecurityError');
+    });
+    try {
+      fireEvent.click(await screen.findByTestId('logout-submit'));
+      expect(await screen.findByTestId('public-landing-page')).toBeVisible();
+      expect(screen.getByTestId('location-probe')).toHaveTextContent('/');
+      expect(authSessionService.clearAuthSession).toHaveBeenCalledWith({
+        clearRefreshHint: true,
+        markExplicitLogout: true,
+      });
+    } finally {
+      removeItem.mockRestore();
+    }
   });
 
   it('clears prior-user protected caches during signed-out bootstrap', async () => {

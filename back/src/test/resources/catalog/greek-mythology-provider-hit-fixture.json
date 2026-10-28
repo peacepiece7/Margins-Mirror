@@ -1,0 +1,27 @@
+{
+  "provenance": "Synthetic isolated regression fixture. The two unrelated titles reproduce owner-reported results but this file is not a raw provider response; the related Korean titles are matching controls.",
+  "liveSourceData": false,
+  "query": "그리스 로마 신화 1권",
+  "books": [
+    {
+      "id": 901,
+      "title": "符籍大事典: 제 1권. 이론 편",
+      "author": "fixture author"
+    },
+    {
+      "id": 902,
+      "title": "韓國出版年鑑",
+      "author": "fixture author"
+    },
+    {
+      "id": 903,
+      "title": "그리스 로마 신화 1권",
+      "author": "fixture author"
+    },
+    {
+      "id": 904,
+      "title": "그리스 로마 신화 제1권",
+      "author": "fixture author"
+    }
+  ]
+}

@@ -44,7 +44,10 @@ export function BookSearchResults({
   const state = searchState({ candidateCount: candidates.length, error, loading, query });
 
   return (
-    <div className="grid grid-cols-1 gap-3" {...testAttr('book-candidate-list')}>
+    <div
+      className="web-discover-results grid grid-cols-1 gap-3"
+      {...testAttr('book-candidate-list')}
+    >
       {state && <BookSearchState onRetry={onRetry} state={state} />}
       {candidates.map((candidate) => (
         <BookCandidateCard

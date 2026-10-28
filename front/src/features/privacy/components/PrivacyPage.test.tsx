@@ -40,7 +40,7 @@ describe('public privacy pages', () => {
       screen.getByText(/within one year of receipt regardless of processing status/i),
     ).toBeVisible();
     expect(screen.getByText(/only redirected or rejected input/i)).toBeVisible();
-    expect(screen.getByText(/identifier-free daily counts/i)).toBeVisible();
+    expect(screen.getByText(/daily counts without raw content or identifiers/i)).toBeVisible();
 
     rerender(
       <I18nProvider>

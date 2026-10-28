@@ -1,9 +1,9 @@
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 
-import { I18nProvider } from '@/lib/i18n';
+import { I18nProvider, useI18n } from '@/lib/i18n';
 import type { MemoryCard, MemoryCardGroup, MemoryCardListResponse } from '@/types/api/memory-card';
 
 import { memoryCardsApi } from '../api';
@@ -14,6 +14,8 @@ vi.mock('../api', () => ({
     groups: vi.fn(),
     group: vi.fn(),
     deleteCard: vi.fn(),
+    deleteGroup: vi.fn(),
+    createCard: vi.fn(),
     updateMemorized: vi.fn(),
   },
 }));
@@ -45,6 +47,11 @@ const secondCard: MemoryCard = {
   position: 2,
 };
 
+function LocaleSwitch() {
+  const { locale, setLocale } = useI18n();
+  return <button onClick={() => setLocale(locale === 'en' ? 'ko' : 'en')}>Switch locale</button>;
+}
+
 function renderMemoryCard(path: string) {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
@@ -53,6 +60,7 @@ function renderMemoryCard(path: string) {
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[path]}>
         <I18nProvider>
+          <LocaleSwitch />
           <MemoryCardApp />
         </I18nProvider>
       </MemoryRouter>
@@ -81,6 +89,45 @@ describe('MemoryCardApp', () => {
     expect(screen.getByText('아직 단어 카드 그룹이 없습니다.')).toBeVisible();
   });
 
+  it('relocalizes group and card controls while preserving the bulk draft', async () => {
+    vi.mocked(memoryCardsApi.groups).mockResolvedValue({ groups: [group] });
+    vi.mocked(memoryCardsApi.group).mockResolvedValue(group);
+    renderMemoryCard('/memory-card/groups');
+    const row = await screen.findByTestId('memory-card-group-row');
+    expect(within(row).getByRole('button', { name: 'Open' })).toBeVisible();
+    fireEvent.click(screen.getByRole('button', { name: 'Switch locale' }));
+    expect(within(row).getByRole('button', { name: '열기' })).toBeVisible();
+    expect(within(row).getByRole('button', { name: '삭제' })).toBeVisible();
+    fireEvent.click(within(row).getByRole('button', { name: '열기' }));
+    const upload = await screen.findByTestId('memory-card-upload-text');
+    fireEvent.change(upload, { target: { value: 'my JSON draft' } });
+    expect(screen.getByTestId('memory-card-card-row')).toHaveTextContent('암기');
+    fireEvent.change(screen.getByLabelText('영어 단어'), { target: { value: 'card draft' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Switch locale' }));
+    expect(screen.getByTestId('memory-card-card-row')).toHaveTextContent('Memorized');
+    expect(upload).toHaveValue('my JSON draft');
+    expect(screen.getByLabelText('English front')).toHaveValue('card draft');
+    expect(memoryCardsApi.createCard).not.toHaveBeenCalled();
+  });
+
+  it('relocalizes a revealed study card without moving or hiding it', async () => {
+    const twoCardGroup = { ...group, cardCount: 2, cards: [card, secondCard] };
+    vi.mocked(memoryCardsApi.groups).mockResolvedValue({ groups: [twoCardGroup] });
+    vi.mocked(memoryCardsApi.group).mockResolvedValue(twoCardGroup);
+    renderMemoryCard('/memory-card/groups/7/study');
+    await screen.findByText('The meaning is hidden.');
+    fireEvent.click(screen.getByTestId('memory-card-study-reveal'));
+    fireEvent.click(screen.getByTestId('memory-card-study-next'));
+    fireEvent.click(screen.getByTestId('memory-card-study-reveal'));
+    fireEvent.click(screen.getByRole('button', { name: 'Switch locale' }));
+
+    expect(screen.getByText('cloak')).toBeVisible();
+    expect(screen.getByText('망토')).toBeVisible();
+    expect(screen.getByTestId('memory-card-study-reveal')).toBeDisabled();
+    expect(screen.getByTestId('memory-card-study-next')).toBeEnabled();
+    expect(memoryCardsApi.updateMemorized).not.toHaveBeenCalled();
+  });
+
   it('surfaces a group-list request failure instead of showing only an empty state', async () => {
     vi.mocked(memoryCardsApi.groups).mockRejectedValue(new Error('Group list failed'));
 
@@ -88,6 +135,18 @@ describe('MemoryCardApp', () => {
 
     expect(await screen.findByText('Memory cards could not be loaded.')).toBeVisible();
     expect(screen.getByRole('alert')).toHaveTextContent('Memory cards could not be loaded.');
+  });
+
+  it('refreshes the group list from its header and displays Query-owned refetch errors', async () => {
+    vi.mocked(memoryCardsApi.groups)
+      .mockResolvedValueOnce({ groups: [] })
+      .mockRejectedValueOnce(new Error('private detail'));
+    renderMemoryCard('/memory-card/groups');
+    await screen.findByText('No memory-card groups yet.');
+    fireEvent.click(screen.getByTestId('memory-card-group-list-nav'));
+    expect(await screen.findByText('Memory cards could not be loaded.')).toBeVisible();
+    expect(screen.queryByText('private detail')).not.toBeInTheDocument();
+    expect(memoryCardsApi.groups).toHaveBeenCalledTimes(2);
   });
 
   it('persists a memorized check and updates study progress', async () => {
@@ -114,6 +173,34 @@ describe('MemoryCardApp', () => {
     expect(await screen.findByText('Memorized state saved.')).toBeVisible();
     expect(screen.getByTestId('memory-card-study-progress')).toHaveTextContent('1/1 memorized');
     expect(screen.getByTestId('memory-card-study-memorized-toggle')).toBeChecked();
+  });
+
+  it('renders the study index and truthful summary while cycling cards', async () => {
+    const twoCardGroup = { ...group, cardCount: 2, cards: [card, secondCard] };
+    vi.mocked(memoryCardsApi.groups).mockResolvedValue({ groups: [twoCardGroup] });
+    vi.mocked(memoryCardsApi.group).mockResolvedValue(twoCardGroup);
+
+    renderMemoryCard('/memory-card/groups/7/study');
+
+    expect(await screen.findByTestId('memory-card-study-layout')).toBeVisible();
+    expect(screen.getByTestId('memory-card-group-index')).toContainElement(
+      screen.getByRole('button', { name: /Fantasy words/ }),
+    );
+    expect(screen.getByRole('button', { name: /Fantasy words/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    expect(screen.getByTestId('memory-card-study-summary')).toHaveTextContent('Total cards2');
+    expect(screen.getByTestId('memory-card-study-summary')).toHaveTextContent('Remaining2');
+    expect(screen.getByTestId('memory-card-study-card')).toHaveTextContent('Card 1 of 2');
+
+    fireEvent.keyDown(window, { code: 'Space', key: ' ' });
+    expect(screen.getByText('지팡이')).toBeVisible();
+    fireEvent.keyDown(window, { key: 'ArrowRight' });
+    expect(screen.getByText('cloak')).toBeVisible();
+    expect(screen.getByText('The meaning is hidden.')).toBeVisible();
+    fireEvent.click(screen.getByTestId('memory-card-study-previous'));
+    expect(screen.getByText('wand')).toBeVisible();
   });
 
   it('does not announce the cached group refetch as foreground processing', async () => {
@@ -254,6 +341,53 @@ describe('MemoryCardApp', () => {
     expect(textarea).toHaveValue(customDraft);
   });
 
+  it('keeps a failed card deletion open for retry without changing the draft', async () => {
+    vi.mocked(memoryCardsApi.groups).mockResolvedValue({ groups: [group] });
+    vi.mocked(memoryCardsApi.group).mockResolvedValue(group);
+    vi.mocked(memoryCardsApi.deleteCard)
+      .mockRejectedValueOnce(new Error('private server detail'))
+      .mockResolvedValueOnce({ groupId: 7, cards: [] });
+    renderMemoryCard('/memory-card/groups/7');
+    const row = await screen.findByTestId('memory-card-card-row');
+    const draft = screen.getByTestId('memory-card-upload-text') as HTMLTextAreaElement;
+    fireEvent.change(draft, { target: { value: 'my draft' } });
+    fireEvent.click(within(row).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    );
+    await waitFor(() => expect(memoryCardsApi.deleteCard).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('alertdialog')).toBeVisible());
+    expect(draft).toHaveValue('my draft');
+    expect(screen.queryByText('private server detail')).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    );
+    await waitFor(() => expect(memoryCardsApi.deleteCard).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+  });
+
+  it('keeps a failed group deletion open for retry with a localized error', async () => {
+    vi.mocked(memoryCardsApi.groups).mockResolvedValue({ groups: [group] });
+    vi.mocked(memoryCardsApi.deleteGroup)
+      .mockRejectedValueOnce(new Error('private server detail'))
+      .mockResolvedValueOnce({ groups: [] });
+    renderMemoryCard('/memory-card/groups');
+    const row = await screen.findByTestId('memory-card-group-row');
+    fireEvent.click(within(row).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    );
+    expect(await screen.findByText('Group could not be deleted.')).toBeVisible();
+    expect(screen.getByRole('alertdialog')).toBeVisible();
+    expect(screen.queryByText('private server detail')).not.toBeInTheDocument();
+    fireEvent.click(
+      within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Delete' }),
+    );
+    await waitFor(() => expect(memoryCardsApi.deleteGroup).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument());
+    expect(screen.queryByTestId('memory-card-group-row')).not.toBeInTheDocument();
+  });
+
   it('caps generated JSON at the 500-card upload limit', async () => {
     const cards = Array.from({ length: 501 }, (_, index): MemoryCard => ({
       cardId: index + 1,
@@ -276,5 +410,39 @@ describe('MemoryCardApp', () => {
     expect(screen.getByTestId('memory-card-upload-limit-notice')).toHaveTextContent(
       'This group has 501 cards',
     );
+  });
+
+  it('does not apply an old group save to the group opened while it was pending', async () => {
+    const otherGroup = {
+      ...group,
+      groupId: 8,
+      title: 'Other words',
+      cards: [{ ...secondCard, groupId: 8 }],
+    };
+    vi.mocked(memoryCardsApi.groups).mockResolvedValue({ groups: [group, otherGroup] });
+    vi.mocked(memoryCardsApi.group).mockImplementation(async (id) =>
+      id === 7 ? group : otherGroup,
+    );
+    let resolveSave!: (value: MemoryCardListResponse) => void;
+    vi.mocked(memoryCardsApi.createCard).mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    renderMemoryCard('/memory-card/groups/7');
+    fireEvent.change(await screen.findByLabelText('English front'), {
+      target: { value: 'new word' },
+    });
+    fireEvent.change(screen.getByLabelText(/^Meaning/), { target: { value: '새 단어' } });
+    fireEvent.submit(screen.getByTestId('memory-card-card-form'));
+    await waitFor(() => expect(memoryCardsApi.createCard).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: /Other words/ }));
+    await screen.findByRole('heading', { name: 'Other words' });
+    const upload = screen.getByTestId('memory-card-upload-text') as HTMLTextAreaElement;
+    fireEvent.change(upload, { target: { value: 'group B draft' } });
+    await act(async () => resolveSave({ groupId: 7, cards: [card] }));
+    expect(screen.getByRole('heading', { name: 'Other words' })).toBeVisible();
+    expect(upload).toHaveValue('group B draft');
+    expect(screen.queryByText('Card added.')).not.toBeInTheDocument();
   });
 });

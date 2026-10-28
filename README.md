@@ -108,6 +108,7 @@ flowchart TD
 | Layer | Responsibilities | Main technologies |
 | --- | --- | --- |
 | Frontend | 사용자 workflow, 서버 상태, 인증 session, streaming UI | React, TypeScript, TanStack Query, Zustand, Vite |
+| Mobile | 모바일 독서 workflow, secure session, deep link | Expo, React Native, Expo Router, TypeScript |
 | Backend | 인증, domain orchestration, AI provider boundary, validation | Java 21, Spring Boot, Spring Security, MyBatis |
 | Database | versioned reflection, discussion state, audit event, migration | MySQL, versioned SQL migration |
 | Runtime | TLS entry point, reverse proxy, service lifecycle, backup·smoke check | Ubuntu, Raspberry Pi, Nginx, systemd, Docker |
@@ -129,7 +130,9 @@ Slack은 대화형 gateway, Kanban과 GitHub Issue/PR은 durable work state로 �
 
 - `front/`: React application, feature modules, unit/component/E2E tests
 - `back/`: Spring Boot API, domain services, security and provider adapters
+- `mobile/`: Expo React Native application, Maestro flows and unit tests
 - `db/`: MySQL schema, query, deterministic local/E2E fixtures
+- `tooling/workspace/`: local development, quality and E2E runner scripts
 - `docs/architecture.md`: 공개용 architecture overview
 - `.github/workflows/ci.yml`: 공개 mirror용 최소 CI
 

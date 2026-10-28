@@ -1,0 +1,15 @@
+package com.margins.book.model;
+
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Data
+@Builder
+@NoArgsConstructor
+@AllArgsConstructor
+public class LibraryCountRecord {
+    private String category;
+    private Long total;
+}

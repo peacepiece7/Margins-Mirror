@@ -138,6 +138,7 @@ describe('authentication form boundaries', () => {
     render(<LoginHarness />);
 
     expect(screen.getByRole('link', { name: 'Contact' })).toHaveAttribute('href', '/contact');
+    expect(screen.getByRole('link', { name: 'Service Terms' })).toHaveAttribute('href', '/terms');
     expect(screen.getByTestId('login-fields-grid')).toHaveClass('gap-1');
     expect(document.querySelector('label[for="login-username"]')).toHaveTextContent('Username');
     expect(document.querySelector('label[for="login-password"]')).toHaveTextContent('Password');
@@ -171,6 +172,9 @@ describe('authentication form boundaries', () => {
     expect(screen.getByTestId('register-email-input')).toBeDisabled();
     expect(screen.getByTestId('register-email-code-input')).toBeDisabled();
     expect(screen.getByTestId('register-password-confirm-input')).toBeVisible();
+    expect(screen.getByTestId('register-consent-panel')).toHaveClass(
+      'auth-registration-consent-panel',
+    );
     expect(screen.getByTestId('register-fields-grid')).toHaveClass('gap-x-5', 'gap-y-1');
     for (const errorTestId of [
       'register-username-error',
@@ -187,6 +191,7 @@ describe('authentication form boundaries', () => {
 
     fireEvent.click(screen.getByTestId('register-privacy-consent'));
     expect(screen.getByTestId('consent-probe')).toHaveTextContent('true');
+    expect(screen.getByRole('link', { name: 'Service Terms' })).toHaveAttribute('href', '/terms');
 
     fireEvent.click(screen.getByRole('button', { name: 'Validate' }));
     await waitFor(() =>

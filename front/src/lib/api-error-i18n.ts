@@ -63,6 +63,7 @@ export const API_ERROR_TRANSLATIONS = {
   CONTACT_INQUIRY_DELIVERY_FAILED: 'contactDeliveryFailed',
   MEMBERSHIP_PREMIUM_REQUIRED: 'premiumRequired',
   BOOK_ALREADY_EXISTS: 'bookAlreadyExists',
+  CATALOG_SNAPSHOT_EXPIRED: 'catalogExpired',
   SESSION_LAST_WINDOW_REQUIRED: 'workbenchLastWindowRequired',
   SESSION_ANSWERED_QUESTION_DELETE_CONFLICT: 'questionAnsweredDeleteConflict',
   SESSION_QUESTION_ANSWER_ROUTE_REQUIRED: 'questionAnswerRouteRequired',

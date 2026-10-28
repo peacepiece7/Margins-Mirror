@@ -19,11 +19,37 @@ public interface ReadingSessionMapper {
         """)
     int countActiveBookById(@Param("bookId") Long bookId, @Param("userId") Long userId);
 
+    /**
+     * Locks the active owned book row so every session ensure for the same book is serialized.
+     * A nullable Boolean is intentional: false is a valid production-data marker while null
+     * means the book is missing or inaccessible.
+     */
     @Select("""
         SELECT is_test_data FROM books
         WHERE id = #{bookId} AND user_id = #{userId} AND deleted_at IS NULL
+        FOR UPDATE
         """)
-    boolean findBookTestData(@Param("bookId") Long bookId, @Param("userId") Long userId);
+    Boolean lockActiveBookTestData(
+        @Param("bookId") Long bookId,
+        @Param("userId") Long userId
+    );
+
+    @Select("""
+        SELECT rs.id, rs.title
+        FROM books b
+        INNER JOIN reading_sessions rs
+          ON rs.id = b.current_reading_session_id
+         AND rs.book_id = b.id
+         AND rs.user_id = b.user_id
+         AND rs.deleted_at IS NULL
+        WHERE b.id = #{bookId}
+          AND b.user_id = #{userId}
+          AND b.deleted_at IS NULL
+        """)
+    ReadingSessionRecord findCurrentByBookIdAndUserId(
+        @Param("bookId") Long bookId,
+        @Param("userId") Long userId
+    );
 
     @Select("""
         SELECT rs.id, rs.title
@@ -31,10 +57,10 @@ public interface ReadingSessionMapper {
         INNER JOIN books b ON b.id = rs.book_id
         WHERE rs.book_id = #{bookId} AND rs.user_id = #{userId}
           AND rs.deleted_at IS NULL AND b.deleted_at IS NULL
-        ORDER BY rs.updated_at DESC, rs.id DESC
+        ORDER BY rs.created_at DESC, rs.id DESC
         LIMIT 1
         """)
-    ReadingSessionRecord findFirstByBookIdAndUserId(
+    ReadingSessionRecord findLatestCreatedByBookIdAndUserId(
         @Param("bookId") Long bookId,
         @Param("userId") Long userId
     );
@@ -52,10 +78,34 @@ public interface ReadingSessionMapper {
         FROM reading_sessions rs
         INNER JOIN books b ON b.id = rs.book_id
         WHERE rs.user_id = #{userId} AND rs.deleted_at IS NULL AND b.deleted_at IS NULL
-        ORDER BY rs.updated_at DESC, rs.id DESC
+        ORDER BY rs.created_at DESC, rs.id DESC
         LIMIT 1
         """)
     ReadingSessionRecord findLatestByUserId(Long userId);
+
+    @Update("""
+        UPDATE books b
+        SET b.current_reading_session_id = #{sessionId,jdbcType=BIGINT}
+        WHERE b.id = #{bookId}
+          AND b.user_id = #{userId}
+          AND b.deleted_at IS NULL
+          AND (
+            #{sessionId,jdbcType=BIGINT} IS NULL
+            OR EXISTS (
+              SELECT 1
+              FROM reading_sessions rs
+              WHERE rs.id = #{sessionId,jdbcType=BIGINT}
+                AND rs.book_id = b.id
+                AND rs.user_id = b.user_id
+                AND rs.deleted_at IS NULL
+            )
+          )
+        """)
+    int updateCurrentForBook(
+        @Param("bookId") Long bookId,
+        @Param("userId") Long userId,
+        @Param("sessionId") Long sessionId
+    );
 
     @Select("""
         SELECT rs.id, rs.user_id, rs.book_id, b.title AS book_title,
@@ -66,6 +116,25 @@ public interface ReadingSessionMapper {
           AND rs.deleted_at IS NULL AND b.deleted_at IS NULL
         """)
     ReadingSessionRecord findByIdAndUserId(
+        @Param("sessionId") Long sessionId,
+        @Param("userId") Long userId
+    );
+
+    /** Locks the active session and its owned active book before archive changes current identity. */
+    @Select("""
+        SELECT rs.id, rs.user_id, rs.book_id, b.title AS book_title,
+               b.author AS book_author, rs.title, rs.is_test_data
+        FROM reading_sessions rs
+        INNER JOIN books b
+          ON b.id = rs.book_id
+         AND b.user_id = rs.user_id
+         AND b.deleted_at IS NULL
+        WHERE rs.id = #{sessionId}
+          AND rs.user_id = #{userId}
+          AND rs.deleted_at IS NULL
+        FOR UPDATE
+        """)
+    ReadingSessionRecord lockByIdAndUserId(
         @Param("sessionId") Long sessionId,
         @Param("userId") Long userId
     );

@@ -48,24 +48,113 @@ describe('PublicLandingPage', () => {
     expect(screen.queryByTestId('login-form')).not.toBeInTheDocument();
     expect(screen.getByTestId('landing-login')).toHaveAttribute('href', '/login');
     expect(screen.getByTestId('landing-signup')).toHaveAttribute('href', '/login?mode=register');
+    expect(screen.getByRole('link', { name: 'Service Terms' })).toHaveAttribute('href', '/terms');
     expect(screen.getByTestId('landing-workflow').querySelectorAll('li')).toHaveLength(6);
     expect(screen.queryByTestId('landing-bookshelf')).not.toBeInTheDocument();
     expect(page.querySelector('.landing-hero-art')).toHaveAttribute(
       'src',
-      '/landing/hero-reader.webp',
+      '/landing/hero-sequence/frame_001.webp',
     );
+    expect(page.querySelector('[data-landing-hero-sequence]')).toHaveAttribute('height', '1280');
     expect(page.querySelector('[data-landing-book-deck]')).not.toBeInTheDocument();
     expect(page.querySelectorAll('.landing-journey-stage')).toHaveLength(6);
     expect(page.querySelector('[data-landing-page]')).not.toBeInTheDocument();
     expect(page.querySelector('.landing-memory-note')).not.toBeInTheDocument();
     expect(page).not.toHaveTextContent('Memory Cards stay beside the reading loop');
     expect(page.querySelector('.landing-screen-frame img')).toHaveAttribute('loading', 'lazy');
+    expect(page.querySelectorAll('.landing-screen-media')).toHaveLength(6);
+    expect(page.querySelectorAll('[data-landing-screen-parallax]')).toHaveLength(6);
 
     fireEvent.click(screen.getByRole('radio', { name: 'KO' }));
     await waitFor(() =>
       expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('생각을 기록하다'),
     );
+    expect(page.querySelector('.landing-stage-meta')).not.toBeInTheDocument();
+    expect(page).not.toHaveTextContent('준비 완료');
+    expect(
+      Array.from(page.querySelectorAll('.landing-screen-frame figcaption')).map(
+        (caption) => caption.textContent,
+      ),
+    ).toEqual([
+      '00 · 독서 준비',
+      '01 · 기록하',
+      '02 · 질의와 답변',
+      '03 · 발제 준비',
+      '04 · 토론 진행',
+      '05 · 생각 다듬기',
+    ]);
+    expect(page).toHaveTextContent('다양한 질문에 답하며 감상을 더 구체적으로 만들어가요.');
+    expect(page).toHaveTextContent('내 감상에서 출발한 발제안을 만들어요.');
+    expect(page).not.toHaveTextContent('비공개 질문에 답하며');
+    expect(page).not.toHaveTextContent('비공개 답변은 그대로 두고');
     expect(page).not.toHaveTextContent('Memory Card는 독서 흐름 옆에서');
+  });
+
+  it('installs bounded screen parallax at mobile widths', async () => {
+    vi.stubGlobal('innerWidth', 320);
+    const addEventListener = vi.spyOn(window, 'addEventListener');
+
+    renderLanding();
+
+    const image = screen
+      .getByTestId('public-landing-page')
+      .querySelector<HTMLElement>('[data-landing-screen-parallax]');
+    expect(image).not.toBeNull();
+    expect(addEventListener).toHaveBeenCalledWith('scroll', expect.any(Function), {
+      passive: true,
+    });
+    await waitFor(() =>
+      expect(image?.style.getPropertyValue('--landing-screen-parallax-y')).toMatch(
+        /^-?\d+\.\d{2}px$/,
+      ),
+    );
+    expect(
+      Math.abs(
+        Number.parseFloat(image?.style.getPropertyValue('--landing-screen-parallax-y') ?? ''),
+      ),
+    ).toBeLessThanOrEqual(24);
+  });
+
+  it('removes parallax when reduced motion is enabled at runtime', async () => {
+    vi.stubGlobal('innerWidth', 1280);
+    const changeListeners = new Set<() => void>();
+    const media = {
+      matches: false,
+      media: '(prefers-reduced-motion: reduce)',
+      onchange: null,
+      addEventListener: vi.fn((_type: string, listener: () => void) => {
+        changeListeners.add(listener);
+      }),
+      removeEventListener: vi.fn((_type: string, listener: () => void) => {
+        changeListeners.delete(listener);
+      }),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    };
+    vi.stubGlobal('matchMedia', vi.fn().mockReturnValue(media));
+    const removeEventListener = vi.spyOn(window, 'removeEventListener');
+
+    renderLanding();
+
+    const page = screen.getByTestId('public-landing-page');
+    const images = Array.from(page.querySelectorAll<HTMLElement>('[data-landing-screen-parallax]'));
+    await waitFor(() =>
+      expect(images[0]?.style.getPropertyValue('--landing-screen-parallax-y')).not.toBe(''),
+    );
+
+    media.matches = true;
+    changeListeners.forEach((listener) => listener());
+
+    expect(page).toHaveAttribute('data-motion', 'reduced');
+    expect(page.querySelector('[data-landing-hero-sequence]')).toHaveAttribute(
+      'src',
+      '/landing/hero-sequence/frame_072.webp',
+    );
+    expect(removeEventListener).toHaveBeenCalledWith('scroll', expect.any(Function));
+    expect(
+      images.map((image) => image.style.getPropertyValue('--landing-screen-parallax-y')),
+    ).toEqual(Array.from({ length: 6 }, () => ''));
   });
 
   it('keeps card instances stable and derives the visual order from the current index', () => {

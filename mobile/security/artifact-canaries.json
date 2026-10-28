@@ -1,0 +1,7 @@
+{
+  "email": "mobile-artifact-canary@example.invalid",
+  "privateReflection": "MARGINS_PRIVATE_REFLECTION_CANARY_7f8fbb91",
+  "aiPrompt": "MARGINS_AI_PROMPT_CANARY_a24d4d35",
+  "ssePayload": "MARGINS_SSE_PAYLOAD_CANARY_3c17f630",
+  "refreshToken": "MARGINS_REFRESH_TOKEN_CANARY_975be901"
+}

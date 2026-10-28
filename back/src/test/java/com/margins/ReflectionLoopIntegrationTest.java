@@ -35,6 +35,7 @@ import com.margins.reflectionloop.model.dto.request.SaveReflectionRequest;
 import com.margins.reflectionloop.model.dto.response.DiscussionGuideResponse;
 import com.margins.reflectionloop.model.dto.response.FacilitatorDiscussionGuideProjectionResponse;
 import com.margins.reflectionloop.model.dto.response.ParticipantDiscussionGuideProjectionResponse;
+import com.margins.reflectionloop.service.MobileReflectionThreadService;
 import com.margins.reflectionloop.service.ReflectionLoopService;
 import com.margins.session.service.ReadingSessionService;
 import com.margins.session.dto.AiMessageResponse;
@@ -82,6 +83,9 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
     private ReflectionLoopService service;
 
     @Autowired
+    private MobileReflectionThreadService mobileReflectionThreadService;
+
+    @Autowired
     private AccountLifecycleService accountLifecycleService;
 
     @Autowired
@@ -125,6 +129,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             "TRUNCATE TABLE reflection_interviews",
             "TRUNCATE TABLE reflection_revisions",
             "TRUNCATE TABLE session_highlights",
+            "TRUNCATE TABLE session_window_personas",
             "TRUNCATE TABLE personas",
             "TRUNCATE TABLE session_windows",
             "TRUNCATE TABLE reading_sessions",
@@ -290,6 +295,52 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             "SELECT COUNT(*) FROM ai_generation_events WHERE is_test_data=TRUE",
             Integer.class
         )).isGreaterThan(0);
+    }
+
+    // BDD: RLOOP-058, MOBILE-017
+    @Test
+    void aggregatesReadingThreadsWithoutPerBookWorkflowRequests() {
+        jdbc.update("""
+            INSERT INTO books (
+              id, user_id, title, author, source, reading_status, is_test_data
+            ) VALUES
+              (101, 1, 'Reading Without Session', 'Second Author', 'manual', 'reading', TRUE),
+              (102, 1, 'Not Started', 'Third Author', 'manual', 'want_to_read', TRUE)
+            """);
+
+        var initial = mobileReflectionThreadService.findReadingThreads().getThreads();
+        assertThat(initial).hasSize(2);
+        assertThat(initial).filteredOn(thread -> thread.getBookId().equals(101L))
+            .singleElement()
+            .satisfies(thread -> {
+                assertThat(thread.getSessionId()).isNull();
+                assertThat(thread.getReflectionId()).isNull();
+                assertThat(thread.getInterviewId()).isNull();
+            });
+
+        var reflection = service.createReflection(100L, SaveReflectionRequest.builder()
+            .content("읽는 중인 스레드가 현재 질문으로 이어지는지 확인한다.")
+            .visibility("PRIVATE")
+            .build());
+        var interview = service.startInterview(reflection.getReflectionId());
+
+        var active = mobileReflectionThreadService.findReadingThreads().getThreads();
+        assertThat(active).filteredOn(thread -> thread.getBookId().equals(100L))
+            .singleElement()
+            .satisfies(thread -> {
+                assertThat(thread.getSessionId()).isEqualTo(100L);
+                assertThat(thread.getReflectionId()).isEqualTo(reflection.getReflectionId());
+                assertThat(thread.getRevisionCount()).isEqualTo(1);
+                assertThat(thread.getReflectionPreview()).contains("읽는 중인 스레드");
+                assertThat(thread.getInterviewId()).isEqualTo(interview.getInterviewId());
+                assertThat(thread.getInterviewStatus()).isEqualTo("ACTIVE");
+                assertThat(thread.getAnsweredCount()).isZero();
+                assertThat(thread.getTargetAnswers()).isEqualTo(5);
+                assertThat(thread.getCurrentQuestion()).isNotBlank();
+                assertThat(thread.getGuideId()).isNull();
+                assertThat(thread.getRunId()).isNull();
+                assertThat(thread.getLastActivityAt()).isNotNull();
+            });
     }
 
     @Test
@@ -660,6 +711,13 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             .outcome("KEPT")
             .build());
         assertThat(kept.getRevisions()).hasSize(1);
+        assertThat(mobileReflectionThreadService.findReadingThreads().getThreads())
+            .filteredOn(thread -> thread.getBookId().equals(100L))
+            .singleElement()
+            .satisfies(thread -> {
+                assertThat(thread.getRunStatus()).isEqualTo("COMPLETED");
+                assertThat(thread.getRefinementOutcome()).isEqualTo("KEPT");
+            });
     }
 
     @Test
@@ -724,6 +782,7 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
         assertThat(aiProvider.refinementCalls()).isEqualTo(1);
     }
 
+    // BDD: RLOOP-004, RLOOP-005
     @Test
     void enforcesThreeFiveSevenInterviewBoundaries() {
         var reflection = service.createReflection(100L, SaveReflectionRequest.builder()
@@ -810,6 +869,56 @@ class ReflectionLoopIntegrationTest extends AbstractMySqlIntegrationTest {
             .isInstanceOf(ApiException.class)
             .satisfies(error -> assertThat(((ApiException) error).getCode())
                 .isEqualTo(ApiErrorCode.COMMON_CONFLICT));
+    }
+
+    // BDD: RLOOP-005
+    @Test
+    void completesASevenQuestionInterviewBelowGuideThresholdWithoutLosingResponses() {
+        var reflection = service.createReflection(100L, SaveReflectionRequest.builder()
+            .content("답변하지 않은 질문도 보존하며 인터뷰를 마칠 수 있어야 한다.")
+            .visibility("PRIVATE")
+            .build());
+        var interview = service.startInterview(reflection.getReflectionId());
+
+        while (!interview.isMaxReached()) {
+            interview = service.respond(
+                interview.getInterviewId(),
+                InterviewResponseRequest.builder()
+                    .questionId(interview.getCurrentQuestion().getQuestionId())
+                    .mode("SKIP")
+                    .build()
+            );
+        }
+        interview = service.respond(
+            interview.getInterviewId(),
+            InterviewResponseRequest.builder()
+                .questionId(interview.getCurrentQuestion().getQuestionId())
+                .mode("SKIP")
+                .build()
+        );
+
+        assertThat(interview.getAnsweredCount()).isZero();
+        assertThat(interview.getSkippedCount()).isEqualTo(7);
+        assertThat(interview.getCurrentQuestion()).isNotNull();
+
+        var completed = service.completeInterview(interview.getInterviewId());
+
+        assertThat(completed.getStatus()).isEqualTo("COMPLETED");
+        assertThat(completed.getAnsweredCount()).isZero();
+        assertThat(completed.getSkippedCount()).isEqualTo(7);
+        assertThat(completed.getGeneratedCount()).isEqualTo(7);
+        assertThat(completed.getCurrentQuestion()).isNull();
+        assertThat(completed.isCanGenerateGuide()).isFalse();
+        assertThat(jdbc.queryForObject(
+            "SELECT completed_at IS NOT NULL FROM reflection_interviews WHERE id=?",
+            Boolean.class,
+            completed.getInterviewId()
+        )).isTrue();
+        assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM questions WHERE reflection_interview_id=? AND status='skipped'",
+            Integer.class,
+            completed.getInterviewId()
+        )).isEqualTo(7);
     }
 
     @Test

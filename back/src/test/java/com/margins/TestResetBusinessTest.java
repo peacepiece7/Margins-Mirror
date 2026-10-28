@@ -115,6 +115,25 @@ class TestResetBusinessTest {
         order.verify(statement).execute("SET FOREIGN_KEY_CHECKS = 1");
     }
 
+    @Test
+    void jdbcResetDeletesBookScopedMemoryCardGroupsBeforeBooks() throws Exception {
+        DataSource dataSource = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        Statement statement = mock(Statement.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.createStatement()).thenReturn(statement);
+
+        JdbcTestDataResetExecutor executor = new JdbcTestDataResetExecutor(dataSource);
+        ReflectionTestUtils.invokeMethod(executor, "deleteTestData", connection);
+
+        InOrder order = inOrder(statement);
+        order.verify(statement).execute("SET FOREIGN_KEY_CHECKS = 0");
+        order.verify(statement).executeUpdate("DELETE FROM memory_cards WHERE is_test_data = TRUE");
+        order.verify(statement).executeUpdate("DELETE FROM memory_card_groups WHERE is_test_data = TRUE");
+        order.verify(statement).executeUpdate("DELETE FROM books WHERE is_test_data = TRUE");
+        order.verify(statement).execute("SET FOREIGN_KEY_CHECKS = 1");
+    }
+
     private static class FakeResetExecutor implements TestDataResetExecutor {
         private int calls;
 

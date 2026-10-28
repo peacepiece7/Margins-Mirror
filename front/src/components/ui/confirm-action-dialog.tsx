@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,6 +32,7 @@ export function ConfirmActionDialog({
   title,
 }: ConfirmActionDialogProps) {
   const [loading, setLoading] = useState(false);
+  const returnFocus = useRef<HTMLElement | null>(null);
 
   async function confirm() {
     setLoading(true);
@@ -54,7 +55,18 @@ export function ConfirmActionDialog({
         }
       }}
     >
-      <AlertDialogContent>
+      <AlertDialogContent
+        onOpenAutoFocus={() => {
+          returnFocus.current =
+            document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        }}
+        onCloseAutoFocus={(event) => {
+          if (returnFocus.current?.isConnected) {
+            event.preventDefault();
+            returnFocus.current.focus();
+          }
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           <AlertDialogDescription>{description}</AlertDialogDescription>

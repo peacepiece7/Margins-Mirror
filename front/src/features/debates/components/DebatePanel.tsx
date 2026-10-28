@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
+import { useOptimisticMessage } from '@/hooks/use-optimistic-message';
+import type { DebateTurnResponse } from '@/types/api/session';
 
 import { debateTopicFromWindowTitle } from '../display';
 import {
@@ -18,17 +20,20 @@ import {
   QUESTION_AI_NOTICE_COOKIE_KEY,
 } from '@/lib/dismissible-notice';
 import { useI18n } from '@/lib/i18n';
-
-type OptimisticDebateMessage = SessionDisplayMessage & {
-  persistedMessageIdsAtSubmit: ReadonlySet<number>;
-};
+import { DeveloperDraftControl } from '@/components/developer-draft-control';
+import { debatesApi } from '../api';
+import { debateDeveloperDraftContext } from '../developer-draft-context';
 
 export function DebatePanel({ bookId, windowId }: { bookId: number; windowId: number }) {
+  return <DebateRoomPanel bookId={bookId} key={`${bookId}:${windowId}`} windowId={windowId} />;
+}
+
+function DebateRoomPanel({ bookId, windowId }: { bookId: number; windowId: number }) {
   const { t } = useI18n();
   const [draft, setDraft] = useState('');
-  const [optimisticMessage, setOptimisticMessage] = useState<OptimisticDebateMessage>();
-  const [awaitingPersistedMessage, setAwaitingPersistedMessage] = useState(false);
-  const optimisticMessageSequence = useRef(0);
+  const draftVersion = useRef(0);
+  const currentDraftVersion = draftVersion.current;
+  const inFlight = useRef(false);
   const { sessionId, timeline } = useDebateTimelineForBook(bookId);
   const personas = usePersonasQuery();
   const recommendations = usePersonaRecommendationsQuery(bookId);
@@ -37,35 +42,33 @@ export function DebatePanel({ bookId, windowId }: { bookId: number; windowId: nu
   const moderationFeedback = useModerationFeedbackMutation(sessionId ?? 0);
   const window = timeline.data?.windows.find((item) => item.windowId === windowId);
   const topic = window ? debateTopicFromWindowTitle(window.title) : '';
-  const persistedMessages = useMemo<SessionDisplayMessage[]>(
-    () =>
-      (timeline.data?.messages ?? [])
-        .filter((message) => message.windowId === windowId)
-        .map((message) => ({
-          id: String(message.messageId),
-          persistedMessageId: message.messageId,
-          sessionId: message.sessionId,
-          windowId: message.windowId,
-          role: message.role,
-          content: message.content,
-          personaId: message.personaId,
-          questionId: message.questionId,
-          createdAt: message.createdAt,
-        })),
-    [timeline.data?.messages, windowId],
+  const persisted = (timeline.data?.messages ?? []).filter(
+    (message) => message.windowId === windowId,
   );
-  const messages = useMemo<SessionDisplayMessage[]>(() => {
-    if (!optimisticMessage) return persistedMessages;
-    const alreadyPersisted = persistedMessages.some(
-      (message) =>
-        message.role === 'user' &&
-        message.content === optimisticMessage.content &&
-        message.windowId === optimisticMessage.windowId &&
-        message.persistedMessageId !== undefined &&
-        !optimisticMessage.persistedMessageIdsAtSubmit.has(message.persistedMessageId),
-    );
-    return alreadyPersisted ? persistedMessages : [...persistedMessages, optimisticMessage];
-  }, [optimisticMessage, persistedMessages]);
+  const optimistic = useOptimisticMessage(persisted);
+  const persistedMessages: SessionDisplayMessage[] = persisted.map((message) => ({
+    id: String(message.messageId),
+    persistedMessageId: message.messageId,
+    sessionId: message.sessionId,
+    windowId: message.windowId,
+    role: message.role,
+    content: message.content,
+    personaId: message.personaId,
+    questionId: message.questionId,
+    createdAt: message.createdAt,
+  }));
+  const messages = optimistic.message
+    ? [
+        ...persistedMessages,
+        {
+          id: optimistic.message.messageId,
+          content: optimistic.message.content,
+          sessionId: sessionId ?? 0,
+          windowId,
+          role: 'user',
+        },
+      ]
+    : persistedMessages;
   const moderationEvents = (timeline.data?.moderationEvents ?? []).filter(
     (event) => event.windowId === windowId,
   );
@@ -86,71 +89,50 @@ export function DebatePanel({ bookId, windowId }: { bookId: number; windowId: nu
   );
   const pending = debate.isPending || debateAll.isPending || timeline.isFetching;
 
-  useEffect(() => {
-    if (awaitingPersistedMessage && optimisticMessage) {
-      const persisted = persistedMessages.some(
-        (message) =>
-          message.role === 'user' &&
-          message.content === optimisticMessage.content &&
-          message.windowId === optimisticMessage.windowId &&
-          message.persistedMessageId !== undefined &&
-          !optimisticMessage.persistedMessageIdsAtSubmit.has(message.persistedMessageId),
-      );
-      if (persisted) {
-        setOptimisticMessage(undefined);
-        setAwaitingPersistedMessage(false);
-      }
-    }
-  }, [awaitingPersistedMessage, optimisticMessage, persistedMessages]);
-
-  useEffect(() => {
-    if (debate.isError || debateAll.isError) {
-      setOptimisticMessage(undefined);
-      setAwaitingPersistedMessage(false);
-    }
-  }, [debate.isError, debateAll.isError]);
-
-  function prompt() {
-    return draft.trim() || topic.trim();
+  function changeDraft(content: string) {
+    draftVersion.current += 1;
+    setDraft(content);
   }
 
-  function requestPersona(personaId: number) {
-    const content = prompt();
-    if (!sessionId || !window || !content || pending) return;
-    setOptimisticMessage({
-      id: `pending-debate-${++optimisticMessageSequence.current}`,
-      sessionId,
-      windowId,
-      role: 'user',
-      content,
-      createdAt: new Date().toISOString(),
-      persistedMessageIdsAtSubmit: new Set(
-        persistedMessages.flatMap((message) =>
-          message.persistedMessageId === undefined ? [] : [message.persistedMessageId],
-        ),
-      ),
-    });
-    setAwaitingPersistedMessage(false);
-    debate.mutate(
-      { windowId, personaId, content },
-      {
-        onSuccess: (result) => {
-          if (result.moderation && result.moderation.decision !== 'ALLOW') {
-            setOptimisticMessage(undefined);
-            setAwaitingPersistedMessage(false);
-          } else {
-            setAwaitingPersistedMessage(true);
-          }
-          if (result.messages.length > 0) setDraft('');
-        },
+  function requestReply(personaId?: number) {
+    const content = draft.trim() || topic.trim();
+    if (!sessionId || window?.windowType !== 'debate' || !content || pending || inFlight.current)
+      return;
+    if (
+      !selectedPersonas.length ||
+      (personaId !== undefined && !selectedPersonaIds.includes(personaId))
+    )
+      return;
+    inFlight.current = true;
+    const submittedVersion = ++draftVersion.current;
+    optimistic.begin(content);
+    const callbacks = {
+      onSuccess(result: DebateTurnResponse) {
+        if (result.moderation && result.moderation.decision !== 'ALLOW') optimistic.clear();
+        if (result.messages.length && draftVersion.current === submittedVersion) setDraft('');
+        inFlight.current = false;
       },
-    );
+      onError() {
+        optimistic.clear();
+        inFlight.current = false;
+      },
+    };
+    if (personaId !== undefined) debate.mutate({ windowId, personaId, content }, callbacks);
+    else
+      debateAll.mutate(
+        {
+          windowId,
+          content,
+          personaIds: selectedPersonas.map((persona) => persona.personaId),
+        },
+        callbacks,
+      );
   }
 
   function submit(event: FormEvent) {
     event.preventDefault();
     const persona = selectedPersonas[0];
-    if (persona) requestPersona(persona.personaId);
+    if (persona) requestReply(persona.personaId);
   }
 
   return (
@@ -161,6 +143,31 @@ export function DebatePanel({ bookId, windowId }: { bookId: number; windowId: nu
         storageKey={QUESTION_AI_NOTICE_COOKIE_KEY}
       />
       <DebatePage
+        developerDraftControl={
+          <DeveloperDraftControl
+            bookId={bookId}
+            context={debateDeveloperDraftContext({
+              draft,
+              messages: persistedMessages,
+              question: sourceQuestion?.questionText,
+              answer: sourceAnswer?.content,
+            })}
+            disabled={pending || window?.windowType !== 'debate'}
+            draftKey={JSON.stringify([
+              windowId,
+              topic,
+              sourceQuestion?.questionText,
+              sourceAnswer?.content,
+              persistedMessages.slice(-8).map(({ id, content }) => [id, content]),
+            ])}
+            generate={debatesApi.developerDraft}
+            onGenerated={(content) => {
+              if (draftVersion.current === currentDraftVersion) changeDraft(content);
+            }}
+            subject={topic.slice(0, 2000)}
+            target="DISCUSSION_TURN"
+          />
+        }
         draft={draft}
         loading={pending}
         messages={messages}
@@ -172,44 +179,9 @@ export function DebatePanel({ bookId, windowId }: { bookId: number; windowId: nu
         sourceQuestion={sourceQuestion}
         topic={topic}
         window={window}
-        onAllReplies={() => {
-          const content = prompt();
-          if (!sessionId || !window || !content || pending) return;
-          setOptimisticMessage({
-            id: `pending-debate-${++optimisticMessageSequence.current}`,
-            sessionId,
-            windowId,
-            role: 'user',
-            content,
-            createdAt: new Date().toISOString(),
-            persistedMessageIdsAtSubmit: new Set(
-              persistedMessages.flatMap((message) =>
-                message.persistedMessageId === undefined ? [] : [message.persistedMessageId],
-              ),
-            ),
-          });
-          setAwaitingPersistedMessage(false);
-          debateAll.mutate(
-            {
-              windowId,
-              content,
-              personaIds: selectedPersonas.map((persona) => persona.personaId),
-            },
-            {
-              onSuccess: (result) => {
-                if (result.moderation && result.moderation.decision !== 'ALLOW') {
-                  setOptimisticMessage(undefined);
-                  setAwaitingPersistedMessage(false);
-                } else {
-                  setAwaitingPersistedMessage(true);
-                }
-                if (result.messages.length > 0) setDraft('');
-              },
-            },
-          );
-        }}
-        onDraftChange={setDraft}
-        onPersonaReply={requestPersona}
+        onAllReplies={() => requestReply()}
+        onDraftChange={changeDraft}
+        onPersonaReply={requestReply}
         onModerationFeedback={(eventId, feedback) => {
           if (moderationFeedback.isPending) return;
           moderationFeedback.mutate({ eventId, feedback });

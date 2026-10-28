@@ -1,13 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 
-import {
-  useEnsureReflectionSessionMutation,
-  useSaveReflectionMutation,
-  useReflectionTimelineForBook,
-} from '../queries';
+import { useSaveReflectionMutation, useReflectionTimelineForBook } from '../queries';
 import { dateInputValue } from '../review-date';
 import { ReviewEditorPage } from './ReviewEditorPage';
+import { DeveloperDraftControl } from './DeveloperDraftControl';
 
 export function ReviewEditorPanel({ bookId, insightId }: { bookId: number; insightId?: number }) {
   const navigate = useNavigate();
@@ -21,13 +18,6 @@ export function ReviewEditorPanel({ bookId, insightId }: { bookId: number; insig
   );
   const [visibility, setVisibility] = useState<'PRIVATE' | 'PUBLIC'>('PRIVATE');
   const save = useSaveReflectionMutation(bookId, sessionId, insightId);
-  const ensureSession = useEnsureReflectionSessionMutation(bookId);
-
-  useEffect(() => {
-    if (!sessions.isLoading && !sessionId && !ensureSession.isPending) {
-      ensureSession.mutate(undefined);
-    }
-  }, [ensureSession, sessionId, sessions.isLoading]);
 
   useEffect(() => {
     if (!insight) return;
@@ -61,9 +51,19 @@ export function ReviewEditorPanel({ bookId, insightId }: { bookId: number; insig
       content={content}
       evidence={evidence}
       isEditing={Boolean(insightId)}
-      loading={save.isPending || timeline.isFetching}
+      loading={sessions.isLoading || save.isPending || timeline.isFetching}
       reviewedOn={reviewedOn}
       visibility={visibility}
+      developerDraftControl={
+        <DeveloperDraftControl
+          bookId={bookId}
+          context={content}
+          disabled={sessions.isLoading || save.isPending || timeline.isFetching}
+          draftKey={insightId ?? 'new'}
+          onGenerated={setContent}
+          target="PRIMARY_REFLECTION"
+        />
+      }
       onAuthorNameChange={setAuthorName}
       onCancel={() => navigate(`/book/${bookId}/review`)}
       onContentChange={setContent}

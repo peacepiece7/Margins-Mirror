@@ -3,14 +3,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { useI18n } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 
 import type { DiscussionGuideEditorProps } from '../discussion-guide-component-types';
 import { guideEditMinutes, moveGuideEditItems } from '../discussion-guide-edit';
 import {
-  discussionGuideAudienceLabels,
-  discussionGuidePurposeLabels,
-  discussionGuideStageLabels,
+  discussionGuideAudienceLabelKeys,
+  discussionGuidePurposeLabelKeys,
+  discussionGuideStageLabelKeys,
 } from '../discussion-guide-labels';
 
 export function DiscussionGuideEditor({
@@ -19,6 +20,7 @@ export function DiscussionGuideEditor({
   guide,
   onChange,
 }: DiscussionGuideEditorProps) {
+  const { t } = useI18n();
   const requiredCount = draft.items.filter((item) => item.priority === 'REQUIRED').length;
   const optionalCount = draft.items.length - requiredCount;
   const expectedMinutes = guideEditMinutes(draft);
@@ -38,33 +40,50 @@ export function DiscussionGuideEditor({
     <>
       <section className="grid gap-4 rounded border border-stone-300 bg-white p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h3 className="font-semibold">토론 설계</h3>
+          <h3 className="font-semibold">{t('reflectionGuideDesignTitle')}</h3>
           <div className="flex flex-wrap justify-end gap-2">
             <Badge>{guide.depth}</Badge>
-            <Badge variant="outline">필수 {requiredCount}개</Badge>
-            {optionalCount ? <Badge variant="outline">선택 {optionalCount}개</Badge> : null}
-            <Badge variant="outline">목표 {guide.targetMinutes}분</Badge>
+            <Badge variant="outline">
+              {t('reflectionGuideRequiredCount').replace('{count}', String(requiredCount))}
+            </Badge>
+            {optionalCount ? (
+              <Badge variant="outline">
+                {t('reflectionGuideOptionalCount').replace('{count}', String(optionalCount))}
+              </Badge>
+            ) : null}
+            <Badge variant="outline">
+              {t('reflectionGuideTargetMinutes').replace('{minutes}', String(guide.targetMinutes))}
+            </Badge>
             {expectedMinutes !== guide.targetMinutes ? (
-              <Badge variant="outline">질문 합계 {expectedMinutes}분</Badge>
+              <Badge variant="outline">
+                {t('reflectionGuideQuestionTotalMinutes').replace(
+                  '{minutes}',
+                  String(expectedMinutes),
+                )}
+              </Badge>
             ) : null}
           </div>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-stone-600">
           <span className="rounded bg-stone-100 px-2.5 py-1.5">
-            {discussionGuidePurposeLabels[guide.purpose] ?? guide.purpose}
+            {discussionGuidePurposeLabelKeys[guide.purpose]
+              ? t(discussionGuidePurposeLabelKeys[guide.purpose])
+              : guide.purpose}
           </span>
           <span className="rounded bg-stone-100 px-2.5 py-1.5">
-            {discussionGuideAudienceLabels[guide.audienceMode] ?? guide.audienceMode}
+            {discussionGuideAudienceLabelKeys[guide.audienceMode]
+              ? t(discussionGuideAudienceLabelKeys[guide.audienceMode])
+              : guide.audienceMode}
           </span>
           <span className="rounded bg-stone-100 px-2.5 py-1.5">
             {guide.disclosureMode === 'PRIVATE_CONTEXT'
-              ? '비공개 답변은 AI만 참고'
-              : '비공개 답변 제외'}
+              ? t('reflectionGuidePrivateContext')
+              : t('reflectionGuidePrivateExcluded')}
           </span>
         </div>
 
         <div className="grid gap-2">
-          <Label htmlFor="discussion-guide-goal">토론 목표</Label>
+          <Label htmlFor="discussion-guide-goal">{t('reflectionGuideGoal')}</Label>
           <Textarea
             disabled={disabled}
             id="discussion-guide-goal"
@@ -76,7 +95,9 @@ export function DiscussionGuideEditor({
         <div className="grid gap-3 sm:grid-cols-2">
           {draft.issues.map((issue, index) => (
             <div className="grid gap-2" key={`issue-${index + 1}`}>
-              <Label htmlFor={`discussion-guide-issue-${index + 1}`}>핵심 논점 {index + 1}</Label>
+              <Label htmlFor={`discussion-guide-issue-${index + 1}`}>
+                {t('reflectionGuideIssueNumber').replace('{number}', String(index + 1))}
+              </Label>
               <Input
                 className="min-h-11"
                 disabled={disabled}
@@ -107,17 +128,26 @@ export function DiscussionGuideEditor({
               <div>
                 <span className="text-xs font-semibold tracking-[0.12em] text-stone-500">
                   {String(index + 1).padStart(2, '0')} /{' '}
-                  {discussionGuideStageLabels[item.stage] ?? item.stage}
+                  {discussionGuideStageLabelKeys[item.stage]
+                    ? t(discussionGuideStageLabelKeys[item.stage])
+                    : item.stage}
                 </span>
                 <div className="mt-2 flex flex-wrap gap-1">
                   <Badge variant={item.priority === 'REQUIRED' ? 'default' : 'outline'}>
-                    {item.priority === 'REQUIRED' ? '필수' : '선택'}
+                    {item.priority === 'REQUIRED'
+                      ? t('reflectionGuidePriorityRequired')
+                      : t('reflectionGuidePriorityOptional')}
                   </Badge>
-                  <Badge variant="outline">{item.expectedMinutes}분</Badge>
+                  <Badge variant="outline">
+                    {t('reflectionBriefMinutes').replace('{minutes}', String(item.expectedMinutes))}
+                  </Badge>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-1">
                   <Button
-                    aria-label={`${index + 1}번 질문 위로 이동`}
+                    aria-label={t('reflectionGuideMoveUpLabel').replace(
+                      '{number}',
+                      String(index + 1),
+                    )}
                     className="min-h-11"
                     disabled={disabled || !canMoveUp}
                     onClick={() => moveItem(index, -1)}
@@ -125,10 +155,13 @@ export function DiscussionGuideEditor({
                     type="button"
                     variant="outline"
                   >
-                    위로
+                    {t('reflectionGuideMoveUp')}
                   </Button>
                   <Button
-                    aria-label={`${index + 1}번 질문 아래로 이동`}
+                    aria-label={t('reflectionGuideMoveDownLabel').replace(
+                      '{number}',
+                      String(index + 1),
+                    )}
                     className="min-h-11"
                     disabled={disabled || !canMoveDown}
                     onClick={() => moveItem(index, 1)}
@@ -136,14 +169,16 @@ export function DiscussionGuideEditor({
                     type="button"
                     variant="outline"
                   >
-                    아래로
+                    {t('reflectionGuideMoveDown')}
                   </Button>
                 </div>
               </div>
               <div className="min-w-0">
                 <div className="grid gap-4">
                   <div className="grid gap-2">
-                    <Label htmlFor={`discussion-guide-question-${item.itemId}`}>질문</Label>
+                    <Label htmlFor={`discussion-guide-question-${item.itemId}`}>
+                      {t('reflectionGuideQuestion')}
+                    </Label>
                     <Textarea
                       disabled={disabled}
                       id={`discussion-guide-question-${item.itemId}`}
@@ -153,7 +188,9 @@ export function DiscussionGuideEditor({
                     />
                   </div>
                   <div className="grid gap-2">
-                    <Label htmlFor={`discussion-guide-intent-${item.itemId}`}>진행 의도</Label>
+                    <Label htmlFor={`discussion-guide-intent-${item.itemId}`}>
+                      {t('reflectionGuideIntent')}
+                    </Label>
                     <Textarea
                       disabled={disabled}
                       id={`discussion-guide-intent-${item.itemId}`}
@@ -164,10 +201,13 @@ export function DiscussionGuideEditor({
                   </div>
                   <div className="grid gap-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <span className="text-sm font-medium">후속 질문</span>
+                      <span className="text-sm font-medium">{t('reflectionGuideFollowUps')}</span>
                       {item.followUps.length < 2 ? (
                         <Button
-                          aria-label={`${index + 1}번 질문 후속 질문 추가`}
+                          aria-label={t('reflectionGuideFollowUpAddLabel').replace(
+                            '{number}',
+                            String(index + 1),
+                          )}
                           className="min-h-11"
                           disabled={disabled}
                           onClick={() => updateItem(index, { followUps: [...item.followUps, ''] })}
@@ -175,7 +215,7 @@ export function DiscussionGuideEditor({
                           type="button"
                           variant="outline"
                         >
-                          추가
+                          {t('reflectionGuideAdd')}
                         </Button>
                       ) : null}
                     </div>
@@ -188,7 +228,12 @@ export function DiscussionGuideEditor({
                             key={followUpId}
                           >
                             <div className="grid gap-2">
-                              <Label htmlFor={followUpId}>후속 질문 {followUpIndex + 1}</Label>
+                              <Label htmlFor={followUpId}>
+                                {t('reflectionGuideFollowUpNumber').replace(
+                                  '{number}',
+                                  String(followUpIndex + 1),
+                                )}
+                              </Label>
                               <Input
                                 className="min-h-11"
                                 disabled={disabled}
@@ -203,7 +248,9 @@ export function DiscussionGuideEditor({
                               />
                             </div>
                             <Button
-                              aria-label={`${index + 1}번 질문 후속 질문 ${followUpIndex + 1} 삭제`}
+                              aria-label={t('reflectionGuideFollowUpDeleteLabel')
+                                .replace('{question}', String(index + 1))
+                                .replace('{followUp}', String(followUpIndex + 1))}
                               className="min-h-11"
                               disabled={disabled}
                               onClick={() =>
@@ -216,19 +263,21 @@ export function DiscussionGuideEditor({
                               type="button"
                               variant="ghost"
                             >
-                              삭제
+                              {t('reflectionGuideDelete')}
                             </Button>
                           </div>
                         );
                       })
                     ) : (
                       <p className="text-xs leading-5 text-stone-500">
-                        필요한 경우 질문마다 최대 2개까지 추가할 수 있습니다.
+                        {t('reflectionGuideFollowUpHelp')}
                       </p>
                     )}
                   </div>
                   <div className="grid max-w-32 gap-2">
-                    <Label htmlFor={`discussion-guide-minutes-${item.itemId}`}>예상 시간</Label>
+                    <Label htmlFor={`discussion-guide-minutes-${item.itemId}`}>
+                      {t('reflectionGuideExpectedMinutes')}
+                    </Label>
                     <Input
                       className="min-h-11"
                       disabled={disabled}

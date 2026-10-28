@@ -1,7 +1,18 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { useGuidedDiscussion } from '../use-guided-discussion';
+import { AuthenticatedSessionGuardContext } from '@/lib/authenticated-session-guard';
 import { GuidedDiscussionPanel } from './GuidedDiscussionPanel';
 
 vi.mock('@/lib/i18n', () => ({
@@ -81,14 +92,20 @@ vi.mock('@/lib/i18n', () => ({
   }),
 }));
 
-const turnMutate = vi.fn();
 const turnMutateAsync = vi.fn();
 const turnReset = vi.fn();
 const timelineRefetch = vi.fn();
+let resolveTurn: (result: any) => void;
+let rejectTurn: (error: Error) => void;
+let runAvailable = true;
+let runStatus = 'ACTIVE';
+let runError: Error | null = null;
+let runFetching = false;
 let turnPending = false;
 let turnError: Error | null = null;
 let turnVariables: { navigation: 'RESPOND' | 'NEXT' | 'FINISH' } | undefined;
 let runCandidates: Array<{ personaId: number; displayName: string; description?: string }> = [];
+let selectionRequired: boolean | undefined;
 let turnData: {
   moderation?: {
     eventId: number;
@@ -118,30 +135,32 @@ vi.mock('../queries', () => ({
 
 vi.mock('../reflection-loop-queries', () => ({
   useDiscussionRunQuery: () => ({
-    data: {
-      currentItem: {
-        expectedMinutes: 5,
-        itemId: 1,
-        order: 1,
-        priority: 'REQUIRED',
-        question: '현재 질문',
-        questionId: 2,
-        sensitivity: 'LOW',
-        sourceExcerpt: '현재 Reflection',
-        sourceType: 'REFLECTION',
-        stage: 'WARM_UP',
-      },
-      guideId: 7,
-      runId: 9,
-      sessionId: 3,
-      status: 'ACTIVE',
-      windowId: 13,
-      perspectiveCandidates: runCandidates,
-      perspectiveSelectionRequired: runCandidates.length > 0,
-    },
-    error: null,
-    isError: false,
-    isFetching: false,
+    data: runAvailable
+      ? {
+          currentItem: {
+            expectedMinutes: 5,
+            itemId: 1,
+            order: 1,
+            priority: 'REQUIRED',
+            question: '현재 질문',
+            questionId: 2,
+            sensitivity: 'LOW',
+            sourceExcerpt: '현재 Reflection',
+            sourceType: 'REFLECTION',
+            stage: 'WARM_UP',
+          },
+          guideId: 7,
+          runId: 9,
+          sessionId: 3,
+          status: runStatus,
+          windowId: 13,
+          perspectiveCandidates: runCandidates,
+          perspectiveSelectionRequired: selectionRequired ?? runCandidates.length > 0,
+        }
+      : undefined,
+    error: runError,
+    isError: Boolean(runError),
+    isFetching: runFetching,
     refetch: vi.fn(),
   }),
   useGuidedDiscussionTurnMutation: () => ({
@@ -149,20 +168,49 @@ vi.mock('../reflection-loop-queries', () => ({
     error: turnError,
     isError: Boolean(turnError),
     isPending: turnPending,
-    mutate: turnMutate,
     mutateAsync: turnMutateAsync,
     reset: turnReset,
     variables: turnVariables,
   }),
 }));
 
+vi.mock('./DeveloperDraftControl', () => ({
+  DeveloperDraftControl: ({
+    onGenerated,
+    target,
+  }: {
+    onGenerated: (value: string) => void;
+    target: string;
+  }) => (
+    <button onClick={() => onGenerated(`draft-${target}`)} type="button">
+      debug-{target}
+    </button>
+  ),
+}));
+
 describe('GuidedDiscussionPanel composer', () => {
   afterEach(cleanup);
 
   beforeEach(() => {
-    turnMutate.mockClear();
     turnMutateAsync.mockReset();
-    turnMutateAsync.mockResolvedValue({ runStatus: 'COMPLETED' });
+    turnMutateAsync.mockImplementation(
+      (_input, callbacks) =>
+        new Promise((resolve, reject) => {
+          resolveTurn = (result) => {
+            callbacks.onSuccess(result);
+            resolve(result);
+          };
+          rejectTurn = (error) => {
+            callbacks.onError(error);
+            reject(error);
+          };
+        }),
+    );
+    runAvailable = true;
+    runStatus = 'ACTIVE';
+    runError = null;
+    runFetching = false;
+    selectionRequired = undefined;
     turnReset.mockClear();
     turnPending = false;
     turnError = null;
@@ -185,6 +233,19 @@ describe('GuidedDiscussionPanel composer', () => {
     timelineRefetch.mockClear();
   });
 
+  it('puts a Discussion draft in the composer without sending a turn', () => {
+    render(
+      <MemoryRouter>
+        <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'debug-DISCUSSION_TURN' }));
+
+    expect(screen.getByLabelText('토론 답변')).toHaveValue('draft-DISCUSSION_TURN');
+    expect(turnMutateAsync).not.toHaveBeenCalled();
+  });
+
   it('keeps the draft until a manual progression request succeeds', () => {
     render(
       <MemoryRouter>
@@ -198,13 +259,13 @@ describe('GuidedDiscussionPanel composer', () => {
     expect(screen.getByText('13자')).toBeVisible();
     fireEvent.click(screen.getByRole('button', { name: '저장하고 다음 주제' }));
 
-    expect(turnMutate).toHaveBeenCalledWith(
+    expect(turnMutateAsync).toHaveBeenCalledWith(
       {
         content: '다음 주제로 이어갈 메모',
         navigation: 'NEXT',
         personaId: undefined,
       },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
+      expect.any(Object),
     );
     expect(screen.getByTestId('guided-discussion-history')).toHaveTextContent(
       '다음 주제로 이어갈 메모',
@@ -230,7 +291,7 @@ describe('GuidedDiscussionPanel composer', () => {
     );
   });
 
-  it('keeps a repeated Me message optimistic until a new persisted message arrives', () => {
+  it('keeps a repeated Me message optimistic until a new persisted message arrives', async () => {
     timelineData = {
       messages: [
         {
@@ -256,9 +317,8 @@ describe('GuidedDiscussionPanel composer', () => {
       within(screen.getByTestId('guided-discussion-history')).getAllByText('같은 생각'),
     ).toHaveLength(2);
 
-    const onSuccess = turnMutate.mock.calls[0]?.[1]?.onSuccess;
-    act(() =>
-      onSuccess?.({
+    await act(async () =>
+      resolveTurn({
         runStatus: 'ACTIVE',
         moderation: { decision: 'ALLOW' },
         messages: [],
@@ -310,7 +370,7 @@ describe('GuidedDiscussionPanel composer', () => {
     expect(screen.getByTestId('guided-discussion-reply-skeleton')).toBeVisible();
   });
 
-  it('does not keep an optimistic Me message after blocked moderation', () => {
+  it('does not keep an optimistic Me message after blocked moderation', async () => {
     render(
       <MemoryRouter>
         <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
@@ -321,10 +381,8 @@ describe('GuidedDiscussionPanel composer', () => {
       target: { value: '저장되면 안 되는 입력' },
     });
     fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
-    const onSuccess = turnMutate.mock.calls[0]?.[1]?.onSuccess;
-
-    act(() =>
-      onSuccess?.({
+    await act(async () =>
+      resolveTurn({
         runStatus: 'ACTIVE',
         moderation: {
           eventId: 33,
@@ -341,7 +399,7 @@ describe('GuidedDiscussionPanel composer', () => {
     );
   });
 
-  it('removes a failed optimistic message and keeps its draft retryable', () => {
+  it('removes a failed optimistic message and keeps its draft retryable', async () => {
     const { rerender } = render(
       <MemoryRouter>
         <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
@@ -352,6 +410,7 @@ describe('GuidedDiscussionPanel composer', () => {
     fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
 
     turnError = new Error('turn failed');
+    await act(async () => rejectTurn(turnError!));
     rerender(
       <MemoryRouter>
         <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
@@ -464,7 +523,7 @@ describe('GuidedDiscussionPanel composer', () => {
     expect(screen.getByRole('button', { name: '이 메모로 토론 마치기' })).toBeDisabled();
   });
 
-  it('asks for confirmation before finishing the discussion', () => {
+  it('asks for confirmation before finishing the discussion', async () => {
     render(
       <MemoryRouter>
         <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
@@ -476,18 +535,21 @@ describe('GuidedDiscussionPanel composer', () => {
     fireEvent.click(finishButton);
 
     expect(screen.getByRole('alertdialog', { name: '토론을 마칠까요?' })).toBeVisible();
-    expect(turnMutate).not.toHaveBeenCalled();
+    expect(turnMutateAsync).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: '계속 작성하기' }));
-    expect(finishButton).toHaveFocus();
+    await waitFor(() => expect(finishButton).toHaveFocus());
 
     fireEvent.click(finishButton);
     fireEvent.click(screen.getByRole('button', { name: '토론 마치기' }));
 
-    expect(turnMutateAsync).toHaveBeenCalledWith({
-      content: '마무리 메모',
-      navigation: 'FINISH',
-      personaId: undefined,
-    });
+    expect(turnMutateAsync).toHaveBeenCalledWith(
+      {
+        content: '마무리 메모',
+        navigation: 'FINISH',
+        personaId: undefined,
+      },
+      expect.any(Object),
+    );
     expect(screen.getByTestId('guided-discussion-history')).toHaveTextContent('마무리 메모');
   });
 
@@ -503,10 +565,156 @@ describe('GuidedDiscussionPanel composer', () => {
 
     fireEvent.click(screen.getByTestId('guided-perspective-41'));
 
-    expect(turnMutate).toHaveBeenCalledWith(
-      { content: '', navigation: 'SELECT_PERSPECTIVE', personaId: 41 },
-      expect.objectContaining({ onSuccess: expect.any(Function) }),
+    expect(turnMutateAsync).toHaveBeenCalledWith(
+      {
+        content: '',
+        navigation: 'SELECT_PERSPECTIVE',
+        personaId: 41,
+      },
+      expect.any(Object),
     );
+  });
+
+  it.each(['', '작성 중인 생각'])(
+    'skips a perspective without consuming draft "%s"',
+    async (content) => {
+      runCandidates = [{ personaId: 41, displayName: '근거를 보는 관점' }];
+      render(
+        <MemoryRouter>
+          <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+        </MemoryRouter>,
+      );
+      const draft = screen.getByLabelText('토론 답변');
+      fireEvent.change(draft, { target: { value: content } });
+      fireEvent.click(screen.getByRole('button', { name: 'reflectionPerspectiveSkip' }));
+      expect(turnMutateAsync).toHaveBeenCalledWith(
+        {
+          content: '',
+          navigation: 'SKIP_PERSPECTIVE',
+          personaId: undefined,
+        },
+        expect.any(Object),
+      );
+      expect(screen.getByTestId('guided-discussion-history')).not.toHaveTextContent(
+        '작성 중인 생각',
+      );
+      await act(async () => resolveTurn({ runStatus: 'ACTIVE', messages: [] }));
+      expect(draft).toHaveValue(content);
+    },
+  );
+
+  it('preserves an unsent draft after selecting a perspective', async () => {
+    runCandidates = [{ personaId: 41, displayName: '근거를 보는 관점' }];
+    render(
+      <MemoryRouter>
+        <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+      </MemoryRouter>,
+    );
+    const draft = screen.getByLabelText('토론 답변');
+    fireEvent.change(draft, { target: { value: '보존할 초안' } });
+    fireEvent.click(screen.getByTestId('guided-perspective-41'));
+    await act(async () => resolveTurn({ runStatus: 'ACTIVE', messages: [] }));
+    expect(draft).toHaveValue('보존할 초안');
+    expect(screen.getByTestId('guided-discussion-history')).not.toHaveTextContent('보존할 초안');
+  });
+
+  it('keeps a failed finish retryable without clearing the draft', async () => {
+    render(
+      <MemoryRouter>
+        <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+      </MemoryRouter>,
+    );
+    const draft = screen.getByLabelText('토론 답변');
+    fireEvent.change(draft, { target: { value: '마무리 초안' } });
+    fireEvent.click(screen.getByRole('button', { name: '이 메모로 토론 마치기' }));
+    fireEvent.click(screen.getByRole('button', { name: '토론 마치기' }));
+    await act(async () => rejectTurn(new Error('finish failed')));
+    expect(screen.getByRole('alertdialog')).toBeVisible();
+    expect(screen.getByRole('button', { name: '토론 마치기' })).toBeEnabled();
+    expect(draft).toHaveValue('마무리 초안');
+    expect(screen.getByTestId('guided-discussion-history')).not.toHaveTextContent('마무리 초안');
+    fireEvent.click(screen.getByRole('button', { name: '토론 마치기' }));
+    expect(turnMutateAsync).toHaveBeenCalledTimes(2);
+    await act(async () => resolveTurn({ runStatus: 'COMPLETED', messages: [] }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(draft).toHaveValue('');
+  });
+
+  it.each(['REDIRECT', 'REJECT'])('preserves the draft after %s moderation', async (decision) => {
+    render(
+      <MemoryRouter>
+        <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+      </MemoryRouter>,
+    );
+    const draft = screen.getByLabelText('토론 답변');
+    fireEvent.change(draft, { target: { value: '다시 작성할 생각' } });
+    fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
+    await act(async () =>
+      resolveTurn({ runStatus: 'ACTIVE', moderation: { decision }, messages: [] }),
+    );
+    expect(draft).toHaveValue('다시 작성할 생각');
+    expect(screen.getByTestId('guided-discussion-history')).not.toHaveTextContent(
+      '다시 작성할 생각',
+    );
+  });
+
+  it('clears the draft only after a successful body submission', async () => {
+    render(
+      <MemoryRouter>
+        <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+      </MemoryRouter>,
+    );
+    const draft = screen.getByLabelText('토론 답변');
+    fireEvent.change(draft, { target: { value: '저장할 생각' } });
+    fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
+    expect(draft).toHaveValue('저장할 생각');
+    await act(async () => resolveTurn({ runStatus: 'ACTIVE', messages: [] }));
+    expect(draft).toHaveValue('');
+    expect(screen.getByTestId('guided-discussion-history')).toHaveTextContent('저장할 생각');
+  });
+
+  it('guards duplicate calls and invalid perspective IDs inside the workflow', async () => {
+    runCandidates = [{ personaId: 41, displayName: '근거를 보는 관점' }];
+    const { result } = renderHook(
+      () => useGuidedDiscussion({ bookId: 1, runId: 9, personas: [] }),
+      { wrapper: MemoryRouter },
+    );
+    act(() => {
+      result.current.perspectives.onSelect(99);
+      result.current.composer.onRespond();
+    });
+    expect(turnMutateAsync).not.toHaveBeenCalled();
+    act(() => {
+      result.current.perspectives.onSelect(41);
+      result.current.perspectives.onSkip();
+    });
+    expect(turnMutateAsync).toHaveBeenCalledOnce();
+    await act(async () => resolveTurn({ runStatus: 'ACTIVE', messages: [] }));
+  });
+
+  it.each([
+    'missing',
+    'fetching',
+    'run error',
+    'completed',
+    'abandoned',
+    'timeline error',
+    'pending',
+  ])('rejects submission inside the workflow when %s', (state) => {
+    runAvailable = state !== 'missing';
+    runFetching = state === 'fetching';
+    runError = state === 'run error' ? new Error('failed') : null;
+    runStatus =
+      state === 'completed' ? 'COMPLETED' : state === 'abandoned' ? 'ABANDONED' : 'ACTIVE';
+    timelineError = state === 'timeline error' ? new Error('failed') : null;
+    turnPending = state === 'pending';
+    const { result } = renderHook(
+      () => useGuidedDiscussion({ bookId: 1, runId: 9, personas: [] }),
+      { wrapper: MemoryRouter },
+    );
+    act(() => result.current.composer.onDraftChange('보내지 않을 내용'));
+    act(() => result.current.composer.onRespond());
+    expect(turnMutateAsync).not.toHaveBeenCalled();
   });
 
   it('distinguishes redirect and reject feedback without exposing internal moderation data', () => {
@@ -569,11 +777,43 @@ describe('GuidedDiscussionPanel composer', () => {
     const draft = screen.getByLabelText('토론 답변');
     fireEvent.change(draft, { target: { value: '나말고 다른 사람은 없어요?' } });
     fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
-    const onSuccess = turnMutate.mock.calls[0]?.[1]?.onSuccess;
-    act(() => onSuccess?.({ runStatus: 'ACTIVE', ...turnData }));
 
     expect(draft).toHaveValue('나말고 다른 사람은 없어요?');
     expect(screen.getByRole('alert')).toHaveTextContent('Me + Director');
     expect(screen.getByTestId('guided-perspective-41')).toBeVisible();
+  });
+  it('allows skip, but not a body turn, when the server requires selection with no candidates', async () => {
+    selectionRequired = true;
+    render(
+      <MemoryRouter>
+        <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('button', { name: '답변 보내기' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'reflectionPerspectiveSkip' }));
+    expect(turnMutateAsync).toHaveBeenCalledWith(
+      { content: '', navigation: 'SKIP_PERSPECTIVE', personaId: undefined },
+      expect.any(Object),
+    );
+    await act(async () => resolveTurn({ runStatus: 'ACTIVE', messages: [] }));
+    expect(screen.queryByTestId('guided-discussion-optimistic-message')).not.toBeInTheDocument();
+  });
+
+  it('does not settle a draft or navigate for a superseded authenticated session', async () => {
+    let current = true;
+    render(
+      <AuthenticatedSessionGuardContext.Provider value={() => current}>
+        <MemoryRouter>
+          <GuidedDiscussionPanel bookId={1} personas={[]} runId={9} />
+        </MemoryRouter>
+      </AuthenticatedSessionGuardContext.Provider>,
+    );
+    fireEvent.change(screen.getByLabelText('토론 답변'), {
+      target: { value: '이전 session draft' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: '답변 보내기' }));
+    current = false;
+    await act(async () => resolveTurn({ runStatus: 'COMPLETED', messages: [] }));
+    expect(screen.getByLabelText('토론 답변')).toHaveValue('이전 session draft');
   });
 });

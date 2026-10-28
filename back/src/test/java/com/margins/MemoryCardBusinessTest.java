@@ -2,7 +2,14 @@ package com.margins;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+import com.margins.book.mapper.BookMapper;
+import com.margins.book.model.BookRecord;
 import com.margins.memorycard.business.MemoryCardBusiness;
 import com.margins.memorycard.dto.BulkMemoryCardRequest;
 import com.margins.memorycard.dto.BulkMemoryCardGroupRequest;
@@ -17,8 +24,12 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
+import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -29,7 +40,7 @@ class MemoryCardBusinessTest {
     void bulkUploadDefaultsToReplacingDuplicateCards() {
         FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
         mapper.seedCardOnInsertGroup = false;
-        MemoryCardBusiness business = new MemoryCardBusiness(mapper);
+        MemoryCardBusiness business = business(mapper);
         Long groupId = createGroup(business);
 
         BulkMemoryCardRequest request = new BulkMemoryCardRequest();
@@ -45,7 +56,7 @@ class MemoryCardBusinessTest {
     @Test
     void bulkUploadCanRemoveDuplicateUploadedCards() {
         FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
-        MemoryCardBusiness business = new MemoryCardBusiness(mapper);
+        MemoryCardBusiness business = business(mapper);
         Long groupId = createGroup(business);
 
         BulkMemoryCardRequest request = new BulkMemoryCardRequest();
@@ -62,7 +73,7 @@ class MemoryCardBusinessTest {
     @Test
     void bulkUploadCanIgnoreDuplicatesAndInsertNewRows() {
         FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
-        MemoryCardBusiness business = new MemoryCardBusiness(mapper);
+        MemoryCardBusiness business = business(mapper);
         Long groupId = createGroup(business);
 
         BulkMemoryCardRequest request = new BulkMemoryCardRequest();
@@ -79,7 +90,7 @@ class MemoryCardBusinessTest {
     @Test
     void bulkCreateGroupAppliesDuplicatePolicyInsideUploadedFile() {
         FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
-        MemoryCardBusiness business = new MemoryCardBusiness(mapper);
+        MemoryCardBusiness business = business(mapper);
         BulkMemoryCardGroupRequest request = new BulkMemoryCardGroupRequest();
         CreateMemoryCardGroupRequest group = new CreateMemoryCardGroupRequest();
         group.setTitle("Bulk group");
@@ -96,7 +107,7 @@ class MemoryCardBusinessTest {
     @Test
     void bulkUploadRejectsInvalidPolicyBeforeSaving() {
         FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
-        MemoryCardBusiness business = new MemoryCardBusiness(mapper);
+        MemoryCardBusiness business = business(mapper);
         Long groupId = createGroup(business);
 
         BulkMemoryCardRequest request = new BulkMemoryCardRequest();
@@ -110,9 +121,157 @@ class MemoryCardBusinessTest {
     }
 
     @Test
+    void bulkGroupParsesPolicyAndNormalizesEveryInputFieldOnce() {
+        FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
+        mapper.seedCardOnInsertGroup = false;
+        MemoryCardBusiness business = business(mapper);
+        BulkMemoryCardGroupRequest request = spy(new BulkMemoryCardGroupRequest());
+        CreateMemoryCardGroupRequest group = new CreateMemoryCardGroupRequest();
+        group.setTitle("Prepared group");
+        request.setGroup(group);
+        request.setDuplicatePolicy(null);
+        MemoryCardInputDto input = spy(card(" word ", " meaning "));
+        request.setCards(List.of(input));
+
+        business.bulkCreateGroup(request);
+
+        verify(request, times(1)).getDuplicatePolicy();
+        verify(input, times(1)).getFrontText();
+        verify(input, times(1)).getBackText();
+        verify(input, times(1)).getExampleText();
+        verify(input, times(1)).getMemo();
+        assertThat(mapper.cards).extracting(MemoryCardRecord::getFrontText).containsExactly("word");
+    }
+
+    @Test
+    void bulkUploadChecksPolicyAndCardCountBeforeCreatingAGroup() {
+        FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
+        MemoryCardBusiness business = business(mapper);
+        BulkMemoryCardGroupRequest request = new BulkMemoryCardGroupRequest();
+        CreateMemoryCardGroupRequest group = new CreateMemoryCardGroupRequest();
+        group.setTitle("New group");
+        request.setGroup(group);
+        request.setDuplicatePolicy("invalid");
+        assertThatThrownBy(() -> business.bulkCreateGroup(request))
+            .isInstanceOfSatisfying(ResponseStatusException.class, exception ->
+                assertThat(exception.getReason()).startsWith("duplicatePolicy"));
+
+        request.setDuplicatePolicy(null);
+        for (int size : new int[] {-1, 0, 501}) {
+            request.setCards(size < 0 ? null : IntStream.range(0, size)
+                .mapToObj(index -> card("word", "meaning")).toList());
+            assertThatThrownBy(() -> business.bulkCreateGroup(request))
+                .isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                    assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                    assertThat(exception.getReason()).isEqualTo(size > 500
+                        ? "cards must contain 1 to 500 items" : "cards is required");
+                });
+            assertThat(mapper.groups).isEmpty();
+            assertThat(mapper.cards).isEmpty();
+        }
+    }
+
+    @Test
+    void bulkUploadAcceptsExactlyFiveHundredCards() {
+        FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
+        mapper.seedCardOnInsertGroup = false;
+        MemoryCardBusiness business = business(mapper);
+        Long groupId = createGroup(business);
+        BulkMemoryCardRequest request = new BulkMemoryCardRequest();
+        request.setDuplicatePolicy("ignore");
+        request.setCards(IntStream.range(0, 500).mapToObj(index -> card("word", "meaning")).toList());
+
+        business.bulkCards(groupId, request);
+
+        assertThat(mapper.cards).hasSize(500);
+        assertThat(mapper.cards.get(499).getPosition()).isEqualTo(500);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"replace", "remove", "ignore"})
+    void bulkUploadPreservesDuplicateOrderPositionsAndNormalizedValues(String policy) {
+        FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
+        MemoryCardBusiness business = business(mapper);
+        Long groupId = createGroup(business);
+        Long existingId = mapper.cards.get(0).getId();
+        BulkMemoryCardRequest request = new BulkMemoryCardRequest();
+        request.setDuplicatePolicy(" " + policy.toUpperCase(Locale.ROOT) + " ");
+        request.setCards(List.of(card(" cloak ", " first "), card(" CLOAK ", " last "),
+            card(" WAND ", " updated "), card(" Wand ", " final "), card(" stone ", " stone ")));
+        request.getCards().forEach(input -> {
+            input.setExampleText(" Example ");
+            input.setMemo(" \t ");
+        });
+
+        business.bulkCards(groupId, request);
+
+        switch (policy) {
+            case "replace" -> {
+                assertThat(mapper.cards).extracting(MemoryCardRecord::getFrontText)
+                    .containsExactly("Wand", "CLOAK", "stone");
+                assertThat(mapper.cards).extracting(MemoryCardRecord::getBackText)
+                    .containsExactly("final", "last", "stone");
+            }
+            case "remove" -> {
+                assertThat(mapper.cards).extracting(MemoryCardRecord::getFrontText)
+                    .containsExactly("wand", "cloak", "stone");
+                assertThat(mapper.cards).extracting(MemoryCardRecord::getBackText)
+                    .containsExactly("지팡이", "first", "stone");
+            }
+            case "ignore" -> assertThat(mapper.cards).extracting(MemoryCardRecord::getFrontText)
+                .containsExactly("wand", "cloak", "CLOAK", "WAND", "Wand", "stone");
+        }
+        assertThat(mapper.cards.get(0).getId()).isEqualTo(existingId);
+        assertThat(mapper.cards).extracting(MemoryCardRecord::getPosition)
+            .containsExactlyElementsOf(IntStream.rangeClosed(1, mapper.cards.size()).boxed().toList());
+        assertThat(mapper.cards).allSatisfy(record -> {
+            assertThat(record.getGroupId()).isEqualTo(groupId);
+            assertThat(record.getMemo()).isNull();
+            assertThat(record.getTestData()).isTrue();
+        });
+        assertThat(mapper.cards.get(1).getExampleText()).isEqualTo("Example");
+        assertThat(request.getCards().get(0).getFrontText()).isEqualTo(" cloak ");
+        assertThat(request.getCards().get(0).getMemo()).isEqualTo(" \t ");
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"frontText", "backText", "exampleText", "memo"})
+    void bulkUploadRejectsInvalidLateRowsBeforeAnyWrite(String field) {
+        for (boolean newGroup : new boolean[] {false, true}) {
+            FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
+            MemoryCardBusiness business = business(mapper);
+            Long groupId = newGroup ? null : createGroup(business);
+            BulkMemoryCardGroupRequest request = new BulkMemoryCardGroupRequest();
+            CreateMemoryCardGroupRequest group = new CreateMemoryCardGroupRequest();
+            group.setTitle("New group");
+            request.setGroup(group);
+            request.setDuplicatePolicy("remove");
+            MemoryCardInputDto invalid = card("CLOAK", "meaning");
+            switch (field) {
+                case "frontText" -> invalid.setFrontText("x".repeat(201));
+                case "backText" -> invalid.setBackText("x".repeat(501));
+                case "exampleText" -> invalid.setExampleText("x".repeat(1001));
+                case "memo" -> invalid.setMemo("x".repeat(1001));
+            }
+            request.setCards(List.of(card("cloak", "meaning"), invalid));
+
+            assertThatThrownBy(() -> {
+                if (newGroup) business.bulkCreateGroup(request);
+                else business.bulkCards(groupId, request);
+            }).isInstanceOfSatisfying(ResponseStatusException.class, exception -> {
+                assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+                assertThat(exception.getReason()).startsWith("cards[1]." + field + " must be ");
+            });
+            assertThat(mapper.groups).hasSize(newGroup ? 0 : 1);
+            assertThat(mapper.cards).extracting(MemoryCardRecord::getFrontText)
+                .containsExactlyElementsOf(newGroup ? List.of() : List.of("wand"));
+        }
+    }
+
+    @Test
     void memorizedStateCanBeCheckedAndUncheckedWithoutChangingCardText() {
         FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
-        MemoryCardBusiness business = new MemoryCardBusiness(mapper);
+        MemoryCardBusiness business = business(mapper);
         Long groupId = createGroup(business);
         Long cardId = mapper.findCards(groupId).get(0).getId();
 
@@ -125,6 +284,51 @@ class MemoryCardBusinessTest {
         var unchecked = business.updateCardMemorized(cardId, false);
 
         assertThat(unchecked.getCards().get(0).getMemorized()).isFalse();
+    }
+
+    @Test
+    void bookScopedGroupsValidateOwnershipPersistBookAndFilterWithoutChangingGlobalListing() {
+        FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
+        mapper.seedCardOnInsertGroup = false;
+        BookMapper bookMapper = mock(BookMapper.class);
+        when(bookMapper.findByIdForUser(42L, 1L)).thenReturn(BookRecord.builder().id(42L).userId(1L).build());
+        MemoryCardBusiness business = new MemoryCardBusiness(mapper, bookMapper);
+
+        CreateMemoryCardGroupRequest globalRequest = new CreateMemoryCardGroupRequest();
+        globalRequest.setTitle("Global vocabulary");
+        business.createGroup(globalRequest);
+
+        CreateMemoryCardGroupRequest scopedRequest = new CreateMemoryCardGroupRequest();
+        scopedRequest.setBookId(42L);
+        scopedRequest.setTitle("Selected book vocabulary");
+        MemoryCardGroupDto created = business.createGroup(scopedRequest);
+
+        assertThat(created.getBookId()).isEqualTo(42L);
+        assertThat(business.groups(42L).getGroups())
+            .extracting(MemoryCardGroupDto::getTitle)
+            .containsExactly("Selected book vocabulary");
+        assertThat(business.groups().getGroups())
+            .extracting(MemoryCardGroupDto::getTitle)
+            .containsExactlyInAnyOrder("Global vocabulary", "Selected book vocabulary");
+    }
+
+    @Test
+    void bookScopedGroupRejectsMissingOrUnownedBookBeforeInsert() {
+        FakeMemoryCardMapper mapper = new FakeMemoryCardMapper();
+        BookMapper bookMapper = mock(BookMapper.class);
+        MemoryCardBusiness business = new MemoryCardBusiness(mapper, bookMapper);
+        CreateMemoryCardGroupRequest request = new CreateMemoryCardGroupRequest();
+        request.setBookId(404L);
+        request.setTitle("Unowned book group");
+
+        assertThatThrownBy(() -> business.createGroup(request))
+            .isInstanceOfSatisfying(ResponseStatusException.class, (exception) ->
+                assertThat(exception.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+        assertThat(mapper.groups).isEmpty();
+    }
+
+    private MemoryCardBusiness business(FakeMemoryCardMapper mapper) {
+        return new MemoryCardBusiness(mapper, mock(BookMapper.class));
     }
 
     private Long createGroup(MemoryCardBusiness business) {
@@ -149,9 +353,10 @@ class MemoryCardBusinessTest {
         private final List<MemoryCardRecord> cards = new ArrayList<>();
 
         @Override
-        public List<MemoryCardGroupRecord> findGroups(Long userId) {
+        public List<MemoryCardGroupRecord> findGroups(Long userId, Long bookId) {
             return groups.stream()
                 .filter((group) -> group.getUserId().equals(userId))
+                .filter((group) -> bookId == null || bookId.equals(group.getBookId()))
                 .map((group) -> {
                     group.setCardCount((int) cards.stream()
                         .filter((card) -> card.getGroupId().equals(group.getId()))

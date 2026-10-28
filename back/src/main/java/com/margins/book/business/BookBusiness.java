@@ -102,22 +102,32 @@ public class BookBusiness {
                 .build();
     }
 
-    /**
-     * ISBN이 있는 후보만 같은 사용자의 중복 ISBN을 거부한다.
-     */
+    /** 같은 사용자의 stable source reference 또는 normalized ISBN 중복을 거부한다. */
     @Transactional
     public SaveBookResponse saveBook(SaveBookRequest request) {
-
+        Long userId = AuthContext.requireUserId();
+        String readingStatus = resolveReadingStatus(
+                BookReadingStatus.WANT_TO_READ,
+                request.getReadingStatus()
+        );
+        Boolean ownerTestData = bookMapper.lockUser(userId);
+        if (ownerTestData == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND);
+        }
+        String sourceRef = request.getCandidateId().trim();
+        if (bookMapper.findDuplicateBySourceRef(userId, sourceRef) != null) {
+            throw new ApiException(ApiErrorCode.BOOK_ALREADY_EXISTS);
+        }
         String isbn = resolveIsbn(request);
-        // ISBN이 없는 사용자 등록 책일 경우 중복 검사 없이 저장한다.
+        // ISBN이 없는 사용자 등록 책은 stable source reference만 검사한다.
         if(isbn != null) {
-            var existing = bookMapper.findDuplicateByIsbn(AuthContext.requireUserId(), isbn);
+            var existing = bookMapper.findDuplicateByIsbn(userId, isbn);
             if (existing != null) {
                 throw new ApiException(ApiErrorCode.BOOK_ALREADY_EXISTS);
             }
         }
 
-        BookRecord record = recordFromRequest(request);
+        BookRecord record = recordFromRequest(request, userId, readingStatus, ownerTestData);
 
         if (bookMapper.insert(record) <= 0) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Book could not be saved");
@@ -129,12 +139,26 @@ public class BookBusiness {
     /**
      * 프론트엔드 후보를 저장된 책 레코드와 provider/AI-context metadata로 변환한다.
      */
-    private BookRecord recordFromRequest(SaveBookRequest saveBookRequest) {
+    private BookRecord recordFromRequest(
+            SaveBookRequest saveBookRequest,
+            Long userId,
+            String readingStatus,
+            boolean ownerTestData
+    ) {
         String isbn = resolveIsbn(saveBookRequest);
-        String source = sourceFromCandidateId(saveBookRequest.getCandidateId());
+        String sourceRef = saveBookRequest.getCandidateId().trim();
+        String source = sourceFromCandidateId(sourceRef);
+        LocalDateTime statusStartedAt = null;
+        LocalDateTime statusFinishedAt = null;
+        if (!BookReadingStatus.WANT_TO_READ.equals(readingStatus)) {
+            statusStartedAt = LocalDateTime.now();
+            if (BookReadingStatus.READ.equals(readingStatus) || BookReadingStatus.DNF.equals(readingStatus)) {
+                statusFinishedAt = statusStartedAt;
+            }
+        }
 
         return BookRecord.builder()
-                .userId(AuthContext.requireUserId())
+                .userId(userId)
                 .title(saveBookRequest.getTitle().trim())
                 .subtitle(trimOptionalToLimit(saveBookRequest.getSubtitle()))
                 .author(saveBookRequest.getAuthor().trim())
@@ -144,11 +168,13 @@ public class BookBusiness {
                 .languageCode(trimOptionalToLimit(saveBookRequest.getLanguage(), LANGUAGE_TEXT_LIMIT))
                 .description(trimOptionalToLimit(saveBookRequest.getDescription(), URL_TEXT_LIMIT))
                 .source(source)
-                .sourceRef(saveBookRequest.getCandidateId())
+                .sourceRef(sourceRef)
                 .coverImageUrl(trimOptionalToLimit(saveBookRequest.getThumbnail(), URL_TEXT_LIMIT))
                 .rawMetadata(bookMetadata(saveBookRequest.getTitle().trim(), saveBookRequest.getAuthor().trim(), isbn, saveBookRequest))
-                .readingStatus(BookReadingStatus.WANT_TO_READ)
-                .testData(true)
+                .readingStatus(readingStatus)
+                .statusStartedAt(statusStartedAt)
+                .statusFinishedAt(statusFinishedAt)
+                .testData(ownerTestData)
                 .build();
     }
 
@@ -313,17 +339,6 @@ public class BookBusiness {
         return returnedCount >= limit;
     }
 
-    private String trimToLimit(String value) {
-        if (value == null) {
-            return "";
-        }
-        String trimmed = value.trim();
-        if (trimmed.length() <= SAVE_TEXT_LIMIT) {
-            return trimmed;
-        }
-        return trimmed.substring(0, SAVE_TEXT_LIMIT);
-    }
-
     private String trimIsbn(String value) {
         if (value == null) {
             return null;
@@ -385,7 +400,7 @@ public class BookBusiness {
         String source = candidateId.substring(0, candidateId.indexOf(':'))
                 .trim()
                 .toLowerCase();
-        return source.isBlank() ? "ai" : trimToLimit(source);
+        return source.isBlank() ? "ai" : trimToLimit(source, SAVE_TEXT_LIMIT);
     }
 
     /**
@@ -406,7 +421,7 @@ public class BookBusiness {
         if (request.getAuthors() != null) {
             request.getAuthors()
                     .stream()
-                    .map(this::trimToLimit)
+                    .map(value -> trimToLimit(value, SAVE_TEXT_LIMIT))
                     .filter((value) -> !value.isBlank())
                     .forEach(authors::add);
         }

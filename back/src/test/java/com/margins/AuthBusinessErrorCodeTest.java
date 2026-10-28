@@ -2,6 +2,8 @@ package com.margins;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -17,12 +19,16 @@ import com.margins.auth.model.UserRecord;
 import com.margins.auth.service.EmailVerificationService;
 import com.margins.auth.service.JwtTokenService;
 import com.margins.auth.service.RefreshTokenService;
+import com.margins.auth.service.RefreshTokenService.IssuedRefreshToken;
+import com.margins.auth.service.RefreshTokenService.RotationResult;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
+import com.margins.membership.model.MembershipTier;
 import com.margins.membership.service.MembershipService;
 import com.margins.privacy.dto.ConsentRequest;
 import com.margins.privacy.service.PrivacyConsentService;
 import com.margins.privacy.service.PrivacyConsentService.PendingGoogleRegistration;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
@@ -33,18 +39,20 @@ class AuthBusinessErrorCodeTest {
     private final UserMapper userMapper = mock(UserMapper.class);
     private final UserOAuthIdentityMapper identityMapper = mock(UserOAuthIdentityMapper.class);
     private final PrivacyConsentService privacy = mock(PrivacyConsentService.class);
+    private final RefreshTokenService refreshTokens = mock(RefreshTokenService.class);
+    private final MembershipService membershipService = mock(MembershipService.class);
     private final AuthBusiness business = new AuthBusiness(
         userMapper,
         identityMapper,
         mock(JwtTokenService.class),
-        mock(RefreshTokenService.class),
+        refreshTokens,
         mock(EmailVerificationService.class),
         mock(PasswordEncoder.class),
         new AuthProperties(),
         new AuthJwtProperties(),
         mock(Environment.class),
         privacy,
-        mock(MembershipService.class)
+        membershipService
     );
 
     @Test
@@ -105,5 +113,35 @@ class AuthBusinessErrorCodeTest {
                     .isEqualTo(ApiErrorCode.PRIVACY_REGISTRATION_INTENT_INVALID));
 
         verify(privacy).consumeRegistrationIntent(null);
+    }
+
+    @Test
+    void refreshRotatesThroughExistingServiceAndReturnsTheNewRawToken() {
+        UserRecord user = UserRecord.builder()
+            .id(7L)
+            .username("reader")
+            .displayName("Reader")
+            .preferredLocale("ko")
+            .authProvider("local")
+            .accountStatus("ACTIVE")
+            .build();
+        IssuedRefreshToken rotated = new IssuedRefreshToken(
+            "rotated-refresh-token", "rotated-jti", Instant.now().plusSeconds(600)
+        );
+        when(refreshTokens.rotate(eq("old-refresh-token"), any()))
+            .thenReturn(Optional.of(new RotationResult(user, rotated)));
+        when(membershipService.tierFor(7L)).thenReturn(MembershipTier.FREE);
+
+        AuthBusiness.AuthSession session = business.refresh("old-refresh-token");
+
+        assertThat(session.refreshToken()).isEqualTo("rotated-refresh-token");
+        verify(refreshTokens).rotate(eq("old-refresh-token"), any());
+    }
+
+    @Test
+    void logoutRevokesRawRefreshTokenWithoutAUserId() {
+        business.logout("native-refresh-token", null);
+
+        verify(refreshTokens).revokeRawToken("native-refresh-token");
     }
 }

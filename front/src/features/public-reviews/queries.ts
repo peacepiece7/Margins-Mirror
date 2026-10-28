@@ -1,6 +1,8 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { publicReviewKeys } from '@/lib/query-keys';
+import { useAuthenticatedSessionGuard } from '@/lib/authenticated-session-guard';
+import type { ReviewCommentListResponse } from '@/types/api/session';
 
 import { publicReviewsApi } from './api';
 
@@ -18,71 +20,32 @@ export function usePublicReviewsQuery() {
   return useQuery(publicReviewQueryOptions.list());
 }
 
-export function useReviewCommentsQuery(insightId: number, enabled = true) {
-  return useQuery({ ...publicReviewQueryOptions.comments(insightId), enabled });
+export function useReviewCommentsQuery(insightId: number) {
+  return useQuery(publicReviewQueryOptions.comments(insightId));
 }
 
-export function useCreateReviewCommentMutation(insightId: number) {
+export function useReviewCommentMutations(insightId: number) {
   const queryClient = useQueryClient();
-  return useMutation({
+  const currentSession = useAuthenticatedSessionGuard();
+  const onSuccess = (response: ReviewCommentListResponse) => {
+    if (!currentSession()) return;
+    const queryKey = publicReviewKeys.comments(insightId);
+    queryClient.setQueryData(queryKey, response);
+    return queryClient.invalidateQueries({ queryKey, exact: true });
+  };
+  const create = useMutation({
     mutationFn: ({ content, parentCommentId }: { content: string; parentCommentId?: number }) =>
       publicReviewsApi.createComment(insightId, content, parentCommentId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: publicReviewKeys.comments(insightId) }),
-  });
-}
-
-export function useUpdateReviewCommentMutation(insightId: number) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: ({ commentId, content }: { commentId: number; content: string }) =>
-      publicReviewsApi.updateComment(insightId, commentId, content),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: publicReviewKeys.comments(insightId) }),
-  });
-}
-
-export function useDeleteReviewCommentMutation(insightId: number) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (commentId: number) => publicReviewsApi.deleteComment(insightId, commentId),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: publicReviewKeys.comments(insightId) }),
-  });
-}
-
-export function useReviewCommentMutations() {
-  const queryClient = useQueryClient();
-  const invalidate = (insightId: number) =>
-    queryClient.invalidateQueries({ queryKey: publicReviewKeys.comments(insightId) });
-  const create = useMutation({
-    mutationFn: ({
-      insightId,
-      content,
-      parentCommentId,
-    }: {
-      insightId: number;
-      content: string;
-      parentCommentId?: number;
-    }) => publicReviewsApi.createComment(insightId, content, parentCommentId),
-    onSuccess: (_, input) => invalidate(input.insightId),
+    onSuccess,
   });
   const update = useMutation({
-    mutationFn: ({
-      insightId,
-      commentId,
-      content,
-    }: {
-      insightId: number;
-      commentId: number;
-      content: string;
-    }) => publicReviewsApi.updateComment(insightId, commentId, content),
-    onSuccess: (_, input) => invalidate(input.insightId),
+    mutationFn: ({ commentId, content }: { commentId: number; content: string }) =>
+      publicReviewsApi.updateComment(insightId, commentId, content),
+    onSuccess,
   });
   const remove = useMutation({
-    mutationFn: ({ insightId, commentId }: { insightId: number; commentId: number }) =>
-      publicReviewsApi.deleteComment(insightId, commentId),
-    onSuccess: (_, input) => invalidate(input.insightId),
+    mutationFn: (commentId: number) => publicReviewsApi.deleteComment(insightId, commentId),
+    onSuccess,
   });
   return { create, update, remove };
 }

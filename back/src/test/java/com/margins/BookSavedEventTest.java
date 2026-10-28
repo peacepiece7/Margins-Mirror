@@ -20,10 +20,11 @@ import com.margins.book.dto.SaveBookRequest;
 import com.margins.book.dto.SaveBookResponse;
 import com.margins.book.event.BookSavedEvent;
 import com.margins.book.event.BookSavedEventListener;
-import com.margins.session.business.ReadingSessionBusiness;
+import com.margins.book.service.BookKnowledgeRegenerationScheduler;
 import com.margins.book.service.BookService;
 import com.margins.common.error.ApiErrorCode;
 import com.margins.common.error.ApiException;
+import com.margins.session.service.ReadingSessionService;
 import com.margins.testsupport.TestSecurityContextSupport;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -44,7 +45,12 @@ class BookSavedEventTest {
             .build();
         when(bookBusiness.saveBook(any(SaveBookRequest.class))).thenReturn(saved);
 
-        BookService service = new BookService(bookBusiness, knowledgeBusiness, eventPublisher);
+        BookService service = new BookService(
+            bookBusiness,
+            knowledgeBusiness,
+            eventPublisher,
+            mock(BookKnowledgeRegenerationScheduler.class)
+        );
 
         assertThat(service.saveBook(SaveBookRequest.builder().build()))
             .isSameAs(saved);
@@ -60,7 +66,12 @@ class BookSavedEventTest {
         ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
         when(bookBusiness.saveBook(any(SaveBookRequest.class)))
             .thenThrow(new ApiException(ApiErrorCode.BOOK_ALREADY_EXISTS));
-        BookService service = new BookService(bookBusiness, knowledgeBusiness, eventPublisher);
+        BookService service = new BookService(
+            bookBusiness,
+            knowledgeBusiness,
+            eventPublisher,
+            mock(BookKnowledgeRegenerationScheduler.class)
+        );
 
         assertThatThrownBy(() -> service.saveBook(SaveBookRequest.builder().build()))
             .isInstanceOf(ApiException.class);
@@ -82,7 +93,12 @@ class BookSavedEventTest {
         doThrow(new IllegalStateException("event infrastructure unavailable"))
             .when(eventPublisher)
             .publishEvent(any(BookSavedEvent.class));
-        BookService service = new BookService(bookBusiness, knowledgeBusiness, eventPublisher);
+        BookService service = new BookService(
+            bookBusiness,
+            knowledgeBusiness,
+            eventPublisher,
+            mock(BookKnowledgeRegenerationScheduler.class)
+        );
 
         assertThat(service.saveBook(SaveBookRequest.builder().build()))
             .isSameAs(saved);
@@ -103,7 +119,12 @@ class BookSavedEventTest {
         doThrow(new IllegalStateException("event infrastructure unavailable"))
             .when(eventPublisher)
             .publishEvent(any(BookSavedEvent.class));
-        BookService service = new BookService(bookBusiness, knowledgeBusiness, eventPublisher);
+        BookService service = new BookService(
+            bookBusiness,
+            knowledgeBusiness,
+            eventPublisher,
+            mock(BookKnowledgeRegenerationScheduler.class)
+        );
         Logger logger = (Logger) LoggerFactory.getLogger(BookService.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
@@ -130,24 +151,25 @@ class BookSavedEventTest {
     }
 
     @Test
-    void listenerPassesExplicitOwnerToKnowledgeGeneration() {
+    void listenerPassesExplicitOwnerToSessionAndKnowledgeServices() {
         BookKnowledgeBusiness knowledgeBusiness = mock(BookKnowledgeBusiness.class);
-        ReadingSessionBusiness sessionBusiness = mock(ReadingSessionBusiness.class);
-        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionBusiness);
+        ReadingSessionService sessionService = mock(ReadingSessionService.class);
+        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionService);
 
         listener.handle(new BookSavedEvent(42L, 7L));
 
+        verify(sessionService).ensureForBook(42L, 7L);
         verify(knowledgeBusiness).ensureForBook(42L, 7L);
     }
 
     @Test
     void listenerDoesNotPropagateKnowledgeFailureToSavedBookFlow() {
         BookKnowledgeBusiness knowledgeBusiness = mock(BookKnowledgeBusiness.class);
-        ReadingSessionBusiness sessionBusiness = mock(ReadingSessionBusiness.class);
+        ReadingSessionService sessionService = mock(ReadingSessionService.class);
         doThrow(new IllegalStateException("provider unavailable"))
             .when(knowledgeBusiness)
             .ensureForBook(42L, 7L);
-        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionBusiness);
+        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionService);
 
         assertThatCode(() -> listener.handle(new BookSavedEvent(42L, 7L)))
             .doesNotThrowAnyException();
@@ -156,11 +178,11 @@ class BookSavedEventTest {
     @Test
     void listenerFailureLogContainsOnlySanitizedOperationalMetadata() {
         BookKnowledgeBusiness knowledgeBusiness = mock(BookKnowledgeBusiness.class);
-        ReadingSessionBusiness sessionBusiness = mock(ReadingSessionBusiness.class);
+        ReadingSessionService sessionService = mock(ReadingSessionService.class);
         doThrow(new IllegalStateException("provider unavailable"))
             .when(knowledgeBusiness)
             .ensureForBook(42L, 7L);
-        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionBusiness);
+        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionService);
         Logger logger = (Logger) LoggerFactory.getLogger(BookSavedEventListener.class);
         ListAppender<ILoggingEvent> appender = new ListAppender<>();
         appender.start();
@@ -189,15 +211,48 @@ class BookSavedEventTest {
     @Test
     void listenerContinuesKnowledgeGenerationWhenSessionEnsureFails() {
         BookKnowledgeBusiness knowledgeBusiness = mock(BookKnowledgeBusiness.class);
-        ReadingSessionBusiness sessionBusiness = mock(ReadingSessionBusiness.class);
+        ReadingSessionService sessionService = mock(ReadingSessionService.class);
         doThrow(new IllegalStateException("session persistence unavailable"))
-            .when(sessionBusiness)
+            .when(sessionService)
             .ensureForBook(42L, 7L);
-        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionBusiness);
+        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionService);
 
         assertThatCode(() -> listener.handle(new BookSavedEvent(42L, 7L)))
             .doesNotThrowAnyException();
 
         verify(knowledgeBusiness).ensureForBook(42L, 7L);
+    }
+
+    @Test
+    void sessionEnsureFailureLogContainsOnlySanitizedOperationalMetadata() {
+        BookKnowledgeBusiness knowledgeBusiness = mock(BookKnowledgeBusiness.class);
+        ReadingSessionService sessionService = mock(ReadingSessionService.class);
+        doThrow(new IllegalStateException("session persistence unavailable"))
+            .when(sessionService)
+            .ensureForBook(42L, 7L);
+        BookSavedEventListener listener = new BookSavedEventListener(knowledgeBusiness, sessionService);
+        Logger logger = (Logger) LoggerFactory.getLogger(BookSavedEventListener.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+
+        try {
+            listener.handle(new BookSavedEvent(42L, 7L));
+
+            assertThat(appender.list)
+                .anyMatch(event -> event.getFormattedMessage().contains("outcome=FAILURE"));
+            assertThat(appender.list).allSatisfy(event -> {
+                assertThat(event.getFormattedMessage())
+                    .doesNotContain("bookId", "userId", "42", "7", "session persistence unavailable");
+                if (event.getArgumentArray() != null) {
+                    assertThat(event.getArgumentArray()).noneMatch(value -> value != null
+                        && value.toString().contains("session persistence unavailable"));
+                }
+                assertThat(event.getThrowableProxy()).isNull();
+            });
+        } finally {
+            logger.detachAppender(appender);
+            appender.stop();
+        }
     }
 }

@@ -1,68 +1,31 @@
-import type { ChangeEvent } from 'react';
-import type { UseFormReturn } from 'react-hook-form';
-
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import type { MemoryCardDuplicatePolicy } from '@/types/api/memory-card';
+import { useI18n } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 
-import {
-  memoryCardDuplicatePolicies,
-  type MemoryCardBulkImportValues,
-  type ParsedMemoryCardUpload,
-} from '../types';
-
-interface BulkImportFormProps {
-  cardsCount: number;
-  duplicateCount: number;
-  form: UseFormReturn<MemoryCardBulkImportValues>;
-  labels: {
-    description: string;
-    duplicateHandling: string;
-    duplicateIgnore: string;
-    duplicateRemove: string;
-    duplicateReplace: string;
-    existingDuplicates: string;
-    fileUpload: string;
-    limitNotice: string;
-    requiredField: string;
-    save: string;
-    templateDownload: string;
-    title: string;
-    validate: string;
-    validatedCards: string;
-  };
-  loading: boolean;
-  maxUploadSize: number;
-  onDownloadTemplate: () => void;
-  onFileChange: (event: ChangeEvent<HTMLInputElement>) => void;
-  onSubmit: (values: MemoryCardBulkImportValues) => Promise<void>;
-  onValidate: () => Promise<void>;
-  parsedUpload: ParsedMemoryCardUpload | undefined;
-}
+import { memoryCardDuplicatePolicies, type MemoryCardWorkspace } from '../types';
+import { downloadTemplate, interpolate, MAX_MEMORY_CARD_UPLOAD_SIZE } from '../utils';
 
 export function BulkImportForm({
   cardsCount,
   duplicateCount,
   form,
-  labels,
   loading,
-  maxUploadSize,
-  onDownloadTemplate,
   onFileChange,
   onSubmit,
   onValidate,
   parsedUpload,
-}: BulkImportFormProps) {
+}: NonNullable<MemoryCardWorkspace['detail']>['bulkImport']) {
+  const { t } = useI18n();
   const duplicatePolicy = form.watch('duplicatePolicy');
   const uploadError = form.formState.errors.uploadText?.message;
-  const duplicatePolicyLabels: Record<MemoryCardDuplicatePolicy, string> = {
-    replace: labels.duplicateReplace,
-    remove: labels.duplicateRemove,
-    ignore: labels.duplicateIgnore,
+  const duplicatePolicyLabels = {
+    replace: t('memoryCardDuplicateReplace'),
+    remove: t('memoryCardDuplicateRemove'),
+    ignore: t('memoryCardDuplicateIgnore'),
   };
 
   return (
@@ -73,20 +36,21 @@ export function BulkImportForm({
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 className="text-lg font-semibold">{labels.title}</h3>
-          <p className="mt-1 text-sm text-stone-600">{labels.description}</p>
+          <h3 className="text-lg font-semibold">{t('memoryCardBulkTitle')}</h3>
+          <p className="mt-1 text-sm text-stone-600">{t('memoryCardBulkDescription')}</p>
         </div>
         <Button
-          className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-stone-900"
-          onClick={onDownloadTemplate}
+          className="min-h-11 px-3 py-2"
+          onClick={downloadTemplate}
           type="button"
+          variant="outline"
           {...testAttr('memory-card-template-download')}
         >
-          {labels.templateDownload}
+          {t('memoryCardTemplateDownload')}
         </Button>
       </div>
       <Label className="sr-only" htmlFor="memory-card-upload-file">
-        {labels.fileUpload}
+        {t('memoryCardFileUpload')}
       </Label>
       <Input
         accept="application/json,.json"
@@ -97,14 +61,14 @@ export function BulkImportForm({
         {...testAttr('memory-card-upload-file')}
       />
       <Label className="sr-only" htmlFor="memory-card-upload-text">
-        {labels.title}
+        {t('memoryCardBulkTitle')}
       </Label>
       <Textarea
         aria-describedby={uploadError ? 'memory-card-upload-text-error' : undefined}
         aria-invalid={Boolean(uploadError)}
         className="min-h-44 w-full resize-y rounded border border-stone-300 bg-stone-50 px-3 py-2 font-mono text-sm"
         id="memory-card-upload-text"
-        {...form.register('uploadText', { required: labels.requiredField })}
+        {...form.register('uploadText', { required: t('requiredField') })}
         {...testAttr('memory-card-upload-text')}
       />
       {uploadError && (
@@ -112,16 +76,19 @@ export function BulkImportForm({
           <AlertDescription>{uploadError}</AlertDescription>
         </Alert>
       )}
-      {cardsCount > maxUploadSize && (
+      {cardsCount > MAX_MEMORY_CARD_UPLOAD_SIZE && (
         <p
-          className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+          className="rounded border border-warning-border bg-warning-surface px-3 py-2 text-sm text-warning-ink"
           {...testAttr('memory-card-upload-limit-notice')}
         >
-          {labels.limitNotice}
+          {interpolate(t('memoryCardPrefillLimitNotice'), {
+            count: cardsCount,
+            limit: MAX_MEMORY_CARD_UPLOAD_SIZE,
+          })}
         </p>
       )}
       <fieldset className="grid gap-2">
-        <legend className="text-sm font-medium">{labels.duplicateHandling}</legend>
+        <legend className="text-sm font-medium">{t('memoryCardDuplicateHandling')}</legend>
         <div className="grid gap-2 sm:grid-cols-3">
           {memoryCardDuplicatePolicies.map((policy) => (
             <label
@@ -139,27 +106,29 @@ export function BulkImportForm({
         </div>
         {parsedUpload && (
           <p className="break-words text-sm text-stone-600">
-            {labels.validatedCards} {parsedUpload.cards.length}, {labels.existingDuplicates}{' '}
-            {duplicateCount}
+            {t('memoryCardValidatedCards')} {parsedUpload.cards.length},{' '}
+            {t('memoryCardExistingDuplicates')} {duplicateCount}
           </p>
         )}
       </fieldset>
       <div className="flex flex-wrap gap-2">
         <Button
-          className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium"
+          className="min-h-11 px-3 py-2"
           onClick={() => void onValidate()}
           type="button"
+          variant="outline"
         >
-          {labels.validate}
+          {t('memoryCardJsonValidate')}
         </Button>
         <Button
-          className="min-h-11 rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
+          className="min-h-11 px-3 py-2"
           disabled={loading || form.formState.isSubmitting}
           loading={loading || form.formState.isSubmitting}
           type="submit"
+          variant="default"
           {...testAttr('memory-card-upload-submit')}
         >
-          {labels.save}
+          {t('memoryCardSave')}
         </Button>
       </div>
     </form>

@@ -2,25 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { ApiRequestError } from '@/lib/api-client';
 
-import { reflectionErrorMessage, reflectionRequestId } from './reflection-loop-ui';
-
-describe('reflectionErrorMessage', () => {
-  it('keeps runtime and server details behind the public error boundary', () => {
-    const runtimeError = new Error('private provider and request detail');
-    const apiError = new ApiRequestError(
-      'COMMON_UPSTREAM_ERROR',
-      502,
-      [],
-      'request-123',
-      undefined,
-      'private provider response detail',
-    );
-    const safeMessage = '저장된 내용은 유지했습니다. 다시 시도해 주세요.';
-
-    expect(reflectionErrorMessage(runtimeError, safeMessage)).toBe(safeMessage);
-    expect(reflectionErrorMessage(apiError, safeMessage)).toBe(safeMessage);
-  });
-});
+import { reflectionRequestId } from './reflection-loop-ui';
 
 describe('reflectionRequestId', () => {
   it('returns only the typed public API request id', () => {

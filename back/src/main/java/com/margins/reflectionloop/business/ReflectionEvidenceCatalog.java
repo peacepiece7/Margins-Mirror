@@ -137,6 +137,13 @@ public class ReflectionEvidenceCatalog {
     }
 
     private Source bookKnowledgeSource(BookRecord book, GenerationLocale generationLocale) {
+        if (!blank(book.getBackgroundSummary())) {
+            return new Source(
+                "BK1", "BOOK_KNOWLEDGE", book.getId(),
+                truncate(book.getBackgroundSummary(), MAX_GUIDE_EXCERPT),
+                "reader-background-v" + book.getBackgroundRevision(), false, false
+            );
+        }
         ResolvedKnowledge resolved = bookKnowledgeBusiness.findReusableForBook(
             book, generationLocale
         );

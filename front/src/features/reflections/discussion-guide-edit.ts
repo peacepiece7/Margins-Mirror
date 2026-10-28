@@ -43,7 +43,14 @@ export function guideEditValidationMessage(
   ) {
     return '비어 있는 목표, 논점, 질문, 진행 의도 또는 후속 질문을 채워 주세요.';
   }
-  if (draft.items.some((item) => item.expectedMinutes < 1 || item.expectedMinutes > 20)) {
+  if (
+    draft.items.some(
+      (item) =>
+        !Number.isInteger(item.expectedMinutes) ||
+        item.expectedMinutes < 1 ||
+        item.expectedMinutes > 20,
+    )
+  ) {
     return '질문별 예상 시간은 1분에서 20분 사이로 입력해 주세요.';
   }
   if (guideEditMinutes(draft) !== targetMinutes) {

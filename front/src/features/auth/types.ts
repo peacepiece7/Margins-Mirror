@@ -1,0 +1,30 @@
+import type { ReactNode } from 'react';
+import type { LoginResponse } from '@/types/api/auth';
+import type { useAuthForm } from './use-auth-form';
+export type AuthFormView = ReturnType<typeof useAuthForm>['formView'];
+export type AuthBoundaryProps = {
+  authenticated: (context: { logout: () => Promise<void>; session: LoginResponse }) => ReactNode;
+  publicRoot: ReactNode;
+};
+export type RegistrationFormProps = {
+  botChallengeResetSignal: number;
+  botChallengeToken?: string;
+  emailAvailabilityConfirmed: boolean;
+  emailAvailabilityMessage?: string;
+  emailCheckLoading: boolean;
+  emailVerificationConfirmed: boolean;
+  onBotChallengeTokenChange: (token?: string) => void;
+  onCheckEmailAvailability: () => void;
+  onConfirmEmailVerification: () => void;
+  onContinueAfterConsent: () => void;
+  onRequestEmailVerification: () => void;
+  registrationConsentsAccepted: boolean;
+  registrationIntentCreated: boolean;
+  registrationIntentLoading: boolean;
+  verificationCodeRequested: boolean;
+  verificationLoading: boolean;
+  verificationMessage?: string;
+  verificationResendSeconds: number;
+  resetEmailVerification: () => void;
+  resetOtpConfirmation: () => void;
+};

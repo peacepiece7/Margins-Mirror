@@ -1,0 +1,46 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="유지보수 가이드/Contributing" />
+
+# 유지보수 가이드
+
+## 새 컴포넌트와 스토리
+
+기존 primitive와 variant로 해결할 수 있는지 먼저 확인합니다.
+두 feature 이상이 실제 사용하고 domain type·API·store·route 의존성이 없을 때 공용으로 승격합니다.
+스토리는 소유 컴포넌트 옆의 `*.stories.tsx`에 작성합니다.
+여러 요소의 조합은 app의 디자인 시스템 영역에 둡니다.
+
+각 사용 가이드에는 용도·선택 기준, 실행 예제, 상태, 긴 콘텐츠·언어 조건, 접근성과 주의점을 포함합니다.
+CSF3의 `satisfies Meta`와 `StoryObj`를 사용하고 component의 실제 props를 Controls에 노출합니다.
+사용자가 확인할 행동은 `play`에서 role과 label로 검증합니다.
+로컬 fixture를 사용하고 API·AI·인증 서비스 요청을 만들지 않습니다.
+
+## 디자인 변경
+
+색상·폰트·간격은 shared token owner에서 변경합니다.
+surface의 기존 cascade와 예외를 유지하며 Storybook 전용 값으로 앱을 모사하지 않습니다.
+한국어·영어, keyboard, pending/error, 좁은 화면을 함께 확인합니다.
+명확한 공통 UI 위반은 소유 컴포넌트에서 보정하고 화면 재설계는 별도 과제로 기록합니다.
+LoadingSpinner는 Spinner, legacy-skeleton은 Skeleton으로 신규 코드를 작성합니다.
+
+## 실행과 검증
+
+- `npm run storybook`: 기본 localhost:6006에서 탐색합니다.
+- `npm run build-storybook`: 공유 가능한 storybook-static을 생성합니다.
+- `npm run test:storybook`: 렌더링·상호작용·접근성을 검사합니다.
+- `npm run test:storybook:visual:setup`: 고정된 Linux/amd64 검증 환경을 준비합니다.
+- `npm run test:storybook:visual`: 주요 상태를 기준 이미지와 비교합니다.
+- `npm run test:design-system`: 정적 build·story tests·responsive·visual·production exclusion을 검사합니다.
+
+기존 unit/component 테스트는 `test:unit`으로 계속 독립 실행합니다.
+저장소의 `verify:local`은 준비된 환경에서 디자인 시스템 검증도 실행합니다.
+서비스 production build에는 Storybook이 포함되지 않습니다.
+
+## 기준 이미지 변경
+
+시각 변경이 의도된 것인지 실제 canvas와 diff를 먼저 검토합니다.
+`npm run test:storybook:visual:update`로 같은 고정 환경에서 기준을 갱신합니다.
+변경된 이미지는 PR에서 리뷰하며 정상 검증 명령은 기준 이미지를 갱신하지 않습니다.
+실패 시 actual·expected·diff와 trace는 `.artifacts/storybook`에 남습니다.
+폰트 로드 실패나 baseline 부재를 정상 통과로 처리하지 않습니다.

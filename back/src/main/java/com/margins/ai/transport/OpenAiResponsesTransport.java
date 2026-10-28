@@ -59,7 +59,8 @@ public class OpenAiResponsesTransport {
                 status,
                 incompleteReason,
                 outputText,
-                usage
+                usage,
+                responseModel(parsed.body(), requestBody)
             );
         } catch (IOException exception) {
             throw OpenAiResponsesException.requestFailure(exception);
@@ -138,6 +139,7 @@ public class OpenAiResponsesTransport {
                     );
                     ObjectNode root = objectMapper.createObjectNode();
                     root.put("output_text", streamed.outputText());
+                    root.put("model", streamed.model());
                     return new ParsedBody(root, streamed.tokenUsage());
                 } catch (IOException streamException) {
                     throw malformedTextResponse(response);
@@ -154,13 +156,14 @@ public class OpenAiResponsesTransport {
         StringBuilder output = new StringBuilder();
         StringBuilder eventData = new StringBuilder();
         AtomicReference<AiTokenUsage> usage = new AtomicReference<>(AiTokenUsage.NONE);
+        AtomicReference<String> model = new AtomicReference<>("");
         try (BufferedReader reader = new BufferedReader(
             new InputStreamReader(inputStream, StandardCharsets.UTF_8)
         )) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
-                    appendStreamEvent(eventData.toString(), output, deltaConsumer, usage);
+                    appendStreamEvent(eventData.toString(), output, deltaConsumer, usage, model);
                     eventData.setLength(0);
                 } else if (line.startsWith("data:")) {
                     if (!eventData.isEmpty()) {
@@ -170,15 +173,16 @@ public class OpenAiResponsesTransport {
                 }
             }
         }
-        appendStreamEvent(eventData.toString(), output, deltaConsumer, usage);
-        return new StreamAccumulator(output.toString(), usage.get());
+        appendStreamEvent(eventData.toString(), output, deltaConsumer, usage, model);
+        return new StreamAccumulator(output.toString(), usage.get(), model.get());
     }
 
     private void appendStreamEvent(
         String data,
         StringBuilder output,
         Consumer<String> deltaConsumer,
-        AtomicReference<AiTokenUsage> usage
+        AtomicReference<AiTokenUsage> usage,
+        AtomicReference<String> model
     ) throws IOException {
         if (data.isBlank() || "[DONE]".equals(data)) {
             return;
@@ -195,6 +199,7 @@ public class OpenAiResponsesTransport {
         }
         if ("response.completed".equals(event.path("type").asText())) {
             usage.set(AiTokenUsage.fromOpenAi(event.path("response")));
+            model.set(event.path("response").path("model").asText(""));
         }
 
         String delta = extractStreamDelta(event);
@@ -290,11 +295,18 @@ public class OpenAiResponsesTransport {
         return normalized;
     }
 
+    private String responseModel(JsonNode response, ObjectNode request) {
+        String model = response.path("model").asText("").trim();
+        return model.matches("[a-zA-Z0-9._-]{1,120}")
+            ? model : request.path("model").asText("");
+    }
+
     public record TextResponse(
         String status,
         String incompleteReason,
         String outputText,
-        AiTokenUsage tokenUsage
+        AiTokenUsage tokenUsage,
+        String model
     ) {
     }
 
@@ -363,7 +375,8 @@ public class OpenAiResponsesTransport {
 
     private record StreamAccumulator(
         String outputText,
-        AiTokenUsage tokenUsage
+        AiTokenUsage tokenUsage,
+        String model
     ) {
     }
 }

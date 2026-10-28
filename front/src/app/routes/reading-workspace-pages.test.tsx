@@ -3,9 +3,13 @@ import type { FormEvent } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, expect, it, vi } from 'vitest';
 
-import { BookDetailPage } from './book-detail';
 import { BookListPage } from '@/features/books/components/BookListPage';
 import { BookSearchPage } from '@/features/books/components/BookSearchPage';
+import {
+  LibraryActivityList,
+  LibraryRevisionList,
+  LibraryThreadProgress,
+} from '@/features/books/components/LibraryThreadSummary';
 import { DebatePage } from '@/features/debates/components/DebatePage';
 import { DebateRoomsPage } from '@/features/debates/components/DebateRoomsPage';
 import { PublicReviewsPage } from '@/features/public-reviews/components/PublicReviewsPage';
@@ -150,26 +154,24 @@ describe('reading workspace page boundaries', () => {
     view.unmount();
   });
 
-  it('book list renders its empty state and forwards filter changes', () => {
-    const onFilterChange = vi.fn();
+  it('book list renders its empty state and forwards sort changes', () => {
+    const onSortChange = vi.fn();
     const view = render(
       <I18nProvider>
         <BookListPage
           books={[]}
-          filter="all"
           loading={false}
           onDelete={vi.fn()}
-          onFilterChange={onFilterChange}
           onRatingChange={vi.fn()}
           onSelect={vi.fn()}
-          onSortChange={vi.fn()}
+          onSortChange={onSortChange}
           onStatusChange={vi.fn()}
           sort="recent"
         />
       </I18nProvider>,
     );
-    fireEvent.change(view.getByTestId('book-shelf-filter'), { target: { value: 'reading' } });
-    expect(onFilterChange).toHaveBeenCalledWith('reading');
+    fireEvent.change(view.getByTestId('book-shelf-sort'), { target: { value: 'title_asc' } });
+    expect(onSortChange).toHaveBeenCalledWith('title_asc');
     view.unmount();
   });
 
@@ -184,13 +186,20 @@ describe('reading workspace page boundaries', () => {
                 author: 'Author',
                 bookId: 1,
                 coverImageUrl: 'https://example.com/margins.jpg',
+                loop: {
+                  answeredCount: 2,
+                  continueLocator: {
+                    href: '/book/1/reflection/interview',
+                    kind: 'INTERVIEW',
+                  },
+                  stage: 'INTERVIEW',
+                  targetCount: 5,
+                },
                 title: 'Margins',
               },
             ]}
-            filter="all"
             loading={false}
             onDelete={vi.fn()}
-            onFilterChange={vi.fn()}
             onRatingChange={vi.fn()}
             onSelect={onSelect}
             onSortChange={vi.fn()}
@@ -204,19 +213,32 @@ describe('reading workspace page boundaries', () => {
     expect(view.getByTestId('saved-book-detail-link')).toHaveAttribute('href', '/book/1');
     expect(view.getByTestId('saved-book-detail-link').tagName).toBe('A');
     expect(view.getByTestId('saved-book-detail-link')).toHaveTextContent('Margins');
+    expect(view.getByTestId('saved-book-continue')).toHaveAttribute(
+      'href',
+      '/book/1/reflection/interview',
+    );
     expect(view.getByTestId('saved-book-detail-link')).not.toHaveAttribute('data-slot', 'button');
     fireEvent.click(view.getByTestId('saved-book-detail-link'));
     expect(onSelect).toHaveBeenCalledWith({
       author: 'Author',
       bookId: 1,
       coverImageUrl: 'https://example.com/margins.jpg',
+      loop: {
+        answeredCount: 2,
+        continueLocator: {
+          href: '/book/1/reflection/interview',
+          kind: 'INTERVIEW',
+        },
+        stage: 'INTERVIEW',
+        targetCount: 5,
+      },
       title: 'Margins',
     });
     expect(
       view.getByTestId('saved-book-detail-link').parentElement?.parentElement,
     ).toContainElement(view.getByTestId('saved-book-cover'));
     expect(view.getByTestId('saved-book-detail-link').parentElement).toHaveClass(
-      'min-h-20',
+      'min-h-16',
       'justify-center',
     );
     expect(view.getByTestId('saved-book-row')).not.toHaveClass(
@@ -227,114 +249,80 @@ describe('reading workspace page boundaries', () => {
     view.unmount();
   });
 
-  it('book detail renders selected-book controls and forwards review start', () => {
-    const onStartReview = vi.fn();
+  it('renders the server-provided Library stage, locator and bounded revision summaries', () => {
     const view = render(
-      <I18nProvider>
-        <BookDetailPage
-          answeredQuestionIds={new Set()}
-          book={{ author: 'Author', bookId: 1, title: 'Margins' }}
-          bookKnowledgeError=""
-          bookKnowledgePending={false}
-          debateTopic=""
-          draftPersonaIds={[]}
-          editAuthor="Author"
-          editTitle="Margins"
-          loading={false}
-          onApplyDiscussionPoint={vi.fn()}
-          onApplyPersonas={vi.fn()}
-          onCloseSpeakerDialog={vi.fn()}
-          onDebateTopicChange={vi.fn()}
-          onDeleteBook={vi.fn()}
-          onDeleteQuestion={vi.fn()}
-          onEditAuthorChange={vi.fn()}
-          onEditTitleChange={vi.fn()}
-          onEnterDebate={vi.fn()}
-          onGenerateQuestions={vi.fn()}
-          onOpenQuestionAnswer={vi.fn()}
-          onOpenQuestionDebate={vi.fn()}
-          onOpenSpeakerDialog={vi.fn()}
-          onRatingChange={vi.fn()}
-          onSpeakerDialogOpenChange={vi.fn()}
-          onStartReview={onStartReview}
-          onStatusChange={vi.fn()}
-          onSubmitBook={vi.fn()}
-          onToggleDraftPersona={vi.fn()}
-          personas={[]}
-          questionLoading={false}
-          questions={[]}
-          recommendedPersonaIds={[]}
-          selectedPersonaIds={[]}
-          speakerDialogOpen={false}
-        />
-      </I18nProvider>,
+      <MemoryRouter>
+        <I18nProvider>
+          <LibraryThreadProgress
+            loop={{
+              answeredCount: 3,
+              continueLocator: {
+                href: '/book/7/reflection/interview',
+                kind: 'INTERVIEW',
+              },
+              stage: 'INTERVIEW',
+              targetCount: 5,
+            }}
+          />
+          <LibraryRevisionList
+            revisions={[
+              {
+                createdAt: '2026-09-01T12:00:00',
+                revisionId: 22,
+                revisionSource: 'USER_EDIT',
+                version: 2,
+              },
+            ]}
+          />
+        </I18nProvider>
+      </MemoryRouter>,
     );
-    fireEvent.click(view.getByTestId('book-start-review'));
-    expect(onStartReview).toHaveBeenCalledOnce();
-    view.unmount();
+
+    expect(view.getByTestId('library-thread-continue')).toHaveAttribute(
+      'href',
+      '/book/7/reflection/interview',
+    );
+    expect(view.getByTestId('library-thread-summary')).toHaveTextContent('Interview 3/5');
+    expect(view.getByTestId('library-recent-revisions')).toHaveTextContent('V2');
   });
 
-  it('book detail keeps selected persona controls on the primary Button variant', () => {
+  it('orders revision activity across books from newest to oldest', () => {
     const view = render(
-      <I18nProvider>
-        <BookDetailPage
-          answeredQuestionIds={new Set()}
-          book={{ author: 'Author', bookId: 1, title: 'Margins' }}
-          bookKnowledgeError=""
-          bookKnowledgePending={false}
-          debateTopic=""
-          draftPersonaIds={[1]}
-          editAuthor="Author"
-          editTitle="Margins"
-          loading={false}
-          onApplyDiscussionPoint={vi.fn()}
-          onApplyPersonas={vi.fn()}
-          onCloseSpeakerDialog={vi.fn()}
-          onDebateTopicChange={vi.fn()}
-          onDeleteBook={vi.fn()}
-          onDeleteQuestion={vi.fn()}
-          onEditAuthorChange={vi.fn()}
-          onEditTitleChange={vi.fn()}
-          onEnterDebate={vi.fn()}
-          onGenerateQuestions={vi.fn()}
-          onOpenQuestionAnswer={vi.fn()}
-          onOpenQuestionDebate={vi.fn()}
-          onOpenSpeakerDialog={vi.fn()}
-          onRatingChange={vi.fn()}
-          onSpeakerDialogOpenChange={vi.fn()}
-          onStartReview={vi.fn()}
-          onStatusChange={vi.fn()}
-          onSubmitBook={vi.fn()}
-          onToggleDraftPersona={vi.fn()}
-          personas={[
-            {
-              description: 'Challenges assumptions.',
-              displayName: 'Skeptic',
-              name: 'skeptic',
-              personaId: 1,
-            },
-            {
-              description: 'Looks for context.',
-              displayName: 'Historian',
-              name: 'historian',
-              personaId: 2,
-            },
-          ]}
-          questionLoading={false}
-          questions={[]}
-          recommendedPersonaIds={[]}
-          selectedPersonaIds={[]}
-          speakerDialogOpen
-        />
-      </I18nProvider>,
+      <MemoryRouter>
+        <I18nProvider>
+          <LibraryActivityList
+            activities={[
+              {
+                bookAuthor: 'Older author',
+                bookId: 1,
+                bookTitle: 'Older book',
+                createdAt: '2026-09-01T12:00:00',
+                revisionId: 11,
+                revisionSource: 'USER_EDIT',
+                version: 1,
+              },
+              {
+                bookAuthor: 'Newer author',
+                bookId: 2,
+                bookTitle: 'Newer book',
+                createdAt: '2026-09-03T12:00:00',
+                revisionId: 22,
+                revisionSource: 'REFINEMENT',
+                version: 3,
+              },
+            ]}
+          />
+        </I18nProvider>
+      </MemoryRouter>,
     );
 
-    const buttons = view.getAllByTestId('debate-participant-toggle');
-    expect(buttons[0]).toHaveAttribute('data-variant', 'default');
-    expect(buttons[1]).toHaveAttribute('data-variant', 'outline');
-    expect(buttons[0]).toHaveAttribute('aria-pressed', 'true');
-    expect(buttons[1]).toHaveAttribute('aria-pressed', 'false');
-    view.unmount();
+    const activity = view.getByTestId('library-recent-activity');
+    const rows = activity.querySelectorAll('li');
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toHaveTextContent('Newer book');
+    expect(rows[0]).toHaveTextContent('V3');
+    expect(rows[1]).toHaveTextContent('Older book');
+    expect(activity.querySelector('a')).toHaveAttribute('href', '/book/2');
   });
 
   it('saved notes renders its empty state and forwards write', () => {
@@ -365,30 +353,16 @@ describe('reading workspace page boundaries', () => {
     const view = render(
       <I18nProvider>
         <PublicReviewsPage
-          commentDrafts={{}}
-          comments={{}}
-          commentsError={{}}
-          commentsPending={{}}
-          editingCommentDraft=""
           error=""
           loaded
-          onCancelEdit={vi.fn()}
-          onCommentDraftChange={vi.fn()}
-          onDeleteComment={vi.fn()}
-          onEditingDraftChange={vi.fn()}
-          onLoadComments={vi.fn()}
           onOpenBook={vi.fn()}
           onRefresh={onRefresh}
-          onReplyDraftChange={vi.fn()}
-          onStartEdit={vi.fn()}
-          onSubmitComment={vi.fn()}
-          onSubmitEdit={vi.fn()}
           pending={false}
-          replyDrafts={{}}
           reviews={[]}
         />
       </I18nProvider>,
     );
+    expect(view.getByTestId('public-reviews-refresh')).toHaveTextContent('Refresh');
     fireEvent.click(view.getByTestId('public-reviews-refresh'));
     expect(onRefresh).toHaveBeenCalledOnce();
     view.unmount();

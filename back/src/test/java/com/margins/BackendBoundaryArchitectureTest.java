@@ -112,7 +112,8 @@ class BackendBoundaryArchitectureTest {
                 "DiscussionGuideMapper.java",
                 "DiscussionRunMapper.java",
                 "ReflectionSummaryMapper.java",
-                "DiscussionRunRefinementMapper.java"
+                "DiscussionRunRefinementMapper.java",
+                "MobileReflectionThreadMapper.java"
             );
         }
 
@@ -134,6 +135,9 @@ class BackendBoundaryArchitectureTest {
         assertThat(source("reflectionloop/mapper/DiscussionRunRefinementMapper.java"))
             .contains("findByIdentity", "discussion_run_refinements")
             .doesNotContain("reflection_summaries");
+        assertThat(source("reflectionloop/mapper/MobileReflectionThreadMapper.java"))
+            .contains("findReadingThreads", "WITH ranked_sessions")
+            .doesNotContain("@Insert", "@Update", "@Delete");
     }
 
     @Test

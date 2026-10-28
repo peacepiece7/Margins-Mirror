@@ -21,7 +21,7 @@ import org.mockito.ArgumentCaptor;
 class ReflectionQuestionGeneratorTest {
 
     @Test
-    void ordinaryProviderFallbackKeepsNullableLanguageValidation() {
+    void providerFallbackUsesDomainQuestionWithoutExposingPromptFocus() {
         AiProvider provider = mock(AiProvider.class);
         when(provider.suggestQuestionsWithMetadata(eq(20L), any(), any())).thenAnswer(invocation ->
             AiGenerationResult.completed(
@@ -42,15 +42,18 @@ class ReflectionQuestionGeneratorTest {
 
         var draft = generator.generate(
             20L,
-            "Initial thought",
+            "Private initial thought",
             "ALTERNATIVE_VIEW",
             false,
             List.of("First question"),
-            List.of("First answer"),
+            List.of("Private first answer"),
             GenerationLocale.EN
         );
 
-        assertThat(draft.question()).isEqualTo("Which scene matters most?");
+        assertThat(draft.question())
+            .isEqualTo("What different interpretation becomes possible from the opposite point of view?")
+            .doesNotContain("Private initial thought", "Private first answer", "Current Reflection");
+        assertThat(draft.model()).isEqualTo("reflection-loop-fallback");
         assertThat(draft.generationLocale()).isEqualTo("en");
         assertThat(draft.languageValidationOutcome()).isNull();
     }

@@ -139,7 +139,7 @@ export function TurnstileWidget({
       <div ref={containerRef} />
       <p
         aria-live="polite"
-        className={status === 'error' ? 'text-sm text-red-700' : 'text-sm text-stone-600'}
+        className={status === 'error' ? 'text-sm text-destructive' : 'text-sm text-stone-600'}
         {...testAttr(`${testId}-status`)}
       >
         {statusMessage}

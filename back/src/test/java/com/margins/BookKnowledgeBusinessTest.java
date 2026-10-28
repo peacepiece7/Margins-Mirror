@@ -33,12 +33,15 @@ import com.margins.book.model.BookKnowledgeRecord;
 import com.margins.book.model.BookKnowledgeStatus;
 import com.margins.book.model.BookRecord;
 import com.margins.common.error.ApiErrorCode;
+import com.margins.testsupport.TestSecurityContextSupport;
 import java.time.LocalDateTime;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -140,6 +143,35 @@ class BookKnowledgeBusinessTest {
         assertThat(request.getValue().getGenerationLocale()).isEqualTo(GenerationLocale.KO);
     }
 
+    @ParameterizedTest
+    @ValueSource(ints = {-5, 3})
+    void freshnessFallbackAndClaimKeepTheirConfiguredLowerBounds(int freshDays) {
+        properties.setFreshDays(freshDays);
+        properties.setFallbackDays(-10);
+        properties.setClaimTtlSeconds(-10);
+        BookKnowledgeRecord current = ready(
+            71L, BookKnowledgeBusiness.PROMPT_VERSION, LocalDateTime.now().minusHours(12), false
+        );
+        when(knowledgeMapper.findByIdentityAndPromptVersion(
+            "isbn", "9781234567890", BookKnowledgeBusiness.PROMPT_VERSION, "ko"
+        )).thenReturn(current);
+        when(knowledgeMapper.findLatestReadyByIdentity("isbn", "9781234567890", "ko"))
+            .thenReturn(current);
+
+        assertThat(business.ensureKnowledge(book(), GenerationLocale.KO).stale()).isFalse();
+        verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+
+        current.setGeneratedAt(LocalDateTime.now().minusDays(Math.max(1, freshDays) + 1));
+        assertThat(business.findReusableForBook(book(), GenerationLocale.KO)).isNull();
+        when(knowledgeMapper.claimGeneration(eq(71L), anyString(), eq("ko"), eq(30))).thenReturn(1);
+        when(aiProvider.analyzeBookKnowledgeWithMetadata(any())).thenReturn(success(analyzed(), false));
+        when(knowledgeMapper.completeGeneration(any())).thenReturn(1);
+
+        assertThat(business.ensureKnowledge(book(), GenerationLocale.KO).stale()).isFalse();
+        verify(knowledgeMapper).claimGeneration(eq(71L), anyString(), eq("ko"), eq(30));
+        verify(aiProvider).analyzeBookKnowledgeWithMetadata(any());
+    }
+
     @Test
     void activeClaimReturnsCurrentSnapshotWithoutDuplicateProviderCall() {
         BookRecord book = book();
@@ -166,6 +198,104 @@ class BookKnowledgeBusinessTest {
 
         assertThat(resolved.record().getId()).isEqualTo(12L);
         assertThat(resolved.refreshPending()).isTrue();
+        verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+    }
+
+    @Test
+    void explicitRegenerationReturnsPendingClaimBeforeProviderWorkRuns() {
+        BookRecord book = book();
+        BookKnowledgeRecord current = ready(
+            13L,
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            LocalDateTime.now().minusDays(2),
+            false
+        );
+        when(bookMapper.findByIdForUser(1L, 7L)).thenReturn(book);
+        when(localeResolver.resolve(7L)).thenReturn(GenerationLocale.KO);
+        when(knowledgeMapper.findByIdentityAndPromptVersion(
+            "isbn",
+            "9781234567890",
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            "ko"
+        )).thenReturn(current);
+        when(knowledgeMapper.claimGeneration(eq(13L), anyString(), eq("ko"), eq(120)))
+            .thenReturn(1);
+        when(knowledgeMapper.findLatestReadyByIdentity("isbn", "9781234567890", "ko"))
+            .thenReturn(current);
+        when(aiProvider.analyzeBookKnowledgeWithMetadata(any()))
+            .thenReturn(success(analyzed(), false));
+        when(knowledgeMapper.renewGenerationClaim(eq(13L), anyString(), eq("ko")))
+            .thenReturn(1);
+        when(knowledgeMapper.completeGeneration(any())).thenReturn(1);
+
+        TestSecurityContextSupport.loginAs(7L, "reader");
+        try {
+            BookKnowledgeBusiness.RegenerationRequest request =
+                business.requestRegeneration(1L);
+
+            assertThat(request.knowledge().isRefreshPending()).isTrue();
+            assertThat(request.work()).isNotNull();
+            verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+
+            business.completeRegeneration(request.work());
+        } finally {
+            TestSecurityContextSupport.clear();
+        }
+
+        verify(aiProvider).analyzeBookKnowledgeWithMetadata(any());
+        verify(knowledgeMapper).completeGeneration(any());
+    }
+
+    @Test
+    void queuedRegenerationSkipsProviderAfterAnotherRequestReclaimsTheLease() {
+        BookKnowledgeBusiness.RegenerationWork work = new BookKnowledgeBusiness.RegenerationWork(
+            book(),
+            ready(15L, BookKnowledgeBusiness.PROMPT_VERSION, LocalDateTime.now(), false),
+            "expired-claim",
+            GenerationLocale.KO
+        );
+        when(knowledgeMapper.renewGenerationClaim(15L, "expired-claim", "ko")).thenReturn(0);
+
+        business.completeRegeneration(work);
+
+        verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+        verify(knowledgeMapper, never()).completeGeneration(any());
+    }
+
+    @Test
+    void explicitRegenerationWithActiveClaimDoesNotCreateBackgroundWork() {
+        BookRecord book = book();
+        BookKnowledgeRecord current = ready(
+            14L,
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            LocalDateTime.now().minusDays(2),
+            false
+        );
+        current.setGenerationClaimToken("active-claim");
+        current.setGenerationClaimedAt(LocalDateTime.now().minusSeconds(5));
+        when(bookMapper.findByIdForUser(1L, 7L)).thenReturn(book);
+        when(localeResolver.resolve(7L)).thenReturn(GenerationLocale.KO);
+        when(knowledgeMapper.findByIdentityAndPromptVersion(
+            "isbn",
+            "9781234567890",
+            BookKnowledgeBusiness.PROMPT_VERSION,
+            "ko"
+        )).thenReturn(current);
+        when(knowledgeMapper.claimGeneration(eq(14L), anyString(), eq("ko"), eq(120)))
+            .thenReturn(0);
+        when(knowledgeMapper.hasActiveGenerationClaim(14L, "ko", 120)).thenReturn(true);
+
+        TestSecurityContextSupport.loginAs(7L, "reader");
+        try {
+            BookKnowledgeBusiness.RegenerationRequest request =
+                business.requestRegeneration(1L);
+
+            assertThat(request.knowledge().isRefreshPending()).isTrue();
+            assertThat(request.work()).isNull();
+        } finally {
+            TestSecurityContextSupport.clear();
+        }
+
         verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
     }
 
@@ -314,15 +444,39 @@ class BookKnowledgeBusinessTest {
         verify(knowledgeMapper, never()).completeGeneration(any());
     }
 
-    @Test
-    void malformedDiscussionPointFailsExactLocaleClaimWithoutCompletion() {
+    @ParameterizedTest
+    @ValueSource(strings = {
+        "result-null", "summary-null", "summary-blank", "points-null", "points-empty", "point-null",
+        "id-null", "id-blank", "question-null", "question-blank", "rationale-null", "rationale-blank",
+        "keys-null", "keys-one", "keys-three", "key-null", "key-blank"
+    })
+    void malformedDiscussionPointFailsExactLocaleClaimWithoutCompletion(String invalid) {
         BookRecord book = book();
         AtomicReference<AiGenerationResult<?>> observed = observeGeneration();
         AtomicReference<BookKnowledgeRecord> inserted = new AtomicReference<>();
-        BookKnowledgeDto malformed = BookKnowledgeDto.builder()
-            .summary("유효한 요약")
+        List<String> keys = switch (invalid) {
+            case "keys-null" -> null;
+            case "keys-one" -> List.of("a");
+            case "keys-three" -> List.of("a", "b", "c");
+            case "key-null" -> java.util.Arrays.asList("a", null);
+            case "key-blank" -> List.of("a", " \t");
+            default -> List.of("a", "b");
+        };
+        BookKnowledgeDto.DiscussionPointDto point = BookKnowledgeDto.DiscussionPointDto.builder()
+            .id(invalid.equals("id-null") ? null : invalid.equals("id-blank") ? " " : "p1")
+            .question(invalid.equals("question-null") ? null : invalid.equals("question-blank") ? " " : "질문")
+            .rationale(invalid.equals("rationale-null") ? null : invalid.equals("rationale-blank") ? " " : "근거")
+            .recommendedPersonaKeys(keys).build();
+        List<BookKnowledgeDto.DiscussionPointDto> points = switch (invalid) {
+            case "points-null" -> null;
+            case "points-empty" -> List.of();
+            case "point-null" -> Collections.singletonList(null);
+            default -> List.of(point);
+        };
+        BookKnowledgeDto malformed = invalid.equals("result-null") ? null : BookKnowledgeDto.builder()
+            .summary(invalid.equals("summary-null") ? null : invalid.equals("summary-blank") ? "\u2003 \t" : "유효한 요약")
             .themes(List.of("주제"))
-            .discussionPoints(Collections.singletonList(null))
+            .discussionPoints(points)
             .recommendedPersonas(List.of())
             .famousQuotes(List.of())
             .keywords(List.of("키워드"))
@@ -378,6 +532,46 @@ class BookKnowledgeBusinessTest {
         verify(bookMapper).findByIdForUser(1L, 7L);
         verify(localeResolver, times(1)).resolve(7L);
         verify(aiProvider, never()).analyzeBookKnowledgeWithMetadata(any());
+    }
+
+    @Test
+    void readsNestedKnowledgeJsonWithoutDroppingDiscussionData() {
+        BookRecord book = book();
+        BookKnowledgeRecord current = ready(
+            41L, BookKnowledgeBusiness.PROMPT_VERSION, LocalDateTime.now(), false
+        );
+        current.setDiscussionPointsJson(
+            "[{\"id\":\"point-1\",\"question\":\"질문\",\"rationale\":\"근거\","
+                + "\"recommendedPersonaKeys\":[\"journalist\",\"writer\"]}]"
+        );
+        current.setRecommendedPersonasJson(
+            "[{\"discussionPointId\":\"point-1\","
+                + "\"personaKeys\":[\"journalist\",\"writer\"]}]"
+        );
+        when(bookMapper.findByIdForUser(1L, 7L)).thenReturn(book);
+        when(localeResolver.resolve(7L)).thenReturn(GenerationLocale.KO);
+        when(knowledgeMapper.findByIdentityAndPromptVersion(
+            "isbn", "9781234567890", BookKnowledgeBusiness.PROMPT_VERSION, "ko"
+        )).thenReturn(current);
+
+        TestSecurityContextSupport.loginAs(7L, "reader");
+        try {
+            BookKnowledgeDto result = business.findForBook(1L);
+
+            assertThat(result.getDiscussionPoints()).singleElement().satisfies(point -> {
+                assertThat(point.getId()).isEqualTo("point-1");
+                assertThat(point.getQuestion()).isEqualTo("질문");
+                assertThat(point.getRationale()).isEqualTo("근거");
+                assertThat(point.getRecommendedPersonaKeys())
+                    .containsExactly("journalist", "writer");
+            });
+            assertThat(result.getRecommendedPersonas()).singleElement().satisfies(persona -> {
+                assertThat(persona.getDiscussionPointId()).isEqualTo("point-1");
+                assertThat(persona.getPersonaKeys()).containsExactly("journalist", "writer");
+            });
+        } finally {
+            TestSecurityContextSupport.clear();
+        }
     }
 
     @Test

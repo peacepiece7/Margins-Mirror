@@ -1,0 +1,42 @@
+import { Meta } from '@storybook/addon-docs/blocks';
+
+<Meta title="시작하기/Introduction" />
+
+# Margins 디자인 시스템
+
+책의 여백처럼 따뜻한 표면, 읽기 쉬운 정보 위계, 예측 가능한 행동을 함께 관리합니다.
+이 Storybook은 실제 Margins front 컴포넌트와 스타일로 동작합니다.
+
+## 컴포넌트를 찾는 순서
+
+1. Foundations에서 색상·간격·타이포·접근성의 기준을 확인합니다.
+2. Components에서 사용할 요소를 찾고 사용 가이드와 상태를 살펴봅니다.
+3. Patterns에서 입력 저장·삭제·책·AI 표시·workspace 조합을 확인합니다.
+4. Canvas의 Controls로 속성을 변경하고 코드 보기에서 예제를 복사합니다.
+
+## 행동의 중요도
+
+일반 행동은 `<Button>`의 따뜻한 secondary 기본값을 사용합니다.
+가장 중요한 행동만 `variant="default"`로 navy를 선택합니다.
+이동은 `asChild`와 실제 링크를 조합해 링크 의미를 유지합니다.
+삭제는 ConfirmActionDialog로 확인하고 실패하면 입력과 문맥을 보존합니다.
+
+## 언어와 작은 화면
+
+toolbar의 언어 선택으로 한국어와 English를 전환합니다.
+viewport에서 320·390·768·1440px를 확인합니다.
+좁은 화면과 coarse pointer는 서로 다른 조건입니다. 실제 44px touch 목표는 browser 검증에서 확인합니다.
+긴 제목·오류·URL도 콘텐츠를 가리거나 페이지 가로 넘침을 만들면 안 됩니다.
+
+## 앱에서 사용하기
+
+컴포넌트는 `@/components/ui/...`에서 가져옵니다.
+form 값·번역 문구·API·도메인 상태는 caller가 소유합니다.
+feature의 비즈니스 UI는 feature 안에 두고, 여러 feature의 조합은 app이 소유합니다.
+Storybook 예제는 서버에 저장하거나 실제 AI를 호출하지 않습니다.
+
+## 기준 문서
+
+현재 계약은 저장소의 `docs/architecture/frontend-design-system/sdd.md`와 `bdd.md`입니다.
+Storybook은 그 계약을 이해하고 검증하는 실행 가능한 사용 예제입니다.
+접근성 자동 검사는 첫 단계이며 키보드와 읽기 순서 검토를 함께 수행합니다.

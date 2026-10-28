@@ -1,7 +1,10 @@
 package com.margins;
 
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.margins.auth.config.SecurityConfig;
@@ -41,6 +44,24 @@ class MemoryCardControllerValidationTest {
         mockMvc.perform(patch("/api/memory-cards/1/memorized")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
+            .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(memoryCardService);
+    }
+
+    @Test
+    void groupListPassesOptionalBookFilterToService() throws Exception {
+        mockMvc.perform(get("/api/memory-card-groups").param("bookId", "42"))
+            .andExpect(status().isOk());
+
+        verify(memoryCardService).groups(42L);
+    }
+
+    @Test
+    void groupCreateRejectsNonPositiveBookIdBeforeBusinessLogic() throws Exception {
+        mockMvc.perform(post("/api/memory-card-groups")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"bookId\":0,\"title\":\"Invalid scope\"}"))
             .andExpect(status().isBadRequest());
 
         verifyNoInteractions(memoryCardService);

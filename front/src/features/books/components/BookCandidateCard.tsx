@@ -24,7 +24,7 @@ export function BookCandidateCard({
   const { t } = useI18n();
   return (
     <Card
-      className="rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_12px_36px_rgba(23,23,23,0.05)] ring-0"
+      className="web-discover-result rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_12px_36px_rgba(23,23,23,0.05)] ring-0"
       {...testAttr('book-candidate-card')}
     >
       <CardContent className="grid gap-3 p-0">
@@ -37,7 +37,10 @@ export function BookCandidateCard({
               {...testAttr('book-candidate-cover')}
             />
           ) : (
-            <div aria-hidden="true" className="h-28 w-[72px] rounded bg-muted" />
+            <div
+              aria-hidden="true"
+              className="web-book-cover-placeholder h-28 w-[72px] rounded bg-muted"
+            />
           )}
           <div className="min-w-0">
             <div

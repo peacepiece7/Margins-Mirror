@@ -11,6 +11,14 @@ import {
 } from './discussion-guide-edit';
 
 describe('discussion guide edit helpers', () => {
+  it.each([NaN, Infinity, 1.5])(
+    'rejects a non-integer or non-finite item duration: %s',
+    (minutes) => {
+      const draft = validDraft();
+      draft.items[0].expectedMinutes = minutes;
+      expect(guideEditValidationMessage(draft, 20)).toMatch(/1분에서 20분/);
+    },
+  );
   it('creates a detached draft and maps a trimmed immutable version request', () => {
     const guide = {
       audienceMode: 'SELF_AI' as const,

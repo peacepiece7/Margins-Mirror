@@ -1,0 +1,28 @@
+appId: cloud.margins.mobile
+env:
+  TEST_EMAIL: ${MARGINS_MAESTRO_RECOVERY_EMAIL}
+  TEST_VERIFICATION_CODE: ${MARGINS_MAESTRO_RECOVERY_CODE}
+---
+- launchApp:
+    clearState: true
+- scrollUntilVisible:
+    element:
+      text: "I already have an account"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn: "I already have an account"
+- tapOn: "Recover account"
+- assertVisible:
+    id: recovery-screen
+- tapOn: "Email"
+- inputText: ${TEST_EMAIL}
+- tapOn: "Recover account"
+- assertVisible: "If the address matches an account, a code has been sent."
+- tapOn: "Verification code"
+- inputText: ${TEST_VERIFICATION_CODE}
+- tapOn: "Confirm code"
+- tapOn: "Restore account"
+- assertVisible: "Your recovery request is complete. You can sign in again."

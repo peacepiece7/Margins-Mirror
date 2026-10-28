@@ -10,29 +10,7 @@ import { testAttr } from '@/utils/testAttrs';
 import { AuthFormField } from './AuthFormField';
 import { emailPattern, type AuthFormValues } from './auth-form';
 import { ConsentCheckbox } from './ConsentCheckbox';
-
-type RegistrationFormProps = {
-  botChallengeResetSignal: number;
-  botChallengeToken?: string;
-  emailAvailabilityConfirmed: boolean;
-  emailAvailabilityMessage?: string;
-  emailCheckLoading: boolean;
-  emailVerificationConfirmed: boolean;
-  onBotChallengeTokenChange: (token?: string) => void;
-  onCheckEmailAvailability: () => void;
-  onConfirmEmailVerification: () => void;
-  onContinueAfterConsent: () => void;
-  onRequestEmailVerification: () => void;
-  registrationConsentsAccepted: boolean;
-  registrationIntentCreated: boolean;
-  registrationIntentLoading: boolean;
-  verificationCodeRequested: boolean;
-  verificationLoading: boolean;
-  verificationMessage?: string;
-  verificationResendSeconds: number;
-  resetEmailVerification: () => void;
-  resetOtpConfirmation: () => void;
-};
+import type { RegistrationFormProps } from '../types';
 
 export function RegistrationForm({
   botChallengeResetSignal,
@@ -58,34 +36,29 @@ export function RegistrationForm({
 }: RegistrationFormProps) {
   const { locale, t } = useI18n();
   const {
+    control,
     formState: { errors, isSubmitting },
     getValues,
     register,
     trigger,
   } = useFormContext<AuthFormValues>();
-  const username = useWatch<AuthFormValues, 'username'>({
-    name: 'username',
-    defaultValue: '',
-  });
-  const displayName = useWatch<AuthFormValues, 'displayName'>({
-    name: 'displayName',
-    defaultValue: '',
-  });
-  const email = useWatch<AuthFormValues, 'email'>({
-    name: 'email',
-    defaultValue: '',
-  });
-  const emailVerificationCode = useWatch<AuthFormValues, 'emailVerificationCode'>({
-    name: 'emailVerificationCode',
-    defaultValue: '',
-  });
-  const password = useWatch<AuthFormValues, 'password'>({
-    name: 'password',
-    defaultValue: '',
-  });
-  const confirmPassword = useWatch<AuthFormValues, 'confirmPassword'>({
-    name: 'confirmPassword',
-    defaultValue: '',
+  const [
+    username = '',
+    displayName = '',
+    email = '',
+    emailVerificationCode = '',
+    password = '',
+    confirmPassword = '',
+  ] = useWatch({
+    control,
+    name: [
+      'username',
+      'displayName',
+      'email',
+      'emailVerificationCode',
+      'password',
+      'confirmPassword',
+    ],
   });
 
   return (
@@ -97,7 +70,7 @@ export function RegistrationForm({
         <Input
           aria-describedby={errors.username ? 'register-username-error' : undefined}
           aria-invalid={Boolean(errors.username)}
-          className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 md:text-sm"
+          className="w-full"
           id="register-username"
           placeholder={t('username')}
           aria-label={t('username')}
@@ -113,7 +86,7 @@ export function RegistrationForm({
           {t('language')}
           <NativeSelect
             id="register-locale"
-            className="h-11 rounded border border-stone-300 bg-white px-3 text-base md:h-8 md:text-sm"
+            className="h-11 text-base md:h-8 md:text-sm"
             {...register('preferredLocale')}
             {...testAttr('register-locale-select')}
           >
@@ -129,7 +102,7 @@ export function RegistrationForm({
         <Input
           aria-describedby={errors.displayName ? 'register-display-name-error' : undefined}
           aria-invalid={Boolean(errors.displayName)}
-          className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 md:text-sm"
+          className="w-full"
           id="register-display-name"
           placeholder={t('displayName')}
           aria-label={t('displayName')}
@@ -147,7 +120,7 @@ export function RegistrationForm({
           <Input
             aria-describedby={errors.email ? 'register-email-error' : undefined}
             aria-invalid={Boolean(errors.email)}
-            className="min-w-0 rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500 md:text-sm"
+            className="min-w-0"
             disabled={emailVerificationConfirmed}
             id="register-email"
             placeholder={t('email')}
@@ -164,10 +137,16 @@ export function RegistrationForm({
             {...testAttr('register-email-input')}
           />
           <Button
-            className="h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-stone-700 disabled:opacity-50 md:h-8"
-            disabled={emailCheckLoading || emailVerificationConfirmed || !email.trim()}
+            className="h-11 px-3 py-2 md:h-8"
+            disabled={
+              emailCheckLoading ||
+              verificationLoading ||
+              emailVerificationConfirmed ||
+              !email.trim()
+            }
             onClick={onCheckEmailAvailability}
             type="button"
+            variant="outline"
             {...testAttr('register-email-check-submit')}
           >
             {t('checkDuplicate')}
@@ -176,7 +155,7 @@ export function RegistrationForm({
         <AuthFormField name="email" errorTestId="register-email-error" />
         {emailAvailabilityMessage && (
           <div
-            className="mt-1 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+            className="mt-1 rounded border border-success-border bg-success-surface px-3 py-2 text-sm text-success-ink"
             {...testAttr('register-email-check-message')}
           >
             {emailAvailabilityMessage}
@@ -200,7 +179,7 @@ export function RegistrationForm({
               errors.emailVerificationCode ? 'register-email-code-error' : undefined
             }
             aria-invalid={Boolean(errors.emailVerificationCode)}
-            className="min-w-0 rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 disabled:cursor-not-allowed disabled:bg-stone-100 disabled:text-stone-500 md:text-sm"
+            className="min-w-0"
             disabled={emailVerificationConfirmed}
             id="register-email-code"
             inputMode="numeric"
@@ -227,30 +206,34 @@ export function RegistrationForm({
             </div>
           ) : (
             <Button
-              className="h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-stone-700 disabled:opacity-50 md:h-8"
+              className="h-11 px-3 py-2 md:h-8"
               disabled={
                 verificationLoading ||
+                emailCheckLoading ||
                 emailVerificationConfirmed ||
                 !emailAvailabilityConfirmed ||
                 (isTurnstileConfigured() && !botChallengeToken)
               }
               onClick={onRequestEmailVerification}
               type="button"
+              variant="outline"
               {...testAttr('register-email-code-submit')}
             >
               {verificationCodeRequested ? t('resendVerificationCode') : t('sendVerificationCode')}
             </Button>
           )}
           <Button
-            className="h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-stone-700 disabled:opacity-50 md:h-8"
+            className="h-11 px-3 py-2 md:h-8"
             disabled={
               verificationLoading ||
+              emailCheckLoading ||
               emailVerificationConfirmed ||
               !emailAvailabilityConfirmed ||
               emailVerificationCode.trim().length !== 6
             }
             onClick={onConfirmEmailVerification}
             type="button"
+            variant="outline"
             {...testAttr('register-email-code-confirm-submit')}
           >
             {t('verifyVerificationCode')}
@@ -259,7 +242,7 @@ export function RegistrationForm({
         <AuthFormField name="emailVerificationCode" errorTestId="register-email-code-error" />
         {verificationMessage && (
           <div
-            className="mt-1 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+            className="mt-1 rounded border border-success-border bg-success-surface px-3 py-2 text-sm text-success-ink"
             {...testAttr('register-email-code-message')}
           >
             {verificationMessage}
@@ -267,7 +250,10 @@ export function RegistrationForm({
         )}
       </div>
       {emailVerificationConfirmed && (
-        <fieldset className="grid gap-3 rounded border border-stone-300 bg-white p-4 md:col-span-2">
+        <fieldset
+          className="auth-registration-consent-panel grid gap-3 rounded border p-4 md:col-span-2"
+          {...testAttr('register-consent-panel')}
+        >
           <legend className="px-1 text-sm font-semibold">{t('consentTitle')}</legend>
           <ConsentCheckbox
             disabled={registrationIntentLoading || registrationIntentCreated}
@@ -295,10 +281,14 @@ export function RegistrationForm({
             <a className="underline" href="/privacy/history">
               {t('privacyHistoryTitle')}
             </a>
+            {' · '}
+            <a className="underline" href="/terms">
+              {t('termsTitle')}
+            </a>
           </p>
           {registrationIntentCreated && (
             <p
-              className="rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800"
+              className="rounded border border-success-border bg-success-surface px-3 py-2 text-sm text-success-ink"
               {...testAttr('register-consent-confirmed')}
             >
               {t('consentConfirmed')}
@@ -313,7 +303,7 @@ export function RegistrationForm({
         <Input
           aria-describedby={errors.password ? 'login-password-error' : undefined}
           aria-invalid={Boolean(errors.password)}
-          className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 md:text-sm"
+          className="w-full"
           id="register-password"
           placeholder={t('password')}
           aria-label={t('password')}
@@ -337,7 +327,7 @@ export function RegistrationForm({
         <Input
           aria-describedby={errors.confirmPassword ? 'register-password-confirm-error' : undefined}
           aria-invalid={Boolean(errors.confirmPassword)}
-          className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 md:text-sm"
+          className="w-full"
           id="register-password-confirm"
           placeholder={t('passwordConfirm')}
           aria-label={t('passwordConfirm')}
@@ -351,10 +341,11 @@ export function RegistrationForm({
       </AuthFormField>
       {emailVerificationConfirmed && !registrationIntentCreated && (
         <Button
-          className="rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 md:col-span-2"
+          className="md:col-span-2"
           disabled={registrationIntentLoading || !registrationConsentsAccepted}
           onClick={onContinueAfterConsent}
           type="button"
+          variant="default"
           {...testAttr('register-consent-continue')}
         >
           {t('consentContinue')}
@@ -362,7 +353,7 @@ export function RegistrationForm({
       )}
       {registrationIntentCreated && (
         <Button
-          className="rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 md:col-span-2"
+          className="md:col-span-2"
           disabled={
             isSubmitting ||
             !username.trim() ||
@@ -376,6 +367,7 @@ export function RegistrationForm({
             password.trim() !== confirmPassword.trim()
           }
           type="submit"
+          variant="default"
           {...testAttr('register-submit')}
         >
           {t('createAccount')}

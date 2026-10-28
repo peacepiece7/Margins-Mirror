@@ -22,6 +22,7 @@ import java.net.http.HttpResponse;
 import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -86,6 +87,17 @@ class ResendContactMailServiceTest {
         assertThatThrownBy(() -> service().send(inquiry()))
             .isInstanceOfSatisfying(ContactDeliveryException.class,
                 error -> assertThat(error.getFailureCode()).isEqualTo("INVALID_RESPONSE"));
+    }
+
+    @Test
+    void rejectsMalformedProviderResponseWithoutExposingItsBody() {
+        for (String invalid : List.of("private-provider-content-not-json", "", "null")) {
+            response = invalid;
+            assertThatThrownBy(() -> service().send(inquiry()))
+                .isInstanceOfSatisfying(ContactDeliveryException.class,
+                    error -> assertThat(error.getFailureCode()).isEqualTo("INVALID_RESPONSE"))
+                .hasMessageNotContaining("private-provider-content-not-json");
+        }
     }
 
     @Test

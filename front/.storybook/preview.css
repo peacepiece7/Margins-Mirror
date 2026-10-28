@@ -1,0 +1,12 @@
+/* Only the reference canvas shell. Component colors/metrics stay source-owned. */
+.sb-sample {
+  min-width: 0;
+  max-width: 100%;
+}
+.sb-sample > * {
+  min-width: 0;
+}
+.sb-sample pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

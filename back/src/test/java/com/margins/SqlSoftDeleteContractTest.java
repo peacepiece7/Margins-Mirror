@@ -17,10 +17,11 @@ class SqlSoftDeleteContractTest {
 
         assertThat(mapper)
             .contains("SELECT rs.id, rs.title")
+            .contains("INNER JOIN reading_sessions rs\n          ON rs.id = b.current_reading_session_id")
             .contains("INNER JOIN books b ON b.id = rs.book_id")
             .contains("WHERE rs.book_id = #{bookId} AND rs.user_id = #{userId}")
             .contains("AND rs.deleted_at IS NULL AND b.deleted_at IS NULL")
-            .contains("ORDER BY rs.updated_at DESC, rs.id DESC")
+            .contains("ORDER BY rs.created_at DESC, rs.id DESC")
             .doesNotContain("COUNT(DISTINCT")
             .doesNotContain("findSummariesByUserId");
     }
@@ -52,8 +53,8 @@ class SqlSoftDeleteContractTest {
         );
 
         assertThat(mapper)
-            .contains("raw_metadata,\n          reading_status,\n          is_test_data")
-            .contains("#{rawMetadata},\n          COALESCE(#{readingStatus}, 'want_to_read'),")
+            .contains("raw_metadata,\n          reading_status,\n          status_started_at,\n          status_finished_at,\n          is_test_data")
+            .contains("#{rawMetadata},\n          COALESCE(#{readingStatus}, 'want_to_read'),\n          #{statusStartedAt},\n          #{statusFinishedAt},")
             .contains("raw_metadata = #{rawMetadata}")
             .doesNotContain("INSERT INTO books (\n          user_id,\n          title,\n          author,\n          isbn,\n          published_year,\n          source,\n          source_ref,\n          raw_metadata AS rawMetadata");
     }
@@ -105,12 +106,12 @@ class SqlSoftDeleteContractTest {
 
     private static void assertMetricSourceContract(String sqlText) {
         assertThat(sqlText)
-            .contains("FROM session_windows qsw")
-            .contains("WHERE qsw.id = q.window_id")
-            .contains("AND qsw.deleted_at IS NULL")
-            .contains("FROM session_windows msw")
-            .contains("WHERE msw.id = m.window_id")
-            .contains("AND msw.deleted_at IS NULL");
+            .contains("active_windows AS (")
+            .contains("WHERE sw.deleted_at IS NULL")
+            .contains("LEFT JOIN active_windows aw ON aw.id = q.window_id")
+            .contains("INNER JOIN active_windows aw ON aw.id = m.window_id")
+            .doesNotContain("LEFT JOIN session_highlights h")
+            .doesNotContain("LEFT JOIN messages m ON");
     }
 
     private static void assertLegacyProgressColumnsRemoved(String sqlText) {

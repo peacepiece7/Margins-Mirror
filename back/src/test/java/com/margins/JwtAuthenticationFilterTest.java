@@ -68,8 +68,7 @@ class JwtAuthenticationFilterTest {
         assertThat(response.getStatus()).isEqualTo(428);
         assertThat(response.getContentAsString())
             .contains("\"code\":\"PRIVACY_CONSENT_REQUIRED\"")
-            .contains("\"message\":null")
-            .doesNotContain("required consents missing");
+            .doesNotContain("required consents missing", "\"message\"");
         assertThat(chain.getRequest()).isNull();
     }
 

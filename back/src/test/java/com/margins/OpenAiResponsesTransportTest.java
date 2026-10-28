@@ -35,6 +35,7 @@ class OpenAiResponsesTransportTest {
             byte[] response = """
                 {
                   "status":"completed",
+                  "model":"gpt-6-luna-2026-10-01",
                   "output":[{"content":[{"type":"output_text","text":"normalized"}]}],
                   "usage":{
                     "input_tokens":21,
@@ -56,6 +57,7 @@ class OpenAiResponsesTransportTest {
             var response = fixture.transport().execute(request(fixture.objectMapper(), false));
 
             assertThat(response.status()).isEqualTo("completed");
+            assertThat(response.model()).isEqualTo("gpt-6-luna-2026-10-01");
             assertThat(response.incompleteReason()).isBlank();
             assertThat(response.outputText()).isEqualTo("normalized");
             assertThat(response.tokenUsage().inputTokens()).isEqualTo(21);
@@ -94,6 +96,7 @@ class OpenAiResponsesTransportTest {
             var response = fixture.transport().execute(request(fixture.objectMapper(), false));
 
             assertThat(response.status()).isEqualTo("incomplete");
+            assertThat(response.model()).isEqualTo("test-model");
             assertThat(response.incompleteReason()).isEqualTo("max_output_tokens");
             assertThat(response.outputText()).isBlank();
             assertThat(response.tokenUsage().outputTokens()).isEqualTo(2000);
@@ -109,6 +112,7 @@ class OpenAiResponsesTransportTest {
             byte[] response = """
                 {
                   "status":"incomplete",
+                  "model":"private reader content 123",
                   "incomplete_details":{"reason":"private reader content 123"}
                 }
                 """.getBytes(StandardCharsets.UTF_8);
@@ -124,6 +128,7 @@ class OpenAiResponsesTransportTest {
             var response = fixture.transport().execute(request(fixture.objectMapper(), false));
 
             assertThat(response.incompleteReason()).isEqualTo("unknown");
+            assertThat(response.model()).isEqualTo("test-model");
             assertThat(response.incompleteReason()).doesNotContain("reader");
         } finally {
             server.stop(0);
@@ -163,7 +168,7 @@ class OpenAiResponsesTransportTest {
             byte[] response = String.join("",
                 "data: {\"type\":\"response.output_text.delta\",\"delta\":\"shared \"}\n\n",
                 "data: {\"type\":\"response.output_text.delta\",\"delta\":\"output\"}\n\n",
-                "data: {\"type\":\"response.completed\",\"response\":{\"usage\":{"
+                "data: {\"type\":\"response.completed\",\"response\":{\"model\":\"gpt-6-luna-2026-10-01\",\"usage\":{"
                     + "\"input_tokens\":34,\"input_tokens_details\":{\"cached_tokens\":21},"
                     + "\"output_tokens\":5,\"total_tokens\":39}}}\n\n"
             ).getBytes(StandardCharsets.UTF_8);
@@ -184,6 +189,7 @@ class OpenAiResponsesTransportTest {
             );
 
             assertThat(text.outputText()).isEqualTo("shared output");
+            assertThat(text.model()).isEqualTo("gpt-6-luna-2026-10-01");
             assertThat(text.tokenUsage().cachedInputTokens()).isEqualTo(21);
             assertThat(stream.outputText()).isEqualTo("shared output");
             assertThat(stream.tokenUsage().totalTokens()).isEqualTo(39);

@@ -34,7 +34,9 @@ export function DebateRoomsPage({
             <span className="block min-w-0 max-w-full truncate font-medium">
               {debateTopicFromWindowTitle(window.title)}
             </span>
-            <span className="mt-1 block text-xs text-stone-500">Window #{window.windowId}</span>
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Window #{window.windowId}
+            </span>
           </Button>
         ))}
         {!windows.length && <div className="text-sm text-stone-500">{t('debateNoRooms')}</div>}

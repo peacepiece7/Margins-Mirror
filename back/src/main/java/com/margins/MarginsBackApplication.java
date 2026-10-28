@@ -13,6 +13,7 @@ import com.margins.book.BookKnowledgeProperties;
 import com.margins.contact.config.ContactProperties;
 import com.margins.moderation.ModerationProperties;
 import com.margins.reflectionloop.ReflectionLoopProperties;
+import com.margins.reflectionloop.developer.DeveloperReflectionDraftProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
@@ -35,7 +36,8 @@ import org.springframework.scheduling.annotation.EnableScheduling;
     ContactProperties.class,
     ModerationProperties.class,
     ReflectionLoopProperties.class,
-    BookKnowledgeProperties.class
+    BookKnowledgeProperties.class,
+    DeveloperReflectionDraftProperties.class
 })
 public class MarginsBackApplication {
 

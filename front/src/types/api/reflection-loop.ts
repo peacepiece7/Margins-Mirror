@@ -14,6 +14,24 @@ export type GuideDisclosureMode = 'PRIVATE_CONTEXT' | 'REFLECTION_ONLY';
 export type GuideFacilitationLevel = 'BEGINNER' | 'EXPERIENCED' | 'EXPERT';
 export type GuideOrigin = 'GENERATED' | 'USER_EDIT' | 'REGENERATED';
 export type DiscussionGuideProjection = 'FACILITATOR' | 'PARTICIPANT';
+export type DeveloperReflectionDraftTarget =
+  'PRIMARY_REFLECTION' | 'QUESTION_ANSWER' | 'INTERVIEW_ANSWER' | 'DISCUSSION_TURN';
+
+export interface DeveloperReflectionDraftInput {
+  target: DeveloperReflectionDraftTarget;
+  bookId: number;
+  subject?: string;
+  context?: string;
+}
+
+export interface DeveloperReflectionDraftResponse {
+  content: string;
+  model: string;
+  personas: Array<{
+    personaId: number;
+    displayName: string;
+  }>;
+}
 
 export interface GuideBriefInput {
   purpose: GuidePurpose;

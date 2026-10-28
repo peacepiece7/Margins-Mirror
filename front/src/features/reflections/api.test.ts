@@ -17,10 +17,33 @@ describe('reflectionsApi', () => {
 
   it('loads the book-scoped reading-session locator', async () => {
     vi.mocked(getJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
+    vi.mocked(putJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
 
     await reflectionsApi.readingSession(7);
+    await reflectionsApi.ensureReadingSession(7);
 
     expect(getJson).toHaveBeenCalledWith('/api/books/7/reading-session');
+    expect(putJson).toHaveBeenCalledWith('/api/books/7/reading-session', {});
+  });
+
+  it('posts developer drafts without calling a persistence endpoint', async () => {
+    vi.mocked(postJson).mockResolvedValue({ content: 'draft', model: 'gpt-6-luna', personas: [] });
+
+    await reflectionsApi.developerDraft({
+      bookId: 7,
+      target: 'DISCUSSION_TURN',
+      subject: '현재 발제',
+      context: '저장 전 메모',
+    });
+
+    expect(postJson).toHaveBeenCalledWith('/api/developer/reflection-drafts', {
+      bookId: 7,
+      target: 'DISCUSSION_TURN',
+      subject: '현재 발제',
+      context: '저장 전 메모',
+    });
+    expect(putJson).not.toHaveBeenCalled();
+    expect(patchJson).not.toHaveBeenCalled();
   });
 
   it('generates questions with explicit transport inputs', async () => {

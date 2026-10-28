@@ -22,11 +22,17 @@ const featureZones = featureNames.map((feature) => ({
 
 export default [
   {
-    ignores: ['dist/**', 'node_modules/**', 'test-results/**', 'playwright-report/**'],
+    ignores: [
+      'dist/**',
+      'storybook-static/**',
+      'node_modules/**',
+      'test-results/**',
+      'playwright-report/**',
+    ],
   },
   js.configs.recommended,
   {
-    files: ['src/**/*.{ts,tsx}'],
+    files: ['src/**/*.{ts,tsx}', '.storybook/**/*.{ts,tsx}', 'tests/storybook/**/*.ts'],
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {

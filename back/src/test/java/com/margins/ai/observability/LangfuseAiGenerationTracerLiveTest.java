@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 @Tag("integration")
+@Tag("live")
 @EnabledIfEnvironmentVariable(named = "LANGFUSE_INTEGRATION_TEST_ENABLED", matches = "true")
 class LangfuseAiGenerationTracerLiveTest {
 

@@ -1,10 +1,14 @@
 spring:
   application:
     name: margins-back
+  profiles:
+    group:
+      dev:
+        - prod
   datasource:
-    url: ${MARGINS_DB_URL:jdbc:mysql://localhost:${MARGINS_MYSQL_PORT:3306}/${MARGINS_MYSQL_DATABASE:margins}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC}
-    username: ${MARGINS_MYSQL_USER:margins}
-    password: ${MARGINS_MYSQL_PASSWORD:margins-pass}
+    url: ${MARGINS_DB_URL}
+    username: ${MARGINS_MYSQL_USER}
+    password: ${MARGINS_MYSQL_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 mybatis:
   configuration:
@@ -14,6 +18,27 @@ server:
   port: ${MARGINS_BACKEND_PORT:8080}
 
 margins:
+  maintenance:
+    enabled: ${MARGINS_MAINTENANCE_ENABLED:true}
+  test-support:
+    catalog-fixture-enabled: ${MARGINS_CATALOG_FIXTURE_ENABLED:false}
+  catalog:
+    enabled: ${MARGINS_CATALOG_ENABLED:true}
+    worker-enabled: ${MARGINS_CATALOG_WORKER_ENABLED:true}
+    test-data: ${MARGINS_CATALOG_TEST_DATA:false}
+    user-agent: ${MARGINS_CATALOG_USER_AGENT:MarginsBookCatalog/1.0 (+https://margins.cloud)}
+    request-timeout-seconds: ${MARGINS_CATALOG_REQUEST_TIMEOUT_SECONDS:10}
+    open-library-timeout-seconds: ${MARGINS_CATALOG_OPEN_LIBRARY_TIMEOUT_SECONDS:25}
+    cover-timeout-seconds: ${MARGINS_CATALOG_COVER_TIMEOUT_SECONDS:10}
+    google-api-key: ${GOOGLE_BOOKS_API_KEY:}
+    kakao-api-key: ${KAKAO_REST_API_KEY:}
+    nl-api-key: ${NL_SEOJI_API_KEY:}
+    naver-client-id: ${NAVER_CLIENT_ID:}
+    naver-client-secret: ${NAVER_CLIENT_SECRET:}
+    metadata-sources: ${MARGINS_CATALOG_METADATA_SOURCES:open_library,google_books,kakao_books,nl_seoji,naver_books}
+    cover-sources: ${MARGINS_CATALOG_COVER_SOURCES:}
+    html-sources: ${MARGINS_CATALOG_HTML_SOURCES:}
+    operator-user-ids: ${MARGINS_CATALOG_OPERATOR_USER_IDS:}
   contact:
     enabled: ${MARGINS_CONTACT_ENABLED:false}
     recipient: ${MARGINS_CONTACT_RECIPIENT:support@margins.cloud}
@@ -54,6 +79,17 @@ margins:
       client-id: ${MARGINS_GOOGLE_CLIENT_ID:}
       client-secret: ${MARGINS_GOOGLE_CLIENT_SECRET:}
       frontend-callback-url: ${MARGINS_GOOGLE_OAUTH_FRONTEND_CALLBACK_URL:http://localhost:5173/auth/callback}
+      mobile-enabled: ${MARGINS_GOOGLE_MOBILE_OAUTH_ENABLED:false}
+      mobile-redirect-uris: ${MARGINS_GOOGLE_OAUTH_MOBILE_REDIRECT_URIS:}
+    native-turnstile-bridge:
+      enabled: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_ENABLED:false}
+      site-key: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_SITE_KEY:}
+      hosted-base-url: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_HOSTED_BASE_URL:}
+      return-uri: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_RETURN_URI:}
+      ttl-seconds: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_TTL_SECONDS:240}
+      capacity: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_CAPACITY:2048}
+      create-limit-per-minute: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_CREATE_LIMIT_PER_MINUTE:10}
+      caller-capacity: ${MARGINS_NATIVE_TURNSTILE_BRIDGE_CALLER_CAPACITY:2048}
   cors:
     allowed-origin: ${MARGINS_CORS_ALLOWED_ORIGIN:http://localhost:5173}
   mail:
@@ -84,6 +120,7 @@ margins:
       model: ${OPENAI_MODEL:gpt-5.6-luna}
       timeout-seconds: ${OPENAI_TIMEOUT_SECONDS:30}
       max-output-tokens: ${OPENAI_MAX_OUTPUT_TOKENS:800}
+      book-knowledge-max-output-tokens: ${OPENAI_BOOK_KNOWLEDGE_MAX_OUTPUT_TOKENS:2000}
       discussion-guide-max-output-tokens: ${OPENAI_DISCUSSION_GUIDE_MAX_OUTPUT_TOKENS:2000}
     moderator:
       enabled: ${MARGINS_AI_MODERATOR_ENABLED:false}
@@ -114,3 +151,8 @@ margins:
     director-version: ${MARGINS_DISCUSSION_DIRECTOR_VERSION:discussion-director-v1}
     refinement-prompt-version: ${MARGINS_REFLECTION_REFINEMENT_PROMPT_VERSION:reflection-refinement-v1}
     perspective-claim-ttl-seconds: ${MARGINS_DISCUSSION_PERSPECTIVE_CLAIM_TTL_SECONDS:120}
+  developer-debug:
+    enabled: ${MARGINS_DEVELOPER_DEBUG_ENABLED:false}
+    runtime-environment: ${MARGINS_RUNTIME_ENVIRONMENT:}
+    model: ${OPENAI_DEBUG_MODEL:gpt-6-luna}
+    max-output-tokens: ${OPENAI_DEBUG_MAX_OUTPUT_TOKENS:500}

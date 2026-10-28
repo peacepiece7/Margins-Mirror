@@ -27,6 +27,7 @@ public class AccountLifecycleService {
 
     @Scheduled(cron = "0 0 * * * *")
     public void runMaintenance() {
+        if (!automaticMaintenanceEnabled()) return;
         Instant now = Instant.now();
         for (Long userId : accountMapper.findDuePurgeUserIds(now)) purgeOne(userId, now);
         accountMapper.deleteExpiredChallenges(now.minus(1, ChronoUnit.DAYS));
@@ -35,7 +36,11 @@ public class AccountLifecycleService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void runStartupMaintenance() {
-        if (!environment.acceptsProfiles(Profiles.of("test"))) runMaintenance();
+        if (!environment.acceptsProfiles(Profiles.of("test")) && automaticMaintenanceEnabled()) runMaintenance();
+    }
+
+    private boolean automaticMaintenanceEnabled() {
+        return !Boolean.FALSE.equals(environment.getProperty("margins.maintenance.enabled", Boolean.class, true));
     }
 
     public void purgeOne(Long userId, Instant now) {

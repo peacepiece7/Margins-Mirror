@@ -61,6 +61,10 @@ describe('BookRatingInput', () => {
       'hover:bg-transparent',
       'h-auto',
     );
+    expect(within(ratingGroup).getByLabelText('0.5 stars').parentElement).toHaveAttribute(
+      'data-ui',
+      'book-rating-star',
+    );
   });
 
   it('renders rating clear as an accessible X icon button', () => {

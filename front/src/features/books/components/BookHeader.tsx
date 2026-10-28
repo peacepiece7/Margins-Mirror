@@ -1,6 +1,7 @@
 import type { SaveBookResponse } from '@/types/api/book';
 import { Link } from 'react-router-dom';
 import { testAttr } from '@/utils/testAttrs';
+import { useI18n } from '@/lib/i18n';
 
 import { bookPath } from '../routes';
 
@@ -11,9 +12,23 @@ export function BookHeader({
   book: SaveBookResponse;
   sessionTitle?: string;
 }) {
+  const { t } = useI18n();
+  const readingStatus =
+    book.readingStatus === 'reading' ||
+    book.readingStatus === 'read' ||
+    book.readingStatus === 'dnf'
+      ? book.readingStatus
+      : 'want_to_read';
+  const statusLabel = {
+    dnf: t('shelfStatusDnf'),
+    read: t('shelfStatusRead'),
+    reading: t('shelfStatusReading'),
+    want_to_read: t('shelfStatusWantToRead'),
+  }[readingStatus];
+
   return (
     <section
-      className="margins-page-gutter border-b border-stone-300/80 bg-white/80 py-3 sm:py-4"
+      className="web-current-book-summary margins-page-gutter border-b border-stone-300/80 bg-white/80 py-3 sm:py-4"
       {...testAttr('current-book-summary')}
     >
       <div className="mx-auto grid max-w-7xl grid-cols-[48px_minmax(0,1fr)] items-center gap-3 sm:grid-cols-[64px_minmax(0,1fr)] sm:gap-4">
@@ -21,13 +36,15 @@ export function BookHeader({
           <img
             alt={book.title}
             className="h-[4.5rem] w-12 rounded border border-stone-200 bg-white object-cover shadow-sm sm:h-24 sm:w-16"
+            data-ui="book-transition-cover"
             src={book.coverImageUrl}
             {...testAttr('current-book-cover')}
           />
         ) : (
           <div
             aria-hidden="true"
-            className="grid h-[4.5rem] w-12 place-items-center rounded border border-stone-200 bg-stone-100 text-base font-semibold text-stone-400 shadow-sm sm:h-24 sm:w-16 sm:text-lg"
+            className="web-book-cover-placeholder grid h-[4.5rem] w-12 place-items-center rounded border border-stone-200 bg-stone-100 text-base font-semibold text-muted-foreground shadow-sm sm:h-24 sm:w-16 sm:text-lg"
+            data-ui="book-transition-cover"
             {...testAttr('current-book-cover-placeholder')}
           >
             M
@@ -35,14 +52,14 @@ export function BookHeader({
         )}
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2 text-xs text-stone-500">
-            <span {...testAttr('current-book-status')}>{book.readingStatus ?? 'want_to_read'}</span>
+            <span {...testAttr('current-book-status')}>{statusLabel}</span>
             {book.rating !== undefined && (
               <span className="text-[var(--margins-gold)]" {...testAttr('current-book-rating')}>
                 ★ {book.rating}
               </span>
             )}
           </div>
-          <h2 className="mt-1 text-lg font-semibold leading-6 sm:text-xl sm:leading-7">
+          <h2 className="mt-1 break-words text-lg font-semibold leading-6 sm:text-xl sm:leading-7">
             <Link
               className="rounded-sm outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               to={bookPath('book-detail', { bookId: book.bookId })}

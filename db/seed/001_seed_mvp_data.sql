@@ -158,6 +158,7 @@ ON DUPLICATE KEY UPDATE
 INSERT INTO memory_card_groups (
   id,
   user_id,
+  book_id,
   title,
   description,
   source_label,
@@ -166,12 +167,14 @@ INSERT INTO memory_card_groups (
 VALUES (
   1,
   1,
+  1,
   '해리포터 1~4 챕터 자주 사용하는 단어모음',
   'Memory Card deterministic seed group for local and E2E flows.',
   'Harry Potter 1-4',
   TRUE
 )
 ON DUPLICATE KEY UPDATE
+  book_id = VALUES(book_id),
   title = VALUES(title),
   description = VALUES(description),
   source_label = VALUES(source_label),

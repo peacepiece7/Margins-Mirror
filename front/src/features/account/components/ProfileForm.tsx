@@ -106,19 +106,19 @@ export function ProfileForm({ account, onSaved }: { account: Account; onSaved: (
           />
         </AccountFormField>
       </div>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <p className="-mt-2 text-xs leading-5 text-stone-500">{t('accountEmailReadOnly')}</p>
+      <section className="web-account-language-section" id="account-language">
+        <div>
+          <h3 className="font-display text-xl font-semibold">{t('language')}</h3>
+          <p className="mt-1 text-sm leading-6 text-stone-600">{t('accountLanguageDescription')}</p>
+        </div>
         <AccountFormField htmlFor="account-locale" label={t('language')}>
-          <NativeSelect
-            id="account-locale"
-            className="h-11 rounded border border-stone-300 bg-white px-3 text-sm"
-            {...form.register('preferredLocale')}
-          >
+          <NativeSelect id="account-locale" className="h-11" {...form.register('preferredLocale')}>
             <option value="ko">한국어</option>
             <option value="en">English</option>
           </NativeSelect>
         </AccountFormField>
-      </div>
-      <p className="-mt-2 text-xs leading-5 text-stone-500">{t('accountEmailReadOnly')}</p>
+      </section>
       <div className="flex justify-end border-t border-stone-200 pt-4">
         <Button
           disabled={!form.formState.isDirty}

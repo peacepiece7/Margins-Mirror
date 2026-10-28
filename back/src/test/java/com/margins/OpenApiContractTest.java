@@ -86,10 +86,21 @@ class OpenApiContractTest {
 
         assertThat(root.path("info").path("title").asText()).isEqualTo("Margins API");
         assertThat(paths.has("/api/auth/login")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/registration-intents")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/register")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/login")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/refresh")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/logout")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/oauth/google/start")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/oauth/google/callback")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/oauth/google/exchange")).isTrue();
+        assertThat(paths.has("/api/mobile/auth/oauth/google/registrations")).isTrue();
         assertThat(paths.has("/api/reading-sessions")).isTrue();
         assertThat(paths.path("/api/reading-sessions").has("get")).isFalse();
         assertThat(paths.has("/api/reading-sessions/stats")).isFalse();
         assertThat(paths.path("/api/books/{bookId}/reading-session").has("get")).isTrue();
+        assertThat(paths.path("/api/library/threads").has("get")).isTrue();
+        assertThat(paths.path("/api/books/{bookId}/reading-session").has("put")).isTrue();
         assertThat(paths.has("/api/reading-sessions/public-reviews")).isTrue();
         assertThat(paths.has("/api/reading-sessions/public-reviews/{insightId}/comments")).isTrue();
         assertThat(paths.has("/api/reading-sessions/public-reviews/{insightId}/comments/{commentId}")).isTrue();
@@ -99,6 +110,8 @@ class OpenApiContractTest {
         assertThat(paths.has("/api/session-windows/{id}/messages/stream")).isTrue();
         assertThat(paths.has("/api/personas")).isTrue();
         assertThat(paths.has("/api/personas/recommendations")).isTrue();
+        JsonNode memoryCardGroups = paths.path("/api/memory-card-groups");
+        assertThat(memoryCardGroups.path("get").path("parameters").toString()).contains("bookId");
         assertThat(paths.path("/api/memory-cards/{cardId}/memorized").has("patch")).isTrue();
         assertThat(paths.has("/api/shell-crawler/saves/default")).isFalse();
         assertThat(paths.path("/api/session-windows/{id}/debate").path("post").path("requestBody").toString())
@@ -107,9 +120,19 @@ class OpenApiContractTest {
             .contains("DebateAllMessageRequest")
             .doesNotContain("DebateMessageRequest");
         JsonNode schemas = root.path("components").path("schemas");
+        assertThat(propertyNames(schemas.path("NativeSessionResponse")))
+            .contains("accessToken", "refreshToken", "refreshTokenExpiresInSeconds");
+        assertThat(propertyNames(schemas.path("LoginResponse")))
+            .doesNotContain("refreshToken", "refreshTokenExpiresInSeconds");
+        assertThat(propertyNames(schemas.path("NativeGoogleOAuthExchangeResponse")))
+            .contains("status", "session", "pendingRegistrationToken")
+            .doesNotContain("email", "displayName", "providerSubject");
         assertThat(schemas.has("BookReadingSessionResponse")).isTrue();
         assertThat(schemas.has("ReadingSessionListResponse")).isFalse();
         assertThat(schemas.has("ReadingLibraryStatsResponse")).isFalse();
+        assertThat(propertyNames(schemas.path("SaveBookRequest"))).contains("readingStatus");
+        assertThat(propertyNames(schemas.path("CreateMemoryCardGroupRequest"))).contains("bookId");
+        assertThat(propertyNames(schemas.path("MemoryCardGroupDto"))).contains("bookId");
         assertThat(schemas.path("SendMessageRequest").toString())
             .doesNotContain("contextMessageId");
         assertThat(schemas.path("DebateMessageRequest").toString())
@@ -154,6 +177,16 @@ class OpenApiContractTest {
     }
 
     @Test
+    void mobileLogoutIsPublicEvenWithAnInvalidAccessBearer() throws Exception {
+        mockMvc.perform(post("/api/mobile/auth/logout")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer invalid-access-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"refreshToken\":\"opaque-native-refresh-token\"}"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true));
+    }
+
+    @Test
     void loginIssuedTokenPassesFullContextAuthFilter() throws Exception {
         String loginBody = mockMvc.perform(post("/api/auth/login")
                 .contentType(MediaType.APPLICATION_JSON)
@@ -194,6 +227,10 @@ class OpenApiContractTest {
         assertThat(paths.path("/api/reading-sessions/{sessionId}/reflections")
             .path("post").path("requestBody").toString())
             .contains("SaveReflectionRequest");
+        assertThat(paths.path("/api/reading-sessions/{sessionId}/reflection-authority")
+            .has("get")).isTrue();
+        assertThat(paths.path("/api/mobile/reflection-threads")
+            .has("get")).isTrue();
         assertThat(paths.path("/api/reflection-interviews/{interviewId}/guides")
             .path("post").path("requestBody").toString())
             .contains("GuideBriefRequest");
@@ -212,6 +249,28 @@ class OpenApiContractTest {
                 "authorName",
                 "visibility",
                 "reviewedOn"
+            );
+        assertThat(propertyNames(schemas.path("MobileReflectionThreadItemResponse")))
+            .containsExactlyInAnyOrder(
+                "bookId",
+                "bookTitle",
+                "bookAuthor",
+                "coverImageUrl",
+                "sessionId",
+                "reflectionId",
+                "revisionCount",
+                "reflectionPreview",
+                "interviewId",
+                "interviewStatus",
+                "answeredCount",
+                "targetAnswers",
+                "generatedCount",
+                "currentQuestion",
+                "guideId",
+                "runId",
+                "runStatus",
+                "refinementOutcome",
+                "lastActivityAt"
             );
         assertThat(schemas.path("SaveReflectionRequest")
             .path("properties").path("visibility").path("pattern").asText())
@@ -244,7 +303,12 @@ class OpenApiContractTest {
             .containsExactlyInAnyOrder(
                 "reflectionId",
                 "sessionId",
+                "bookId",
+                "title",
+                "evidence",
+                "authorName",
                 "visibility",
+                "reviewedOn",
                 "currentRevision",
                 "revisions",
                 "activeInterviewId",
@@ -252,6 +316,8 @@ class OpenApiContractTest {
                 "runId",
                 "runStatus"
             );
+        assertThat(propertyNames(schemas.path("ReflectionRouteAuthorityResponse")))
+            .containsExactlyInAnyOrder("sessionId", "bookId");
     }
 
     private List<String> propertyNames(JsonNode schema) {

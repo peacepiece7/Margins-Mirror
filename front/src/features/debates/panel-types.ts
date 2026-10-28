@@ -1,4 +1,4 @@
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import type { Persona } from '@/types/api/persona';
 import type {
   ModerationEvent,
@@ -28,6 +28,7 @@ export interface DebateWindow {
 }
 
 export interface DebatePageProps {
+  developerDraftControl?: ReactNode;
   draft: string;
   loading: boolean;
   messages: SessionDisplayMessage[];

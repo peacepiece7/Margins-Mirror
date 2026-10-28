@@ -1,0 +1,30 @@
+appId: cloud.margins.mobile
+env:
+  TEST_ACTIVE_RUN_ID: ${MARGINS_MAESTRO_ACTIVE_DISCUSSION_RUN_ID}
+  TEST_BOOK_ID: ${MARGINS_MAESTRO_REFLECTION_BOOK_ID}
+  TEST_COMPLETED_RUN_ID: ${MARGINS_MAESTRO_COMPLETED_DISCUSSION_RUN_ID}
+  TEST_GUIDE_ID: ${MARGINS_MAESTRO_GUIDE_ID}
+  TEST_INTERVIEW_ID: ${MARGINS_MAESTRO_INTERVIEW_ID}
+  TEST_PASSWORD: ${MARGINS_MAESTRO_PASSWORD}
+  TEST_SESSION_ID: ${MARGINS_MAESTRO_REFLECTION_SESSION_ID}
+  TEST_USERNAME: ${MARGINS_MAESTRO_USERNAME}
+---
+- runFlow: subflows/login.yaml
+- tapOn:
+    id: global-navigation-reflection
+- assertVisible:
+    id: reflection-thread-screen
+- assertVisible:
+    id: reflection-thread-action
+- openLink: "margins://books/${TEST_BOOK_ID}/reflection/interview?interviewId=${TEST_INTERVIEW_ID}&sessionId=${TEST_SESSION_ID}"
+- assertVisible:
+    id: reflection-interview-screen
+- openLink: "margins://books/${TEST_BOOK_ID}/reflection/guide/${TEST_GUIDE_ID}"
+- assertVisible:
+    id: reflection-guide-screen
+- openLink: "margins://books/${TEST_BOOK_ID}/reflection/discuss/${TEST_ACTIVE_RUN_ID}"
+- assertVisible:
+    id: reflection-discussion-screen
+- openLink: "margins://books/${TEST_BOOK_ID}/reflection/refine/${TEST_COMPLETED_RUN_ID}"
+- assertVisible:
+    id: reflection-refinement-screen

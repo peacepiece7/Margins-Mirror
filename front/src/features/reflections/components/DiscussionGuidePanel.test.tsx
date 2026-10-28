@@ -17,6 +17,10 @@ const editMutate = vi.fn();
 const regenerateMutate = vi.fn();
 const exportMutate = vi.fn();
 let guideData: DiscussionGuideResponse;
+let guideReadError: Error | null = null;
+let guideFetching = false;
+let emptyGuide = false;
+const guideRefetch = vi.fn();
 
 function currentGuide(): DiscussionGuideResponse {
   return {
@@ -123,11 +127,12 @@ function guideProjection(projection: DiscussionGuideProjection): DiscussionGuide
 
 vi.mock('../reflection-loop-queries', () => ({
   useDiscussionGuideQuery: () => ({
-    data: guideData,
-    error: null,
-    isError: false,
-    isFetching: false,
-    refetch: vi.fn(),
+    data: emptyGuide ? undefined : guideData,
+    isSuccess: true,
+    error: guideReadError,
+    isError: Boolean(guideReadError),
+    isFetching: guideFetching,
+    refetch: guideRefetch,
   }),
   useDiscussionGuideVersionsQuery: () => ({
     data: {
@@ -175,6 +180,7 @@ vi.mock('../reflection-loop-queries', () => ({
     error: null,
     isPending: false,
     mutate: regenerateMutate,
+    mutateAsync: regenerateMutate,
   }),
 }));
 
@@ -187,15 +193,85 @@ describe('DiscussionGuidePanel versions', () => {
   beforeEach(() => {
     window.localStorage.setItem('margins.locale', 'ko');
     guideData = currentGuide();
+    guideReadError = null;
+    guideFetching = false;
+    emptyGuide = false;
+    guideRefetch.mockClear();
     createRunMutate.mockClear();
     editMutate.mockClear();
-    regenerateMutate.mockClear();
+    regenerateMutate.mockReset();
     exportMutate.mockClear();
   });
 
   function render(ui: ReactNode) {
     return rtlRender(<I18nProvider>{ui}</I18nProvider>);
   }
+
+  it('keeps regenerate confirmation open on failure and retries the exact version', async () => {
+    regenerateMutate
+      .mockRejectedValueOnce(new Error('private provider detail'))
+      .mockResolvedValueOnce({});
+    render(
+      <MemoryRouter>
+        <DiscussionGuidePanel bookId={1} guideId={7} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('discussion-guide-regenerate'));
+    const dialog = screen.getByRole('alertdialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: '새 버전 만들기' }));
+    await screen.findByRole('button', { name: '새 버전 만들기' });
+    await vi.waitFor(() => expect(regenerateMutate).toHaveBeenCalledOnce());
+    expect(dialog).toBeInTheDocument();
+    expect(screen.queryByText('private provider detail')).not.toBeInTheDocument();
+    await vi.waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: '새 버전 만들기' })).toBeEnabled(),
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: '새 버전 만들기' }));
+    await vi.waitFor(() => expect(regenerateMutate).toHaveBeenCalledTimes(2));
+    expect(regenerateMutate.mock.calls[1][0]).toEqual(regenerateMutate.mock.calls[0][0]);
+  });
+
+  it.each(['error', 'fetching'])(
+    'blocks run creation and edits during a required read %s',
+    (state) => {
+      guideReadError = state === 'error' ? new Error('private detail') : null;
+      guideFetching = state === 'fetching';
+      render(
+        <MemoryRouter>
+          <DiscussionGuidePanel bookId={1} guideId={7} />
+        </MemoryRouter>,
+      );
+      expect(screen.getByTestId('discussion-start-run')).toBeDisabled();
+      expect(screen.getByTestId('discussion-guide-edit')).toBeDisabled();
+      expect(screen.getByTestId('discussion-guide-regenerate')).toBeDisabled();
+      fireEvent.click(screen.getByTestId('discussion-start-run'));
+      expect(createRunMutate).not.toHaveBeenCalled();
+    },
+  );
+
+  it('serializes run creation before pending state renders', () => {
+    render(
+      <MemoryRouter>
+        <DiscussionGuidePanel bookId={1} guideId={7} />
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByTestId('discussion-start-run'));
+    fireEvent.click(screen.getByTestId('discussion-start-run'));
+    expect(createRunMutate).toHaveBeenCalledOnce();
+  });
+
+  it('offers read retry and blocks writes for an empty successful Guide payload', () => {
+    emptyGuide = true;
+    render(
+      <MemoryRouter>
+        <DiscussionGuidePanel bookId={1} guideId={7} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByTestId('discussion-start-run')).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: '다시 불러오기' }));
+    expect(guideRefetch).toHaveBeenCalledOnce();
+    expect(createRunMutate).not.toHaveBeenCalled();
+  });
 
   it('redacts private answer text and sends a complete immutable edit payload', () => {
     render(
@@ -249,7 +325,7 @@ describe('DiscussionGuidePanel versions', () => {
     );
 
     fireEvent.click(screen.getByTestId('discussion-guide-regenerate'));
-    fireEvent.click(screen.getByRole('button', { name: '새 version 만들기' }));
+    fireEvent.click(screen.getByRole('button', { name: '새 버전 만들기' }));
 
     expect(regenerateMutate).toHaveBeenCalledWith(
       {
@@ -280,7 +356,7 @@ describe('DiscussionGuidePanel versions', () => {
       </MemoryRouter>,
     );
 
-    expect(screen.getByText('읽기 전용으로 보관된 version입니다')).toBeVisible();
+    expect(screen.getByText('읽기 전용으로 보관된 버전입니다')).toBeVisible();
     expect(screen.queryByTestId('discussion-guide-edit')).not.toBeInTheDocument();
     expect(screen.queryByTestId('discussion-guide-regenerate')).not.toBeInTheDocument();
     expect(screen.getByTestId('discussion-start-run')).toBeDisabled();
@@ -310,5 +386,30 @@ describe('DiscussionGuidePanel versions', () => {
       'PARTICIPANT',
       expect.objectContaining({ onSuccess: expect.any(Function) }),
     );
+  });
+  it('preserves a same-guide draft but resets draft and projection for another guide', () => {
+    const ui = () => (
+      <MemoryRouter>
+        <DiscussionGuidePanel bookId={1} guideId={guideData.guideId} />
+      </MemoryRouter>
+    );
+    const view = render(ui());
+    fireEvent.click(screen.getByTestId('discussion-guide-edit'));
+    fireEvent.change(screen.getByLabelText('토론 목표'), { target: { value: '작성 중 목표' } });
+    guideData = { ...guideData, goal: 'server refetch' };
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.getByLabelText('토론 목표')).toHaveValue('작성 중 목표');
+    guideData = { ...guideData, guideId: 8, currentGuideId: 8, goal: '다음 Guide' };
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.queryByLabelText('토론 목표')).not.toBeInTheDocument();
+    expect(screen.getByTestId('discussion-guide-edit')).toBeEnabled();
+    fireEvent.mouseDown(screen.getByTestId('discussion-guide-participant-tab'), {
+      button: 0,
+      ctrlKey: false,
+    });
+    expect(screen.getByTestId('discussion-guide-edit')).toBeDisabled();
+    guideData = { ...guideData, guideId: 9, currentGuideId: 9 };
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.getByTestId('discussion-guide-edit')).toBeEnabled();
   });
 });

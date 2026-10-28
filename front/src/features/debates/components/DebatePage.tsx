@@ -22,6 +22,7 @@ function messageName(message: SessionDisplayMessage, userLabel: string, personaL
 }
 
 export function DebatePage({
+  developerDraftControl,
   draft: debateDraft,
   loading,
   messages: activeMessages,
@@ -103,7 +104,7 @@ export function DebatePage({
         >
           {selectedDebatePersonas.map((persona) => (
             <Button
-              className="grid h-auto min-h-24 min-w-24 content-center justify-items-center gap-1 whitespace-normal rounded border border-stone-200 bg-stone-50 px-3 py-2 text-center text-xs leading-tight hover:border-stone-950 disabled:opacity-50"
+              className="grid h-auto min-h-24 min-w-24 content-center justify-items-center gap-1 whitespace-normal rounded border border-stone-200 bg-stone-50 px-3 py-2 text-center text-xs leading-tight hover:border-stone-950"
               disabled={
                 currentWindow?.windowType !== 'debate' ||
                 loading ||
@@ -167,7 +168,7 @@ export function DebatePage({
                 )}
                 <div className={`max-w-[78%] ${isUser ? 'items-end' : 'items-start'} grid gap-1`}>
                   <div
-                    className={`text-xs font-medium ${isUser ? 'text-right text-stone-500' : 'text-stone-600'}`}
+                    className={`text-xs font-medium ${isUser ? 'text-right text-muted-foreground' : 'text-stone-600'}`}
                   >
                     {messageName(message, t('userMessageName'), personaLabel)}
                   </div>
@@ -214,13 +215,14 @@ export function DebatePage({
             onChange={setDebateDraft}
             value={debateDraft}
           />
+          {developerDraftControl}
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="text-xs text-stone-500">
               {t('debateParticipantCount')} {selectedDebatePersonas.length}
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
-                className="rounded border border-stone-950 px-4 py-2 text-sm font-medium disabled:opacity-50"
+                className="px-4 py-2"
                 disabled={
                   currentWindow?.windowType !== 'debate' ||
                   !selectedDebatePersonas.length ||
@@ -229,12 +231,13 @@ export function DebatePage({
                 }
                 onClick={requestAllPersonaReplies}
                 type="button"
+                variant="outline"
                 {...testAttr('debate-all-submit')}
               >
                 {t('debateAllReply')}
               </Button>
               <Button
-                className="rounded bg-stone-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+                className="px-4 py-2"
                 disabled={
                   currentWindow?.windowType !== 'debate' ||
                   !selectedDebatePersonas.length ||
@@ -242,6 +245,7 @@ export function DebatePage({
                   !(debateDraft.trim() || debateTopic.trim())
                 }
                 type="submit"
+                variant="default"
                 {...testAttr('debate-session-submit')}
               >
                 {t('debateSpeakerReply')}

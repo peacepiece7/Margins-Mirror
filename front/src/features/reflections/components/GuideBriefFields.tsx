@@ -8,84 +8,74 @@ import type {
 } from '@/types/api/reflection-loop';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { useI18n, type TranslationKey } from '@/lib/i18n';
 import { cn } from '@/utils/cn';
 
-const purposes: Array<{
-  value: GuidePurpose;
-  label: string;
-  description: string;
-}> = [
+type GuideChoice<T> = {
+  value: T;
+  label: TranslationKey;
+  description: TranslationKey;
+};
+
+const purposes: Array<GuideChoice<GuidePurpose>> = [
   {
     value: 'THOUGHT_EXPANSION',
-    label: '생각 확장',
-    description: '처음 생각의 근거와 다른 가능성을 넓혀요.',
+    label: 'reflectionBriefThoughtExpansion',
+    description: 'reflectionBriefThoughtExpansionDescription',
   },
   {
     value: 'ISSUE_EXPLORATION',
-    label: '쟁점 탐색',
-    description: '핵심 논점과 충돌하는 관점을 선명하게 봐요.',
+    label: 'reflectionBriefIssueExploration',
+    description: 'reflectionBriefIssueExplorationDescription',
   },
   {
     value: 'DISCUSSION_PREP',
-    label: '토론 준비',
-    description: '함께 이야기하기 좋은 흐름과 질문을 만들어요.',
+    label: 'reflectionBriefDiscussionPrep',
+    description: 'reflectionBriefDiscussionPrepDescription',
   },
 ];
 
-const audiences: Array<{
-  value: GuideAudienceMode;
-  label: string;
-  description: string;
-}> = [
+const audiences: Array<GuideChoice<GuideAudienceMode>> = [
   {
     value: 'SMALL_GROUP',
-    label: '소그룹',
-    description: 'AI가 진행을 돕고, 여러 사람이 차례로 답하기 좋은 흐름으로 준비해요.',
+    label: 'reflectionBriefSmallGroup',
+    description: 'reflectionBriefSmallGroupDescription',
   },
   {
     value: 'SELF_AI',
-    label: '나와 AI',
-    description: 'AI와 혼자 천천히 답하며 사고를 정리해요.',
+    label: 'reflectionBriefSelfAi',
+    description: 'reflectionBriefSelfAiDescription',
   },
 ];
 
-const disclosures: Array<{
-  value: GuideDisclosureMode;
-  label: string;
-  description: string;
-}> = [
+const disclosures: Array<GuideChoice<GuideDisclosureMode>> = [
   {
     value: 'PRIVATE_CONTEXT',
-    label: '비공개 답변도 AI가 참고',
-    description: '답변 원문은 발제안에 표시하지 않고 생성 문맥으로만 사용해요.',
+    label: 'reflectionBriefPrivateContext',
+    description: 'reflectionBriefPrivateContextDescription',
   },
   {
     value: 'REFLECTION_ONLY',
-    label: '비공개 답변 제외',
-    description:
-      '인터뷰 답변을 AI에게 보내지 않고 Reflection, 저장한 하이라이트와 책 배경 정보만 사용해요.',
+    label: 'reflectionBriefReflectionOnly',
+    description: 'reflectionBriefReflectionOnlyDescription',
   },
 ];
 
-const facilitationLevels: Array<{
-  value: GuideFacilitationLevel;
-  label: string;
-  description: string;
-}> = [
+const facilitationLevels: Array<GuideChoice<GuideFacilitationLevel>> = [
   {
     value: 'BEGINNER',
-    label: '초심자',
-    description: '질문 수를 줄이고 답하기 쉬운 흐름으로 시작해요.',
+    label: 'reflectionBriefBeginner',
+    description: 'reflectionBriefBeginnerDescription',
   },
   {
     value: 'EXPERIENCED',
-    label: '경험자',
-    description: '근거와 다른 관점을 균형 있게 오가요.',
+    label: 'reflectionBriefExperienced',
+    description: 'reflectionBriefExperiencedDescription',
   },
   {
     value: 'EXPERT',
-    label: '전문가',
-    description: '논점 사이의 긴장과 후속 질문을 깊게 다뤄요.',
+    label: 'reflectionBriefExpert',
+    description: 'reflectionBriefExpertDescription',
   },
 ];
 
@@ -93,7 +83,7 @@ function choiceClass(selected: boolean) {
   return cn(
     'grid min-h-14 cursor-pointer gap-1 rounded-lg border px-3 py-2.5 transition-colors',
     'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-stone-950 has-[:focus-visible]:ring-offset-2',
-    'has-[:disabled]:cursor-not-allowed has-[:disabled]:opacity-50',
+    'has-[:disabled]:cursor-not-allowed',
     selected
       ? 'border-stone-950 bg-stone-950 text-white'
       : 'border-stone-300 bg-white hover:bg-stone-50',
@@ -109,12 +99,14 @@ export function GuideBriefFields({
   onChange: (next: GuideBriefInput) => void;
   disabled?: boolean;
 }) {
+  const { t } = useI18n();
+
   return (
     <div className="grid gap-4">
       <fieldset disabled={disabled}>
-        <legend className="text-sm font-semibold">진행 난이도</legend>
+        <legend className="text-sm font-semibold">{t('reflectionBriefDifficulty')}</legend>
         <p className="mt-1 text-xs leading-5 text-stone-500">
-          발제안의 질문 깊이와 진행 속도를 정해요. 책의 내용 난이도와는 달라요.
+          {t('reflectionBriefDifficultyDescription')}
         </p>
         <RadioGroup
           className="mt-2 grid gap-2 md:grid-cols-3"
@@ -139,7 +131,7 @@ export function GuideBriefFields({
                   id={`guide-facilitation-${option.value}`}
                   value={option.value}
                 />
-                {option.label}
+                {t(option.label)}
               </span>
               <span
                 className={cn(
@@ -147,7 +139,7 @@ export function GuideBriefFields({
                   value.facilitationLevel === option.value ? 'text-stone-200' : 'text-stone-500',
                 )}
               >
-                {option.description}
+                {t(option.description)}
               </span>
             </Label>
           ))}
@@ -156,15 +148,20 @@ export function GuideBriefFields({
 
       <details
         aria-disabled={disabled}
-        className={cn('rounded-lg border border-stone-300 bg-white', disabled && 'opacity-70')}
+        className={cn(
+          'rounded-lg border border-stone-300 bg-white',
+          disabled && 'bg-stone-50 text-stone-600',
+        )}
       >
         <summary className="flex min-h-11 cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-stone-950 focus-visible:ring-inset">
-          <span>고급 설정</span>
-          <span className="text-xs font-normal text-stone-500">목적·참여 형태·시간·AI 문맥</span>
+          <span>{t('reflectionBriefAdvanced')}</span>
+          <span className="text-xs font-normal text-stone-500">
+            {t('reflectionBriefAdvancedSummary')}
+          </span>
         </summary>
         <div className="grid gap-5 border-t border-stone-200 p-3 sm:p-4">
           <fieldset disabled={disabled}>
-            <legend className="text-sm font-semibold">발제 목적</legend>
+            <legend className="text-sm font-semibold">{t('reflectionBriefPurpose')}</legend>
             <RadioGroup
               className="mt-2 grid gap-2 md:grid-cols-3"
               disabled={disabled}
@@ -183,7 +180,7 @@ export function GuideBriefFields({
                       id={`guide-purpose-${option.value}`}
                       value={option.value}
                     />
-                    {option.label}
+                    {t(option.label)}
                   </span>
                   <span
                     className={cn(
@@ -191,7 +188,7 @@ export function GuideBriefFields({
                       value.purpose === option.value ? 'text-stone-200' : 'text-stone-500',
                     )}
                   >
-                    {option.description}
+                    {t(option.description)}
                   </span>
                 </Label>
               ))}
@@ -200,9 +197,9 @@ export function GuideBriefFields({
 
           <div className="grid gap-5 md:grid-cols-2">
             <fieldset disabled={disabled}>
-              <legend className="text-sm font-semibold">참여 형태</legend>
+              <legend className="text-sm font-semibold">{t('reflectionBriefAudience')}</legend>
               <p className="mt-1 text-xs leading-5 text-stone-500">
-                어떤 형태든 AI가 질문 진행을 도와요.
+                {t('reflectionBriefAudienceDescription')}
               </p>
               <RadioGroup
                 className="mt-2 grid gap-2"
@@ -224,7 +221,7 @@ export function GuideBriefFields({
                         id={`guide-audience-${option.value}`}
                         value={option.value}
                       />
-                      {option.label}
+                      {t(option.label)}
                     </span>
                     <span
                       className={cn(
@@ -232,7 +229,7 @@ export function GuideBriefFields({
                         value.audienceMode === option.value ? 'text-stone-200' : 'text-stone-500',
                       )}
                     >
-                      {option.description}
+                      {t(option.description)}
                     </span>
                   </Label>
                 ))}
@@ -240,7 +237,7 @@ export function GuideBriefFields({
             </fieldset>
 
             <fieldset disabled={disabled}>
-              <legend className="text-sm font-semibold">목표 시간</legend>
+              <legend className="text-sm font-semibold">{t('reflectionBriefTargetMinutes')}</legend>
               <RadioGroup
                 className="mt-2 grid grid-cols-3 gap-2"
                 disabled={disabled}
@@ -266,7 +263,9 @@ export function GuideBriefFields({
                       id={`guide-minutes-${minutes}`}
                       value={String(minutes)}
                     />
-                    <span className="font-semibold">{minutes}분</span>
+                    <span className="font-semibold">
+                      {t('reflectionBriefMinutes').replace('{minutes}', String(minutes))}
+                    </span>
                   </Label>
                 ))}
               </RadioGroup>
@@ -274,7 +273,7 @@ export function GuideBriefFields({
           </div>
 
           <fieldset disabled={disabled}>
-            <legend className="text-sm font-semibold">AI 문맥 범위</legend>
+            <legend className="text-sm font-semibold">{t('reflectionBriefAiContext')}</legend>
             <RadioGroup
               className="mt-2 grid gap-2 md:grid-cols-2"
               disabled={disabled}
@@ -298,7 +297,7 @@ export function GuideBriefFields({
                       id={`guide-disclosure-${option.value}`}
                       value={option.value}
                     />
-                    {option.label}
+                    {t(option.label)}
                   </span>
                   <span
                     className={cn(
@@ -306,7 +305,7 @@ export function GuideBriefFields({
                       value.disclosureMode === option.value ? 'text-stone-200' : 'text-stone-500',
                     )}
                   >
-                    {option.description}
+                    {t(option.description)}
                   </span>
                 </Label>
               ))}

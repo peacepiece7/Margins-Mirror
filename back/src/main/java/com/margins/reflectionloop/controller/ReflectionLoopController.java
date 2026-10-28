@@ -21,6 +21,7 @@ import com.margins.reflectionloop.model.dto.response.GuidedDiscussionTurnRespons
 import com.margins.reflectionloop.model.dto.response.ReflectionInterviewResponse;
 import com.margins.reflectionloop.model.dto.response.ReflectionLoopResponse;
 import com.margins.reflectionloop.model.dto.response.ReflectionRefinementResponse;
+import com.margins.reflectionloop.model.dto.response.ReflectionRouteAuthorityResponse;
 import com.margins.reflectionloop.service.ReflectionLoopService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -54,6 +55,14 @@ public class ReflectionLoopController {
     @GetMapping("/api/reading-sessions/{sessionId}/reflection")
     public ApiResponse<ReflectionLoopResponse> sessionReflection(@PathVariable Long sessionId) {
         return ApiResponse.ok(reflectionLoopService.sessionReflection(sessionId));
+    }
+
+    /** [Mobile client API] Reflection 생성 경로에서 session과 book 소유 관계만 가볍게 확인한다. */
+    @GetMapping("/api/reading-sessions/{sessionId}/reflection-authority")
+    public ApiResponse<ReflectionRouteAuthorityResponse> reflectionRouteAuthority(
+        @PathVariable Long sessionId
+    ) {
+        return ApiResponse.ok(reflectionLoopService.reflectionRouteAuthority(sessionId));
     }
 
     @PatchMapping("/api/reflections/{reflectionId}")
@@ -96,6 +105,14 @@ public class ReflectionLoopController {
         @PathVariable Long interviewId
     ) {
         return ApiResponse.ok(reflectionLoopService.continueInterview(interviewId));
+    }
+
+    /** [Mobile client API] Guide 기준에 못 미친 7문항 Interview를 명시적으로 종료한다. */
+    @PostMapping("/api/reflection-interviews/{interviewId}/complete")
+    public ApiResponse<ReflectionInterviewResponse> completeInterview(
+        @PathVariable Long interviewId
+    ) {
+        return ApiResponse.ok(reflectionLoopService.completeInterview(interviewId));
     }
 
     @PostMapping("/api/reflection-interviews/{interviewId}/guides")

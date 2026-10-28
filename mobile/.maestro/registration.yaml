@@ -1,0 +1,45 @@
+appId: cloud.margins.mobile
+env:
+  TEST_DISPLAY_NAME: ${MARGINS_MAESTRO_NEW_DISPLAY_NAME}
+  TEST_EMAIL: ${MARGINS_MAESTRO_NEW_EMAIL}
+  TEST_PASSWORD: ${MARGINS_MAESTRO_NEW_PASSWORD}
+  TEST_USERNAME: ${MARGINS_MAESTRO_NEW_USERNAME}
+  TEST_VERIFICATION_CODE: ${MARGINS_MAESTRO_VERIFICATION_CODE}
+---
+- launchApp:
+    clearState: true
+- scrollUntilVisible:
+    element:
+      text: "Create your reading room"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn: "Create your reading room"
+- assertVisible:
+    id: registration-screen
+- tapOn: "Username"
+- inputText: ${TEST_USERNAME}
+- tapOn: "Display name"
+- inputText: ${TEST_DISPLAY_NAME}
+- tapOn: "Email"
+- inputText: ${TEST_EMAIL}
+- tapOn: "Password"
+- inputText: ${TEST_PASSWORD}
+- tapOn: "Confirm password"
+- inputText: ${TEST_PASSWORD}
+- tapOn: "Check email availability"
+- assertVisible: "This email is available."
+- tapOn: "Send verification code"
+- tapOn: "Verification code"
+- inputText: ${TEST_VERIFICATION_CODE}
+- tapOn: "Confirm code"
+- assertVisible: "Email verified. Review the required consent."
+- tapOn: "I agree to the current Privacy Policy."
+- tapOn: "I agree to the required AI data transfer terms."
+- tapOn: "I confirm I am at least 14 years old."
+- tapOn: "Agree and continue"
+- tapOn: "Create account"
+- assertVisible:
+    id: library-screen

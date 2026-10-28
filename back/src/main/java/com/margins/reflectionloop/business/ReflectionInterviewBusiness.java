@@ -74,7 +74,35 @@ public class ReflectionInterviewBusiness {
     }
 
     public ReflectionInterviewResponse start(Long reflectionId) {
-        StartResult started = transactionTemplate.execute(status -> startInTransaction(reflectionId));
+        StartResult started = transactionTemplate.execute(status -> {
+            reflectionBusiness.requireEnabled();
+            SessionInsightRecord reflection = reflectionBusiness.requirePrimaryReflectionForUpdate(reflectionId);
+            ReflectionRevisionRecord revision = reflectionBusiness.currentRevision(reflectionId);
+            ReflectionInterviewRecord interview = reflectionInterviewMapper.findActiveInterviewByRevision(
+                revision.getId(),
+                currentUserId()
+            );
+            if (interview == null) {
+                SessionWindowRecord window = ensureReflectionWindow(reflection);
+                interview = ReflectionInterviewRecord.builder()
+                    .reflectionInsightId(reflectionId)
+                    .sourceRevisionId(revision.getId())
+                    .sessionId(reflection.getSessionId())
+                    .windowId(window.getId())
+                    .userId(currentUserId())
+                    .status("ACTIVE")
+                    .coverageJson("[]")
+                    .answeredCount(0)
+                    .skippedCount(0)
+                    .generatedCount(0)
+                    .promptVersion(properties.getInterviewPromptVersion())
+                    .testData(reflection.isTestData())
+                    .build();
+                requireChanged(reflectionInterviewMapper.insertInterview(interview), "Interview could not be saved");
+                return new StartResult(interview.getId(), true);
+            }
+            return new StartResult(interview.getId(), false);
+        });
         if (started == null) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Interview could not be started");
         }
@@ -84,45 +112,67 @@ public class ReflectionInterviewBusiness {
         return response(requireInterview(started.interviewId()));
     }
 
-    private StartResult startInTransaction(Long reflectionId) {
-        reflectionBusiness.requireEnabled();
-        SessionInsightRecord reflection = reflectionBusiness.requirePrimaryReflectionForUpdate(reflectionId);
-        ReflectionRevisionRecord revision = reflectionBusiness.currentRevision(reflectionId);
-        ReflectionInterviewRecord interview = reflectionInterviewMapper.findActiveInterviewByRevision(
-            revision.getId(),
-            currentUserId()
-        );
-        if (interview == null) {
-            SessionWindowRecord window = ensureReflectionWindow(reflection);
-            interview = ReflectionInterviewRecord.builder()
-                .reflectionInsightId(reflectionId)
-                .sourceRevisionId(revision.getId())
-                .sessionId(reflection.getSessionId())
-                .windowId(window.getId())
-                .userId(currentUserId())
-                .status("ACTIVE")
-                .coverageJson("[]")
-                .answeredCount(0)
-                .skippedCount(0)
-                .generatedCount(0)
-                .promptVersion(properties.getInterviewPromptVersion())
-                .testData(reflection.isTestData())
-                .build();
-            requireChanged(reflectionInterviewMapper.insertInterview(interview), "Interview could not be saved");
-            return new StartResult(interview.getId(), true);
-        }
-        return new StartResult(interview.getId(), false);
-    }
-
     public ReflectionInterviewResponse get(Long interviewId) {
         reflectionBusiness.requireEnabled();
         return response(requireInterview(interviewId));
     }
 
     public ReflectionInterviewResponse respond(Long interviewId, InterviewResponseRequest request) {
-        ResponseResult result = transactionTemplate.execute(
-            status -> respondInTransaction(interviewId, request)
-        );
+        ResponseResult result = transactionTemplate.execute(status -> {
+            reflectionBusiness.requireEnabled();
+            ReflectionInterviewRecord interview = requireInterviewForUpdate(interviewId);
+            if (!"ACTIVE".equals(interview.getStatus())) {
+                throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview no longer accepts responses");
+            }
+            QuestionRecord question = reflectionInterviewMapper.findOwnedInterviewQuestion(
+                interviewId,
+                request.getQuestionId(),
+                currentUserId()
+            );
+            if (question == null || !"active".equals(question.getStatus())) {
+                throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview question is not current");
+            }
+
+            String mode = request.getMode();
+            if ("ANSWER".equals(mode)) {
+                if (request.getContent() == null || request.getContent().isBlank()) {
+                    throw new ApiException(ApiErrorCode.COMMON_BAD_REQUEST, "Answer content is required");
+                }
+                savePrivateAnswer(interview, question, request.getContent().trim());
+                resolveQuestion(interview, question, "answered", mode);
+                interview.setAnsweredCount(interview.getAnsweredCount() + 1);
+                List<String> coverage = coverage(interview);
+                if (!coverage.contains(question.getCoverageArea())) {
+                    coverage.add(question.getCoverageArea());
+                }
+                interview.setCoverageJson(writeJson(coverage));
+            } else {
+                resolveQuestion(
+                    interview,
+                    question,
+                    "BOOK_ONLY".equals(mode) ? "replaced" : "skipped",
+                    mode
+                );
+                interview.setSkippedCount(interview.getSkippedCount() + 1);
+            }
+
+            boolean bookOnly = "BOOK_ONLY".equals(mode);
+            boolean pauseForChoice = "ANSWER".equals(mode)
+                && (interview.getAnsweredCount() == MINIMUM_ANSWERS
+                    || interview.getAnsweredCount() == TARGET_ANSWERS);
+            boolean generateNext = interview.getGeneratedCount() < MAXIMUM_QUESTIONS
+                && !pauseForChoice;
+            if (!generateNext && interview.getGeneratedCount() >= MAXIMUM_QUESTIONS
+                && interview.getAnsweredCount() < MINIMUM_ANSWERS) {
+                reflectionInterviewMapper.reopenFirstSkippedQuestion(interviewId, currentUserId());
+            }
+            requireChanged(reflectionInterviewMapper.updateInterview(interview), "Interview progress could not be saved");
+            return new ResponseResult(
+                generateNext,
+                bookOnly,
+                bookOnly ? question.getCoverageArea() : null
+            );
+        });
         if (result == null) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Interview response could not be saved");
         }
@@ -141,9 +191,58 @@ public class ReflectionInterviewBusiness {
         Long questionId,
         UpdateInterviewAnswerRequest request
     ) {
-        AnswerUpdateResult result = transactionTemplate.execute(
-            status -> updateAnswerInTransaction(interviewId, questionId, request)
-        );
+        AnswerUpdateResult result = transactionTemplate.execute(status -> {
+            reflectionBusiness.requireEnabled();
+            ReflectionInterviewRecord interview = requireInterviewForUpdate(interviewId);
+            if ("ABANDONED".equals(interview.getStatus())) {
+                throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview lineage is no longer active");
+            }
+            QuestionRecord question = reflectionInterviewMapper.findOwnedInterviewQuestion(
+                interviewId,
+                questionId,
+                currentUserId()
+            );
+            if (question == null || !"answered".equals(question.getStatus())
+                || !"ANSWER".equals(question.getResponseMode())) {
+                throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Only an answered interview question can be edited");
+            }
+            ReflectionInterviewAnswerRecord current = reflectionInterviewMapper.findCurrentAnswerForUpdate(
+                interviewId,
+                questionId,
+                currentUserId()
+            );
+            if (current == null) {
+                throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Interview answer not found");
+            }
+            if (current.getVersion() == null
+                || current.getVersion().longValue() != request.getExpectedAnswerVersion()) {
+                throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview answer changed; reload before editing");
+            }
+
+            String content = request.getContent().trim();
+            if ("WORDING_ONLY".equals(request.getRevisionKind())) {
+                appendAnswerRevision(
+                    interview,
+                    question,
+                    current,
+                    content,
+                    "WORDING_ONLY",
+                    current.getSessionInsightId()
+                );
+                return new AnswerUpdateResult(interviewId, false);
+            }
+
+            ReflectionInterviewRecord fork = forkFromAnswer(
+                interview,
+                question,
+                current,
+                content
+            );
+            return new AnswerUpdateResult(
+                fork.getId(),
+                fork.getGeneratedCount() < MAXIMUM_QUESTIONS
+            );
+        });
         if (result == null) {
             throw new ApiException(ApiErrorCode.COMMON_INTERNAL_ERROR, "Interview answer could not be updated");
         }
@@ -151,122 +250,6 @@ public class ReflectionInterviewBusiness {
             generateAndPersistNextQuestion(result.interviewId(), false, null);
         }
         return response(requireInterview(result.interviewId()));
-    }
-
-    private AnswerUpdateResult updateAnswerInTransaction(
-        Long interviewId,
-        Long questionId,
-        UpdateInterviewAnswerRequest request
-    ) {
-        reflectionBusiness.requireEnabled();
-        ReflectionInterviewRecord interview = requireInterviewForUpdate(interviewId);
-        if ("ABANDONED".equals(interview.getStatus())) {
-            throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview lineage is no longer active");
-        }
-        QuestionRecord question = reflectionInterviewMapper.findOwnedInterviewQuestion(
-            interviewId,
-            questionId,
-            currentUserId()
-        );
-        if (question == null || !"answered".equals(question.getStatus())
-            || !"ANSWER".equals(question.getResponseMode())) {
-            throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Only an answered interview question can be edited");
-        }
-        ReflectionInterviewAnswerRecord current = reflectionInterviewMapper.findCurrentAnswerForUpdate(
-            interviewId,
-            questionId,
-            currentUserId()
-        );
-        if (current == null) {
-            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Interview answer not found");
-        }
-        if (current.getVersion() == null
-            || current.getVersion().longValue() != request.getExpectedAnswerVersion()) {
-            throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview answer changed; reload before editing");
-        }
-
-        String content = request.getContent().trim();
-        if ("WORDING_ONLY".equals(request.getRevisionKind())) {
-            appendAnswerRevision(
-                interview,
-                question,
-                current,
-                content,
-                "WORDING_ONLY",
-                current.getSessionInsightId()
-            );
-            return new AnswerUpdateResult(interviewId, false);
-        }
-
-        ReflectionInterviewRecord fork = forkFromAnswer(
-            interview,
-            question,
-            current,
-            content
-        );
-        return new AnswerUpdateResult(
-            fork.getId(),
-            fork.getGeneratedCount() < MAXIMUM_QUESTIONS
-        );
-    }
-
-    private ResponseResult respondInTransaction(
-        Long interviewId,
-        InterviewResponseRequest request
-    ) {
-        reflectionBusiness.requireEnabled();
-        ReflectionInterviewRecord interview = requireInterviewForUpdate(interviewId);
-        if (!"ACTIVE".equals(interview.getStatus())) {
-            throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview no longer accepts responses");
-        }
-        QuestionRecord question = reflectionInterviewMapper.findOwnedInterviewQuestion(
-            interviewId,
-            request.getQuestionId(),
-            currentUserId()
-        );
-        if (question == null || !"active".equals(question.getStatus())) {
-            throw new ApiException(ApiErrorCode.COMMON_CONFLICT, "Interview question is not current");
-        }
-
-        String mode = request.getMode();
-        if ("ANSWER".equals(mode)) {
-            if (request.getContent() == null || request.getContent().isBlank()) {
-                throw new ApiException(ApiErrorCode.COMMON_BAD_REQUEST, "Answer content is required");
-            }
-            savePrivateAnswer(interview, question, request.getContent().trim());
-            resolveQuestion(interview, question, "answered", mode);
-            interview.setAnsweredCount(interview.getAnsweredCount() + 1);
-            List<String> coverage = coverage(interview);
-            if (!coverage.contains(question.getCoverageArea())) {
-                coverage.add(question.getCoverageArea());
-            }
-            interview.setCoverageJson(writeJson(coverage));
-        } else {
-            resolveQuestion(
-                interview,
-                question,
-                "BOOK_ONLY".equals(mode) ? "replaced" : "skipped",
-                mode
-            );
-            interview.setSkippedCount(interview.getSkippedCount() + 1);
-        }
-
-        boolean bookOnly = "BOOK_ONLY".equals(mode);
-        boolean pauseForChoice = "ANSWER".equals(mode)
-            && (interview.getAnsweredCount() == MINIMUM_ANSWERS
-                || interview.getAnsweredCount() == TARGET_ANSWERS);
-        boolean generateNext = interview.getGeneratedCount() < MAXIMUM_QUESTIONS
-            && !pauseForChoice;
-        if (!generateNext && interview.getGeneratedCount() >= MAXIMUM_QUESTIONS
-            && interview.getAnsweredCount() < MINIMUM_ANSWERS) {
-            reflectionInterviewMapper.reopenFirstSkippedQuestion(interviewId, currentUserId());
-        }
-        requireChanged(reflectionInterviewMapper.updateInterview(interview), "Interview progress could not be saved");
-        return new ResponseResult(
-            generateNext,
-            bookOnly,
-            bookOnly ? question.getCoverageArea() : null
-        );
     }
 
     public ReflectionInterviewResponse continueInterview(Long interviewId) {
@@ -289,6 +272,47 @@ public class ReflectionInterviewBusiness {
         if (shouldGenerate) {
             generateAndPersistNextQuestion(interviewId, false, null);
         }
+        return response(requireInterview(interviewId));
+    }
+
+    public ReflectionInterviewResponse completeInterview(Long interviewId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            reflectionBusiness.requireEnabled();
+            ReflectionInterviewRecord interview = requireInterviewForUpdate(interviewId);
+            if (!"ACTIVE".equals(interview.getStatus())
+                || interview.getGeneratedCount() < MAXIMUM_QUESTIONS
+                || interview.getAnsweredCount() >= MINIMUM_ANSWERS) {
+                throw new ApiException(
+                    ApiErrorCode.COMMON_CONFLICT,
+                    "Interview cannot complete from this state"
+                );
+            }
+            QuestionRecord current = reflectionInterviewMapper.findCurrentInterviewQuestion(
+                interviewId,
+                currentUserId()
+            );
+            if (current != null) {
+                requireChanged(
+                    reflectionInterviewMapper.resolveInterviewQuestion(
+                        interviewId,
+                        current.getId(),
+                        currentUserId(),
+                        "skipped",
+                        "SKIP"
+                    ),
+                    "Interview question could not be completed"
+                );
+                if (interview.getAnsweredCount() + interview.getSkippedCount()
+                    < interview.getGeneratedCount()) {
+                    interview.setSkippedCount(interview.getSkippedCount() + 1);
+                }
+            }
+            interview.setStatus("COMPLETED");
+            requireChanged(
+                reflectionInterviewMapper.updateInterview(interview),
+                "Interview could not be completed"
+            );
+        });
         return response(requireInterview(interviewId));
     }
 
@@ -444,6 +468,7 @@ public class ReflectionInterviewBusiness {
             question.getId(),
             currentUserId()
         );
+        Long insightId = current == null ? null : current.getSessionInsightId();
         if (current == null) {
             SessionInsightRecord answer = SessionInsightRecord.builder()
                 .sessionId(interview.getSessionId())
@@ -456,24 +481,9 @@ public class ReflectionInterviewBusiness {
                 .testData(interview.isTestData())
                 .build();
             requireChanged(sessionInsightMapper.insert(answer), "Interview answer could not be saved");
-            appendAnswerRevision(
-                interview,
-                question,
-                null,
-                content,
-                "WORDING_ONLY",
-                answer.getId()
-            );
-        } else {
-            appendAnswerRevision(
-                interview,
-                question,
-                current,
-                content,
-                "WORDING_ONLY",
-                current.getSessionInsightId()
-            );
+            insightId = answer.getId();
         }
+        appendAnswerRevision(interview, question, current, content, "WORDING_ONLY", insightId);
     }
 
     private void appendAnswerRevision(

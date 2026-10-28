@@ -11,7 +11,7 @@ export function RecoveryPage() {
 
   return (
     <main
-      className="blueprint-login-page margins-page-gutter grid min-h-screen place-items-center py-8 text-stone-950"
+      className="auth-dark-shell auth-dark-shell-wide blueprint-login-page margins-page-gutter grid min-h-screen place-items-center py-8 text-stone-950"
       {...testAttr('account-recovery-page')}
     >
       <section className="blueprint-auth-card relative grid w-full max-w-xl gap-6 rounded border border-stone-300 bg-stone-50/95 p-6 shadow-[0_24px_80px_rgba(23,23,23,0.10)] sm:p-8">
@@ -23,7 +23,7 @@ export function RecoveryPage() {
             type="button"
             variant="outline"
           >
-            {locale.toUpperCase()}
+            {locale === 'ko' ? 'EN' : 'KO'}
           </Button>
         </div>
         <header className="pr-16">

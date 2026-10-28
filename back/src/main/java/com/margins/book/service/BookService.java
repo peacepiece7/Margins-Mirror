@@ -30,6 +30,7 @@ public class BookService {
     private final BookBusiness bookBusiness;
     private final BookKnowledgeBusiness bookKnowledgeBusiness;
     private final ApplicationEventPublisher eventPublisher;
+    private final BookKnowledgeRegenerationScheduler regenerationScheduler;
 
     public BookCandidateSearchResponse searchCandidates(BookCandidateSearchRequest request) {
         return bookBusiness.searchCandidates(request);
@@ -64,7 +65,12 @@ public class BookService {
     }
 
     public BookKnowledgeDto regenerateBookKnowledge(Long bookId) {
-        return bookKnowledgeBusiness.regenerate(bookId);
+        BookKnowledgeBusiness.RegenerationRequest request =
+            bookKnowledgeBusiness.requestRegeneration(bookId);
+        if (request.work() != null) {
+            regenerationScheduler.schedule(request.work());
+        }
+        return request.knowledge();
     }
 
     /** 책 식별 필드와 재생성된 메타데이터를 원자적으로 수정한다. */

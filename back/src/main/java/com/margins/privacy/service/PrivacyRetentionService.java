@@ -28,6 +28,7 @@ public class PrivacyRetentionService {
     @Scheduled(cron = "0 15 * * * *")
     @Transactional
     public RetentionResult runMaintenance() {
+        if (!automaticMaintenanceEnabled()) return RetentionResult.builder().build();
         RetentionResult result = executeAt(Instant.now());
         log.info("Privacy retention maintenance completed. deletedRows={}", result);
         return result;
@@ -35,10 +36,14 @@ public class PrivacyRetentionService {
 
     @EventListener(ApplicationReadyEvent.class)
     public void runStartupMaintenance() {
-        if (!environment.acceptsProfiles(Profiles.of("test"))) {
+        if (!environment.acceptsProfiles(Profiles.of("test")) && automaticMaintenanceEnabled()) {
             RetentionResult result = transactionTemplate.execute(status -> executeAt(Instant.now()));
             log.info("Privacy retention startup maintenance completed. deletedRows={}", result);
         }
+    }
+
+    private boolean automaticMaintenanceEnabled() {
+        return !Boolean.FALSE.equals(environment.getProperty("margins.maintenance.enabled", Boolean.class, true));
     }
 
     @Transactional

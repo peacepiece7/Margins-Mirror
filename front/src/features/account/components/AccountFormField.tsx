@@ -20,7 +20,7 @@ export function AccountFormField({
       {children}
       {description && <p className="text-xs leading-5 text-stone-500">{description}</p>}
       {error && (
-        <p className="text-xs leading-5 text-red-700" id={`${htmlFor}-error`}>
+        <p className="text-xs leading-5 text-destructive" id={`${htmlFor}-error`}>
           {error}
         </p>
       )}

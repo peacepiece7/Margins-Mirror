@@ -67,6 +67,7 @@ import com.margins.testsupport.TestSecurityContextSupport;
 import com.margins.session.model.SessionWindowRecord;
 import com.margins.testsupport.TestSecurityContextSupport;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.List;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -85,6 +86,7 @@ class ReadingSessionBusinessPersistenceTest {
     @Test
     void createPersistsAndReturnsGeneratedId() {
         FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.owningBookTestData = true;
         ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
 
         CreateReadingSessionResponse response = business.create(CreateReadingSessionRequest.builder()
@@ -97,6 +99,7 @@ class ReadingSessionBusinessPersistenceTest {
 
         assertThat(mapper.inserted.getUserId()).isEqualTo(1L);
         assertThat(mapper.inserted.isTestData()).isTrue();
+        assertThat(mapper.currentSessionId).isEqualTo(77L);
     }
 
     @Test
@@ -109,8 +112,48 @@ class ReadingSessionBusinessPersistenceTest {
 
         assertThat(session.isTestData()).isTrue();
         assertThat(mapper.inserted.isTestData()).isTrue();
+        assertThat(mapper.ensureCalls).containsExactly("lock", "current", "latest", "insert", "point:77");
         assertThat(Files.readString(Path.of("../db/reset/001_reset_test_data.sql")))
             .contains("DELETE FROM reading_sessions WHERE is_test_data = TRUE");
+    }
+
+    @Test
+    void ensureForBookReturnsExistingSessionAfterLockWithoutInsert() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.existingBookSession = true;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
+
+        ReadingSessionRecord session = business.ensureForBook(7L, 1L);
+
+        assertThat(session.getId()).isEqualTo(77L);
+        assertThat(mapper.inserted).isNull();
+        assertThat(mapper.ensureCalls).containsExactly("lock", "current");
+    }
+
+    @Test
+    void ensureForBookRepairsMissingPointerToLatestCreatedSession() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.replacementSessionId = 66L;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
+
+        ReadingSessionRecord session = business.ensureForBook(7L, 1L);
+
+        assertThat(session.getId()).isEqualTo(66L);
+        assertThat(mapper.inserted).isNull();
+        assertThat(mapper.currentSessionId).isEqualTo(66L);
+        assertThat(mapper.ensureCalls).containsExactly("lock", "current", "latest", "point:66");
+    }
+
+    @Test
+    void ensureForBookRejectsMissingOwnedBookBeforeSessionLookup() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.activeBookCount = 0;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
+
+        assertNotFound("Book not found", () -> business.ensureForBook(404L, 1L));
+
+        assertThat(mapper.inserted).isNull();
+        assertThat(mapper.ensureCalls).containsExactly("lock");
     }
 
     @Test
@@ -139,6 +182,20 @@ class ReadingSessionBusinessPersistenceTest {
     }
 
     @Test
+    void createRejectsZeroRowCurrentPointerUpdate() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.currentUpdateRows = 0;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
+
+        assertServerError("Reading session current pointer could not be updated", () -> business.create(
+            CreateReadingSessionRequest.builder()
+                .bookId(7L)
+                .title("My Session")
+                .build()
+        ));
+    }
+
+    @Test
     void findLatestTimelineReturnsSessionWindowsAndMessages() {
         ReadingSessionBusiness business = business(new FakeReadingSessionMapper(), new FakeSessionHighlightMapper());
 
@@ -157,6 +214,39 @@ class ReadingSessionBusinessPersistenceTest {
         assertThat(response.getStats().getPersonaCount()).isZero();
         assertThat(response.getMessages().get(0).getContent()).isEqualTo("Saved reflection");
         assertThat(response.getNextActions()).extracting("actionId").contains("ask_persona");
+    }
+
+    @Test
+    void timelineLoadsOrderedPersonaSelectionsInOneBatch() {
+        SessionWindowMapper windowMapper = new FakeSessionWindowMapper() {
+            @Override
+            public List<SessionWindowRecord> findBySessionId(Long sessionId) {
+                return List.of(
+                    SessionWindowRecord.builder().id(88L).sessionId(sessionId).position(1).build(),
+                    SessionWindowRecord.builder().id(89L).sessionId(sessionId).position(2).build()
+                );
+            }
+        };
+        ReadingSessionBusiness business = business(
+            new FakeReadingSessionMapper(),
+            windowMapper,
+            new FakeSessionHighlightMapper(),
+            new FakeSessionInsightMapper(),
+            new FakeSessionSearchMapper(),
+            new FakeSessionTagMapper(),
+            new FakeMessageMapper(),
+            new FakeQuestionMapper()
+        );
+        FakeTimelinePersonaMapper personaMapper = new FakeTimelinePersonaMapper();
+        business.configureSessionWindowPersonaMapper(personaMapper);
+
+        ReadingSessionTimelineResponse response = business.findTimeline(77L);
+
+        assertThat(personaMapper.batchCalls).isEqualTo(1);
+        assertThat(personaMapper.singleCalls).isZero();
+        assertThat(personaMapper.windowIds).containsExactly(88L, 89L);
+        assertThat(response.getWindows().get(0).getPersonaIds()).containsExactly(4L, 5L);
+        assertThat(response.getWindows().get(1).getPersonaIds()).containsExactly(6L);
     }
 
     @Test
@@ -182,6 +272,55 @@ class ReadingSessionBusinessPersistenceTest {
         );
     }
 
+    @Test
+    void timelineStatsAndNextActionShareAnsweredIdentityWithoutCountingAssistantOrNullIds() {
+        MessageMapper messages = new FakeMessageMapper() {
+            @Override
+            public List<MessageRecord> findBySessionId(Long sessionId) {
+                return List.of(
+                    MessageRecord.builder().role("user").questionId(42L).build(),
+                    MessageRecord.builder().role("user").questionId(42L).build(),
+                    MessageRecord.builder().role("user").build(),
+                    MessageRecord.builder().role("assistant").questionId(44L).personaId(5L).build()
+                );
+            }
+        };
+        FakeSessionInsightMapper insights = new FakeSessionInsightMapper() {
+            @Override
+            public List<SessionInsightRecord> findBySessionId(Long sessionId, Long userId) {
+                return List.of(
+                    SessionInsightRecord.builder().insightType("question_answer").questionId(42L).build(),
+                    SessionInsightRecord.builder().insightType("question_answer").questionId(43L).build(),
+                    SessionInsightRecord.builder().insightType("question_answer").build(),
+                    SessionInsightRecord.builder().insightType("takeaway").questionId(44L).build()
+                );
+            }
+        };
+        QuestionMapper questions = new FakeQuestionMapper() {
+            @Override
+            public List<QuestionRecord> findBySessionId(Long sessionId) {
+                return List.of(42L, 43L, 44L, 45L).stream()
+                    .map(id -> QuestionRecord.builder().id(id).windowId(88L).questionText("Question " + id).build())
+                    .toList();
+            }
+        };
+        ReadingSessionBusiness business = business(
+            new FakeReadingSessionMapper(), new FakeSessionWindowMapper(),
+            new FakeSessionHighlightMapper(), insights, new FakeSessionSearchMapper(),
+            new FakeSessionTagMapper(), messages, questions
+        );
+
+        ReadingSessionTimelineResponse response = business.findTimeline(77L);
+
+        assertThat(response.getStats().getAnsweredQuestionCount()).isEqualTo(2);
+        assertThat(response.getStats().getPersonaResponseCount()).isEqualTo(1);
+        assertThat(response.getNextActions()).singleElement().satisfies(action -> {
+            assertThat(action.getActionId()).isEqualTo("answer_open_question");
+            assertThat(action.getTargetQuestionId()).isEqualTo(44L);
+            assertThat(action.getTargetWindowId()).isEqualTo(88L);
+        });
+    }
+
 
     @Test
     void findTimelineReturnsRequestedSession() {
@@ -191,6 +330,15 @@ class ReadingSessionBusinessPersistenceTest {
 
         assertThat(response.getSessionId()).isEqualTo(77L);
         assertThat(response.getBookTitle()).isEqualTo("Seed Book");
+    }
+
+    @Test
+    void missingDirectTimelineReturnsNotFound() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.sessionMissing = true;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
+
+        assertNotFound("Reading session not found", () -> business.findTimeline(404L));
     }
 
     @Test
@@ -220,6 +368,7 @@ class ReadingSessionBusinessPersistenceTest {
 
         assertThat(business.search(" ceremony ").getResults()).singleElement()
             .satisfies((result) -> {
+                assertThat(result.getBookId()).isEqualTo(7L);
                 assertThat(result.getSessionId()).isEqualTo(77L);
                 assertThat(result.getResultType()).isEqualTo("insight");
                 assertThat(result.getBookTitle()).isEqualTo("Seed Book");
@@ -401,6 +550,39 @@ class ReadingSessionBusinessPersistenceTest {
 
         assertThat(mapper.deletedSessionId).isEqualTo(77L);
         assertThat(mapper.deletedUserId).isEqualTo(1L);
+        assertThat(mapper.ensureCalls).startsWith("lock-session");
+    }
+
+    @Test
+    void archiveCurrentSessionSelectsTheLatestRemainingSession() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.existingBookSession = true;
+        mapper.replacementSessionId = 66L;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
+
+        business.archive(77L);
+
+        assertThat(mapper.currentSessionId).isEqualTo(66L);
+        assertThat(mapper.ensureCalls).contains("lock-session", "current", "latest", "point:66");
+    }
+
+    @Test
+    void archiveFallbackCurrentSessionRepairsAMissingPointer() {
+        FakeReadingSessionMapper mapper = new FakeReadingSessionMapper();
+        mapper.fallbackCurrentSessionId = 77L;
+        mapper.replacementSessionId = 66L;
+        ReadingSessionBusiness business = business(mapper, new FakeSessionHighlightMapper());
+
+        business.archive(77L);
+
+        assertThat(mapper.currentSessionId).isEqualTo(66L);
+        assertThat(mapper.ensureCalls).containsSequence(
+            "lock-session",
+            "current",
+            "latest",
+            "latest",
+            "point:66"
+        );
     }
 
     @Test
@@ -852,10 +1034,15 @@ class ReadingSessionBusinessPersistenceTest {
         private String updatedTitle;
         private int insertRows = 1;
         private int updatedRows = 1;
+        private int currentUpdateRows = 1;
         private int activeBookCount = 1;
         private boolean owningBookTestData;
         private boolean existingBookSession;
         private boolean sessionMissing;
+        private Long fallbackCurrentSessionId;
+        private Long replacementSessionId;
+        private Long currentSessionId;
+        private final List<String> ensureCalls = new ArrayList<>();
 
         @Override
         public int countActiveBookById(Long bookId, Long userId) {
@@ -863,19 +1050,38 @@ class ReadingSessionBusinessPersistenceTest {
         }
 
         @Override
-        public ReadingSessionRecord findFirstByBookIdAndUserId(Long bookId, Long userId) {
+        public ReadingSessionRecord findCurrentByBookIdAndUserId(Long bookId, Long userId) {
+            ensureCalls.add("current");
             return existingBookSession
                 ? ReadingSessionRecord.builder().id(77L).title("My Session").build()
                 : null;
         }
 
         @Override
-        public boolean findBookTestData(Long bookId, Long userId) {
-            return owningBookTestData;
+        public ReadingSessionRecord findLatestCreatedByBookIdAndUserId(Long bookId, Long userId) {
+            ensureCalls.add("latest");
+            Long latestSessionId = deletedSessionId == null && fallbackCurrentSessionId != null
+                ? fallbackCurrentSessionId
+                : replacementSessionId;
+            return latestSessionId == null
+                ? null
+                : ReadingSessionRecord.builder()
+                    .id(latestSessionId)
+                    .bookId(bookId)
+                    .userId(userId)
+                    .title("Replacement Session")
+                    .build();
+        }
+
+        @Override
+        public Boolean lockActiveBookTestData(Long bookId, Long userId) {
+            ensureCalls.add("lock");
+            return activeBookCount > 0 ? owningBookTestData : null;
         }
 
         @Override
         public int insert(ReadingSessionRecord record) {
+            ensureCalls.add("insert");
             this.inserted = record;
             record.setId(77L);
             return insertRows;
@@ -897,6 +1103,19 @@ class ReadingSessionBusinessPersistenceTest {
             }
 
             return sessionRecord(userId);
+        }
+
+        @Override
+        public ReadingSessionRecord lockByIdAndUserId(Long sessionId, Long userId) {
+            ensureCalls.add("lock-session");
+            return findByIdAndUserId(sessionId, userId);
+        }
+
+        @Override
+        public int updateCurrentForBook(Long bookId, Long userId, Long sessionId) {
+            currentSessionId = sessionId;
+            ensureCalls.add("point:" + sessionId);
+            return currentUpdateRows;
         }
 
 
@@ -1013,6 +1232,40 @@ class ReadingSessionBusinessPersistenceTest {
         @Override
         public List<SessionWindowRecord> findBySessionId(Long sessionId) {
             return List.of();
+        }
+    }
+
+    private static class FakeTimelinePersonaMapper
+        implements com.margins.session.mapper.SessionWindowPersonaMapper {
+        private int batchCalls;
+        private int singleCalls;
+        private List<Long> windowIds = List.of();
+
+        @Override
+        public int insertSelections(Long windowId, List<Long> personaIds) {
+            return personaIds.size();
+        }
+
+        @Override
+        public List<Long> findPersonaIds(Long windowId) {
+            singleCalls += 1;
+            return List.of();
+        }
+
+        @Override
+        public List<com.margins.session.model.SessionWindowPersonaSelection> findByWindowIds(
+            List<Long> windowIds
+        ) {
+            batchCalls += 1;
+            this.windowIds = List.copyOf(windowIds);
+            return List.of(
+                com.margins.session.model.SessionWindowPersonaSelection.builder()
+                    .windowId(88L).personaId(4L).selectionOrder(0).build(),
+                com.margins.session.model.SessionWindowPersonaSelection.builder()
+                    .windowId(88L).personaId(5L).selectionOrder(1).build(),
+                com.margins.session.model.SessionWindowPersonaSelection.builder()
+                    .windowId(89L).personaId(6L).selectionOrder(0).build()
+            );
         }
     }
 
@@ -1466,6 +1719,7 @@ class ReadingSessionBusinessPersistenceTest {
             this.query = query;
             this.limit = limit;
             return List.of(SessionSearchResultRecord.builder()
+                .bookId(7L)
                 .sessionId(77L)
                 .sourceId(66L)
                 .resultType("insight")

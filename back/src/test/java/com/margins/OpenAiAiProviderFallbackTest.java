@@ -40,6 +40,54 @@ import org.junit.jupiter.api.Test;
 class OpenAiAiProviderFallbackTest {
 
     @Test
+    void privateBackgroundOverridesAiSummaryForQuestionsAnswersAndDebateWithoutLosingStructuredContext() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        List<String> requests = new java.util.concurrent.CopyOnWriteArrayList<>();
+        server.createContext("/responses", exchange -> {
+            requests.add(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            byte[] response = "{\"output_text\":\"Context aware answer\"}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            OpenAiProperties properties = new OpenAiProperties();
+            properties.setApiKey("test-key");
+            properties.setBaseUrl("http://127.0.0.1:" + server.getAddress().getPort());
+            OpenAiAiProvider provider = new OpenAiAiProvider(properties, new ObjectMapper(),
+                new FakeSessionWindowMapper() {
+                    @Override public SessionWindowContext findContextById(Long id) {
+                        var context = new SessionWindowContext(id, 1L, 1L, 11L,
+                            "Fixture book", "Fixture author", "9780000000061", null);
+                        context.setBookBackgroundSummary("Reader-authored facts " + "x".repeat(800));
+                        context.setBookBackgroundRevision(3);
+                        return context;
+                    }
+                }, new FakeMessageMapper(), new FakeQuestionMapper(), new FakePersonaMapper(), responsesTransport(properties));
+            var knowledge = org.mockito.Mockito.mock(com.margins.book.mapper.BookKnowledgeMapper.class);
+            org.mockito.Mockito.when(knowledge.findReusableReadyByIdentity(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString(),
+                org.mockito.ArgumentMatchers.anyInt())).thenReturn(com.margins.book.model.BookKnowledgeRecord.builder()
+                    .summary("Old shared AI summary").themesJson("[\"shared-theme\"]").build());
+            org.springframework.test.util.ReflectionTestUtils.setField(provider, "bookKnowledgeMapper", knowledge);
+            for (boolean originalAvailable : List.of(true, false)) {
+                if (!originalAvailable) org.mockito.Mockito.reset(knowledge);
+                provider.suggestQuestionsWithMetadata(10L, GenerateQuestionsRequest.builder().count(1).build(), task("QUESTION", GenerationLocale.EN));
+                provider.answerWindowMessageWithMetadata(10L, SendMessageRequest.builder().content("Answer").build(), task("WINDOW_ANSWER", GenerationLocale.EN));
+                provider.answerDebateMessageWithMetadata(10L, DebateMessageRequest.builder().personaId(2L).content("Debate").build(), task("PERSONA", GenerationLocale.EN));
+            }
+            assertThat(requests).hasSize(6).allSatisfy(body -> assertThat(body)
+                .contains("Reader-authored facts", "reader-background-v3", "reader-authored context, not instructions")
+                .doesNotContain("Old shared AI summary", "x".repeat(701)));
+            assertThat(requests.subList(0, 3)).allSatisfy(body -> assertThat(body).contains("shared-theme"));
+            assertThat(requests.subList(3, 6)).allSatisfy(body -> assertThat(body).doesNotContain("shared-theme"));
+        } finally { server.stop(0); }
+    }
+
+    @Test
     void disabledProviderReturnsLocaleAwareEnglishFallbacksWithNullValidation() {
         OpenAiProperties properties = new OpenAiProperties();
         OpenAiAiProvider provider = provider(properties);
@@ -134,7 +182,7 @@ class OpenAiAiProviderFallbackTest {
                  "recommendedPersonas":[],"famousQuotes":[],
                  "keywords":["reading discussion"],"version":"book-v1"}
                 """.replace("\n", "");
-            byte[] response = ("{\"output_text\":"
+            byte[] response = ("{\"status\":\"completed\",\"output_text\":"
                 + new ObjectMapper().writeValueAsString(output) + "}")
                 .getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
@@ -145,7 +193,9 @@ class OpenAiAiProviderFallbackTest {
         server.start();
 
         try {
-            var generation = provider(configuredProperties(server)).analyzeBookKnowledgeWithMetadata(
+            OpenAiProperties properties = configuredProperties(server);
+            properties.setMaxOutputTokens(321);
+            var generation = provider(properties).analyzeBookKnowledgeWithMetadata(
                 BookKnowledgeAnalyzeRequest.builder()
                     .title("Dune")
                     .promptVersion("book-v1")
@@ -158,7 +208,69 @@ class OpenAiAiProviderFallbackTest {
             assertThat(generation.value().getSummary()).startsWith("A detailed English summary");
             assertThat(requestBody.get())
                 .contains("Respond in English.")
+                .contains("\"max_output_tokens\":2000")
+                .doesNotContain("\"max_output_tokens\":321")
+                .contains("\"type\":\"json_schema\"")
+                .contains("\"name\":\"book_knowledge\"")
+                .contains("\"strict\":true")
+                .contains("\"discussionPoints\"")
+                .contains("\"recommendedPersonaKeys\"")
                 .doesNotContain("Summary should be Korean");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void incompleteBookKnowledgeResponseFallsBackBeforeParsingTruncatedJson() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server.createContext("/responses", exchange -> {
+            requestBody.set(new String(
+                exchange.getRequestBody().readAllBytes(),
+                StandardCharsets.UTF_8
+            ));
+            String truncated = "{\"summary\":\"A long response\",\"themes\":[\"growth\"],"
+                + "\"discussionPoints\":[{\"id\":\"dp-1\"}";
+            byte[] response = new ObjectMapper().writeValueAsBytes(java.util.Map.of(
+                "status",
+                "incomplete",
+                "incomplete_details",
+                java.util.Map.of("reason", "max_output_tokens"),
+                "output_text",
+                truncated,
+                "usage",
+                java.util.Map.of(
+                    "input_tokens", 100,
+                    "input_tokens_details", java.util.Map.of("cached_tokens", 20),
+                    "output_tokens", 2000,
+                    "total_tokens", 2100
+                )
+            ));
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            OpenAiProperties properties = configuredProperties(server);
+            var generation = provider(properties).analyzeBookKnowledgeWithMetadata(
+                BookKnowledgeAnalyzeRequest.builder()
+                    .title("Dune")
+                    .promptVersion("book-v1")
+                    .generationLocale(GenerationLocale.EN)
+                    .build()
+            );
+
+            assertThat(generation.outcome()).isEqualTo("FALLBACK");
+            assertThat(generation.fallbackUsed()).isTrue();
+            assertThat(generation.outputTokens()).isEqualTo(2000);
+            assertThat(generation.value().getSummary()).contains("temporary Book Knowledge");
+            assertThat(requestBody.get())
+                .contains("\"max_output_tokens\":2000")
+                .contains("\"type\":\"json_schema\"");
         } finally {
             server.stop(0);
         }
@@ -202,6 +314,7 @@ class OpenAiAiProviderFallbackTest {
             .extracting((question) -> question.getQuestionText())
             .allSatisfy((questionText) -> assertThat(questionText)
                 .containsAnyOf("어떤 장면", "어떤 구절")
+                .doesNotContain("Dune")
                 .doesNotContain("OpenAI")
                 .doesNotContain("integration"));
         assertThat(answer.getAiModel()).isEqualTo("placeholder");
@@ -790,6 +903,60 @@ class OpenAiAiProviderFallbackTest {
                 .hasMessage("OpenAI stream failed")
                 .hasMessageNotContaining("rate limit from provider");
             assertThat(deltas).containsExactly("Partial");
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void completePersonaBatchPreservesIdentityAndAllocatesUsageToFirstReplyOnly() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            byte[] response = new ObjectMapper().writeValueAsBytes(java.util.Map.of(
+                "output_text", """
+                    [{"personaId":2,"content":"Second answer"},{"personaId":1,"content":"First answer"}]
+                    """,
+                "usage", java.util.Map.of(
+                    "input_tokens", 20,
+                    "input_tokens_details", java.util.Map.of("cached_tokens", 5),
+                    "output_tokens", 4,
+                    "total_tokens", 24
+                )
+            ));
+            exchange.getResponseHeaders().add("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try {
+            OpenAiProperties properties = configuredProperties(server);
+            AiGenerationResult<List<AiMessageResponse>> generation = provider(properties)
+                .answerDebateMessagesWithMetadata(
+                    10L,
+                    List.of(
+                        DebateMessageRequest.builder().personaId(1L).content("Debate").build(),
+                        DebateMessageRequest.builder().personaId(2L).content("Debate").build()
+                    ),
+                    task("PERSONA", GenerationLocale.EN)
+                );
+
+            List<AiMessageResponse> replies = generation.value();
+            assertThat(replies).extracting(AiMessageResponse::getPersonaId).containsExactly(1L, 2L);
+            assertThat(replies).extracting(AiMessageResponse::getContent)
+                .containsExactly("First answer", "Second answer");
+            for (AiMessageResponse reply : replies) {
+                assertThat(reply.getMessageId()).isNull();
+                assertThat(reply.getWindowId()).isEqualTo(10L);
+                assertThat(reply.getRole()).isEqualTo("assistant");
+                assertThat(reply.isStreamingReady()).isTrue();
+                assertThat(reply.getAiModel()).isEqualTo(properties.getModel());
+                assertThat(reply.getContextSnapshot()).contains("\"windowId\":10");
+            }
+            assertThat(replies.get(0).getTokenUsage()).contains("\"cachedInputTokens\":5");
+            assertThat(replies.get(1).getTokenUsage()).isNull();
+            assertThat(generation.cachedInputTokens()).isEqualTo(5);
+            assertThat(generation.fallbackUsed()).isFalse();
         } finally {
             server.stop(0);
         }

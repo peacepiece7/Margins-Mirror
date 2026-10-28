@@ -60,6 +60,7 @@ public final class IntegrationFixtureSupport {
             .testData(true)
             .build();
         readingSessionMapper.insert(session);
+        readingSessionMapper.updateCurrentForBook(book.getId(), userId, session.getId());
 
         SessionWindowRecord window = SessionWindowRecord.builder()
             .sessionId(session.getId())

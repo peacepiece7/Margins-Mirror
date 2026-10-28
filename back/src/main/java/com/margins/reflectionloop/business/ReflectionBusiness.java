@@ -14,8 +14,11 @@ import com.margins.reflectionloop.model.ReflectionInterviewRecord;
 import com.margins.reflectionloop.model.ReflectionRevisionRecord;
 import com.margins.reflectionloop.model.dto.request.SaveReflectionRequest;
 import com.margins.reflectionloop.model.dto.response.ReflectionLoopResponse;
+import com.margins.reflectionloop.model.dto.response.ReflectionRouteAuthorityResponse;
 import com.margins.reflectionloop.model.dto.response.RevisionDto;
+import com.margins.session.mapper.ReadingSessionMapper;
 import com.margins.session.mapper.SessionInsightMapper;
+import com.margins.session.model.ReadingSessionRecord;
 import com.margins.session.model.SessionInsightRecord;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -32,6 +35,7 @@ public class ReflectionBusiness {
     private final DiscussionGuideMapper discussionGuideMapper;
     private final DiscussionRunMapper discussionRunMapper;
     private final SessionInsightMapper sessionInsightMapper;
+    private final ReadingSessionMapper readingSessionMapper;
 
     public ReflectionLoopResponse create(Long sessionId, SaveReflectionRequest request) {
         requireEnabled();
@@ -80,6 +84,21 @@ public class ReflectionBusiness {
             );
         }
         return response(reflection);
+    }
+
+    public ReflectionRouteAuthorityResponse routeAuthority(Long sessionId) {
+        requireEnabled();
+        ReadingSessionRecord session = readingSessionMapper.findByIdAndUserId(
+            sessionId,
+            currentUserId()
+        );
+        if (session == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Reading session not found");
+        }
+        return ReflectionRouteAuthorityResponse.builder()
+            .sessionId(session.getId())
+            .bookId(session.getBookId())
+            .build();
     }
 
     public ReflectionLoopResponse update(Long reflectionId, SaveReflectionRequest request) {
@@ -229,6 +248,13 @@ public class ReflectionBusiness {
     }
 
     private ReflectionLoopResponse response(SessionInsightRecord reflection) {
+        ReadingSessionRecord session = readingSessionMapper.findByIdAndUserId(
+            reflection.getSessionId(),
+            currentUserId()
+        );
+        if (session == null) {
+            throw new ApiException(ApiErrorCode.COMMON_NOT_FOUND, "Reading session not found");
+        }
         List<ReflectionRevisionRecord> revisions = reflectionRevisionMapper.findRevisions(
             reflection.getId(),
             currentUserId()
@@ -243,7 +269,12 @@ public class ReflectionBusiness {
         return ReflectionLoopResponse.builder()
             .reflectionId(reflection.getId())
             .sessionId(reflection.getSessionId())
+            .bookId(session.getBookId())
+            .title(reflection.getTitle())
+            .evidence(reflection.getEvidence())
+            .authorName(reflection.getAuthorName())
             .visibility(reflection.getVisibility())
+            .reviewedOn(reflection.getReviewedOn())
             .currentRevision(current == null ? null : toRevisionDto(current))
             .revisions(revisions.stream().map(this::toRevisionDto).toList())
             .activeInterviewId(interview == null ? null : interview.getId())

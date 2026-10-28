@@ -1,5 +1,6 @@
 type BookListKeyInput = {
   status?: string;
+  stage?: string;
   sort?: string;
 };
 
@@ -16,10 +17,18 @@ export const bookKeys = {
   searches: () => [...bookKeys.all, 'search'] as const,
   search: (query: string, limit: number) => [...bookKeys.searches(), query, limit] as const,
   searchCommand: () => [...bookKeys.searches(), 'command'] as const,
+  catalog: () => [...bookKeys.all, 'catalog'] as const,
+  catalogSearch: (request: object, revision: number | string) =>
+    [...bookKeys.catalog(), 'search', request, revision] as const,
+  collection: (id: string, generation: number) =>
+    [...bookKeys.catalog(), 'collection', id, generation] as const,
+  catalogCapabilities: () => [...bookKeys.catalog(), 'capabilities'] as const,
+  catalogOperations: () => [...bookKeys.catalog(), 'operations'] as const,
   details: () => [...bookKeys.all, 'detail'] as const,
   detail: (bookId: number) => [...bookKeys.details(), bookId] as const,
   knowledge: (bookId: number, preferredLocale: 'ko' | 'en') =>
     [...bookKeys.detail(bookId), 'knowledge', preferredLocale] as const,
+  background: (bookId: number) => [...bookKeys.detail(bookId), 'background'] as const,
 };
 
 export const sessionKeys = {

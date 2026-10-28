@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="192" viewBox="0 0 128 192">
+  <rect width="128" height="192" fill="#f0ebe2"/>
+  <rect x="8" y="8" width="112" height="176" fill="none" stroke="#2e3a46"/>
+  <path d="M22 44h84M22 48h84M22 145h84" stroke="#c46b36"/>
+  <text x="64" y="94" text-anchor="middle" font-family="serif" font-size="18" fill="#2e3a46">Margins</text>
+</svg>

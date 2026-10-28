@@ -23,12 +23,29 @@ import com.margins.testsupport.TestAuthSupport;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.core.env.Environment;
+import org.springframework.mock.env.MockEnvironment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.transaction.support.TransactionTemplate;
 
 class AccountManagementTest {
+    @Test
+    void sharedDevClientDoesNotRunAutomaticAccountMaintenance() {
+        AccountMapper mapper = mock(AccountMapper.class);
+        JdbcTemplate jdbc = mock(JdbcTemplate.class);
+        PrivacyRetentionMapper retentionMapper = mock(PrivacyRetentionMapper.class);
+        MockEnvironment environment = new MockEnvironment().withProperty("margins.maintenance.enabled", "false");
+        environment.setActiveProfiles("prod");
+        AccountLifecycleService lifecycle = new AccountLifecycleService(
+            mapper, jdbc, environment, mock(TransactionTemplate.class), retentionMapper);
+
+        lifecycle.runStartupMaintenance();
+        lifecycle.runMaintenance();
+
+        verifyNoInteractions(mapper, jdbc, retentionMapper);
+    }
+
     @Test
     void profileRequestOnlyAcceptsMutableDisplayName() {
         assertThat(AccountController.ProfileRequest.class.getRecordComponents())

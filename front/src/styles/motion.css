@@ -1,0 +1,70 @@
+@keyframes margins-route-content-out {
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes margins-route-content-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@supports (view-transition-name: none) {
+  #main-content {
+    view-transition-name: margins-route-content;
+  }
+
+  .web-library-row:has(.book-detail-transition-link.transitioning)
+    [data-ui='book-transition-cover'],
+  .web-current-book-summary [data-ui='book-transition-cover'] {
+    view-transition-name: margins-book-cover;
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  ::view-transition-group(margins-route-content) {
+    animation-duration: var(--motion-fast);
+    animation-timing-function: ease-out;
+  }
+
+  ::view-transition-old(margins-route-content) {
+    animation: margins-route-content-out var(--motion-fast) ease-out both;
+  }
+
+  ::view-transition-new(margins-route-content) {
+    animation: margins-route-content-in var(--motion-fast) ease-out both;
+  }
+
+  ::view-transition-group(margins-book-cover),
+  ::view-transition-old(margins-book-cover),
+  ::view-transition-new(margins-book-cover) {
+    animation-duration: 280ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+}
+
+/* Shared controls respect the reader's motion preference. Campaign motion stays surface-owned. */
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+
+  [data-slot],
+  [data-slot]::before,
+  [data-slot]::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  [data-slot]:not(:disabled):active {
+    transform: none;
+  }
+}

@@ -50,3 +50,9 @@ back/.zed/
 .codex/skills/.system/**
 !.codex/prompts/
 !.codex/prompts/**
+
+# Storybook and local workspace output
+front/storybook-static/
+.artifacts/
+/.worktrees/
+back/config/application-dev-local.yml

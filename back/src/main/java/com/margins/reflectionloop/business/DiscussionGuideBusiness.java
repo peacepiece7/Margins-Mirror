@@ -87,9 +87,40 @@ public class DiscussionGuideBusiness {
     }
 
     public DiscussionGuideResponse edit(Long guideId, EditDiscussionGuideRequest request) {
-        DiscussionGuideRecord guide = transactionTemplate.execute(
-            status -> editInTransaction(guideId, request)
-        );
+        DiscussionGuideRecord guide = transactionTemplate.execute(status -> {
+            reflectionBusiness.requireEnabled();
+            if (request == null || request.getExpectedVersion() == null) {
+                throw badRequest("Guide expected version is required");
+            }
+            DiscussionGuideRecord visible = requireGuide(guideId);
+            ReflectionInterviewRecord interview = interviewBusiness.requireInterviewForUpdate(
+                visible.getInterviewId()
+            );
+            requireGuideWritable(interview);
+            DiscussionGuideRecord source = requireGuideForUpdate(guideId);
+            requireCurrentSource(interview, source, request.getExpectedVersion());
+            VersionContent content = versionPolicy.editedContent(
+                source,
+                discussionGuideMapper.findGuideItems(source.getId(), currentUserId()),
+                request
+            );
+            return versionWriter.replaceCurrent(
+                interview,
+                source,
+                "USER_EDIT",
+                new GuideBrief(
+                    source.getPurpose(),
+                    source.getAudienceMode(),
+                    source.getTargetMinutes(),
+                    source.getDisclosureMode(),
+                    source.getFacilitationLevel()
+                ),
+                content,
+                source.getPromptVersion(),
+                depth(interview.getAnsweredCount()),
+                currentUserId()
+            );
+        });
         if (guide == null) {
             throw internal("Discussion guide edit could not be saved");
         }
@@ -279,44 +310,6 @@ public class DiscussionGuideBusiness {
             preparation.brief(),
             versionPolicy.generatedContent(draft),
             properties.getGuidePromptVersion(),
-            depth(interview.getAnsweredCount()),
-            currentUserId()
-        );
-    }
-
-    private DiscussionGuideRecord editInTransaction(
-        Long guideId,
-        EditDiscussionGuideRequest request
-    ) {
-        reflectionBusiness.requireEnabled();
-        if (request == null || request.getExpectedVersion() == null) {
-            throw badRequest("Guide expected version is required");
-        }
-        DiscussionGuideRecord visible = requireGuide(guideId);
-        ReflectionInterviewRecord interview = interviewBusiness.requireInterviewForUpdate(
-            visible.getInterviewId()
-        );
-        requireGuideWritable(interview);
-        DiscussionGuideRecord source = requireGuideForUpdate(guideId);
-        requireCurrentSource(interview, source, request.getExpectedVersion());
-        VersionContent content = versionPolicy.editedContent(
-            source,
-            discussionGuideMapper.findGuideItems(source.getId(), currentUserId()),
-            request
-        );
-        return versionWriter.replaceCurrent(
-            interview,
-            source,
-            "USER_EDIT",
-            new GuideBrief(
-                source.getPurpose(),
-                source.getAudienceMode(),
-                source.getTargetMinutes(),
-                source.getDisclosureMode(),
-                source.getFacilitationLevel()
-            ),
-            content,
-            source.getPromptVersion(),
             depth(interview.getAnsweredCount()),
             currentUserId()
         );

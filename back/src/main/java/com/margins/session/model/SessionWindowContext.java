@@ -16,6 +16,8 @@ public class SessionWindowContext {
     private String bookAuthor;
     private String bookIsbn;
     private String bookRawMetadata;
+    private String bookBackgroundSummary;
+    private int bookBackgroundRevision;
     private String bookReadingStatus;
     private Double bookRating;
     private String windowContextSnapshot;

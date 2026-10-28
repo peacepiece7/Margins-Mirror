@@ -11,5 +11,6 @@ public class OpenAiProperties {
     private String model = "gpt-5.6-luna";
     private int timeoutSeconds = 30;
     private int maxOutputTokens = 800;
+    private int bookKnowledgeMaxOutputTokens = 2000;
     private int discussionGuideMaxOutputTokens = 2000;
 }

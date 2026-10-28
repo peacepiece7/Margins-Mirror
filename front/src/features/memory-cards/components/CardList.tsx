@@ -1,11 +1,11 @@
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { useI18n } from '@/lib/i18n';
 import type { MemoryCard } from '@/types/api/memory-card';
 import { testAttr } from '@/utils/testAttrs';
 
 interface CardListProps {
   cards: MemoryCard[];
-  labels: { delete: string; edit: string; memorized: string; open: string };
   onDelete: (card: MemoryCard) => void;
   onEdit: (card: MemoryCard) => void;
   onMemorizedChange: (card: MemoryCard, memorized: boolean) => void;
@@ -15,13 +15,13 @@ interface CardListProps {
 
 export function CardList({
   cards,
-  labels,
   onDelete,
   onEdit,
   onMemorizedChange,
   onOpen,
   savingMemorizedCardIds,
 }: CardListProps) {
+  const { t } = useI18n();
   return (
     <section className="grid gap-3">
       {cards.map((card) => (
@@ -38,37 +38,39 @@ export function CardList({
             )}
             {card.memo && <p className="mt-1 break-words text-sm text-stone-500">{card.memo}</p>}
             <label className="mt-3 flex min-h-11 w-fit items-center gap-2 rounded border border-stone-300 px-3 py-2 text-sm font-medium">
-              <Input
+              <Checkbox
                 checked={card.memorized}
                 disabled={savingMemorizedCardIds.has(card.cardId)}
-                onChange={(event) => onMemorizedChange(card, event.target.checked)}
-                type="checkbox"
+                onCheckedChange={(checked) => onMemorizedChange(card, checked === true)}
                 {...testAttr('memory-card-memorized-toggle')}
               />
-              {labels.memorized}
+              {t('memoryCardMemorized')}
             </label>
           </div>
           <div className="grid grid-cols-2 gap-2 md:flex">
             <Button
-              className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium"
+              className="min-h-11 px-3 py-2"
               onClick={() => onOpen(card)}
               type="button"
+              variant="outline"
             >
-              {labels.open}
+              {t('memoryCardOpen')}
             </Button>
             <Button
-              className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium"
+              className="min-h-11 px-3 py-2"
               onClick={() => onEdit(card)}
               type="button"
+              variant="outline"
             >
-              {labels.edit}
+              {t('edit')}
             </Button>
             <Button
-              className="min-h-11 rounded border border-stone-300 bg-white px-3 py-2 text-sm font-medium hover:border-red-700"
+              className="min-h-11 px-3 py-2"
               onClick={() => onDelete(card)}
               type="button"
+              variant="destructive"
             >
-              {labels.delete}
+              {t('delete')}
             </Button>
           </div>
         </article>

@@ -8,6 +8,7 @@ test.beforeEach(async ({ page, request }) => {
   const response = await request.post(`${backendUrl}/api/test/reset`);
   expect(response.ok()).toBeTruthy();
   await page.addInitScript(() => {
+    window.localStorage.setItem('margins.app-download-notice.v1', 'dismissed');
     let callback: ((token: string) => void) | undefined;
     let sequence = 0;
     const tokenPrefix = `e2e-turnstile-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -119,9 +120,9 @@ test('uses a frame-free auth shell, home-linked title, and labeled two-column si
   await page.getByTestId('auth-mode-register').hover();
   await expect(page.getByTestId('auth-mode-register')).toHaveCSS(
     'background-color',
-    'rgb(59, 75, 89)',
+    'rgb(182, 129, 61)',
   );
-  await expect(page.getByTestId('auth-mode-register')).toHaveCSS('color', 'rgb(252, 250, 246)');
+  await expect(page.getByTestId('auth-mode-register')).toHaveCSS('color', 'rgb(23, 19, 14)');
   expect(
     await page
       .getByTestId('auth-page')

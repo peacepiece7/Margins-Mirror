@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
@@ -24,17 +23,6 @@ export function CardForm({
   const form = useForm<MemoryCardInput>({ defaultValues: initialValues });
   const frontText = useWatch({ control: form.control, name: 'frontText', defaultValue: '' });
   const backText = useWatch({ control: form.control, name: 'backText', defaultValue: '' });
-  useEffect(() => {
-    form.reset(initialValues);
-    // Primitive values intentionally define authoritative route-bound defaults.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    form,
-    initialValues.backText,
-    initialValues.exampleText,
-    initialValues.frontText,
-    initialValues.memo,
-  ]);
   return (
     <form
       className="grid gap-3 rounded border border-stone-300 bg-white p-4"
@@ -67,7 +55,10 @@ export function CardForm({
                 {...form.register(name, { required: required ? t('requiredField') : false })}
               />
               {form.formState.errors[name]?.message && (
-                <span className="text-xs leading-5 text-red-700" id={`memory-card-${name}-error`}>
+                <span
+                  className="text-xs leading-5 text-destructive"
+                  id={`memory-card-${name}-error`}
+                >
                   {form.formState.errors[name]?.message}
                 </span>
               )}

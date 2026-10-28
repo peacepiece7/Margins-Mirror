@@ -1,19 +1,18 @@
-import { Link } from 'react-router-dom';
+import { useId } from 'react';
+import { Link, NavLink } from 'react-router-dom';
+import { ChevronDownIcon } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { NativeSelect } from '@/components/ui/native-select';
 import { BookRatingInput } from '@/features/books/components/BookRatingInput';
 import { BookStatusSelect } from '@/features/books/components/BookStatusSelect';
 import { bookPath } from '@/features/books/routes';
-import type {
-  BookReadingStatus,
-  BookShelfSort,
-  BookShelfStatusFilter,
-} from '@/features/books/types';
+import type { BookReadingStatus, BookShelfSort } from '@/features/books/types';
 import { useI18n } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 
 import type { BookListPageProps } from '../panel-types';
+import { LibraryThreadProgress } from './LibraryThreadSummary';
 
 function normalizeStatus(status?: string): BookReadingStatus {
   return status === 'reading' || status === 'read' || status === 'dnf' ? status : 'want_to_read';
@@ -21,17 +20,16 @@ function normalizeStatus(status?: string): BookReadingStatus {
 
 export function BookListPage({
   books,
-  filter,
   loading,
   sort,
   onDelete,
-  onFilterChange,
   onRatingChange,
   onSelect,
   onSortChange,
   onStatusChange,
 }: BookListPageProps) {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
+  const instanceId = useId();
   const statusLabel = (status: BookReadingStatus) =>
     ({
       want_to_read: t('shelfStatusWantToRead'),
@@ -41,29 +39,22 @@ export function BookListPage({
     })[status];
 
   return (
-    <section className="grid gap-3" {...testAttr('book-list-page')}>
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <h2 className="font-display text-3xl font-semibold tracking-normal">{t('bookList')}</h2>
-        <div className="flex flex-wrap items-center gap-3">
-          <label className="grid gap-1 text-sm">
-            <span className="text-stone-600">{t('shelfFilterLabel')}</span>
+    <section
+      className="web-library-page grid min-w-0 grid-cols-[minmax(0,1fr)] gap-3"
+      {...testAttr('book-list-page')}
+    >
+      <div className="web-library-header flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <span className="blueprint-unit-label">THREAD LIBRARY</span>
+          <h1 className="font-display text-3xl font-semibold tracking-normal">{t('bookList')}</h1>
+        </div>
+        <label className="web-library-sort grid gap-1 text-sm">
+          <span className="text-stone-600">{t('shelfSortLabel')}</span>
+          <div className="relative w-full">
             <NativeSelect
-              className="rounded border border-stone-300 bg-white px-3 py-2 text-sm"
-              onChange={(event) => onFilterChange(event.target.value as BookShelfStatusFilter)}
-              value={filter}
-              {...testAttr('book-shelf-filter')}
-            >
-              <option value="all">{t('shelfFilterAll')}</option>
-              <option value="want_to_read">{t('shelfStatusWantToRead')}</option>
-              <option value="reading">{t('shelfStatusReading')}</option>
-              <option value="read">{t('shelfStatusRead')}</option>
-              <option value="dnf">{t('shelfStatusDnf')}</option>
-            </NativeSelect>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span className="text-stone-600">{t('shelfSortLabel')}</span>
-            <NativeSelect
-              className="rounded border border-stone-300 bg-white px-3 py-2 text-sm"
+              className="appearance-none pr-10"
+              id={`book-shelf-sort-${instanceId}`}
+              name="book-shelf-sort"
               onChange={(event) => onSortChange(event.target.value as BookShelfSort)}
               value={sort}
               {...testAttr('book-shelf-sort')}
@@ -75,38 +66,45 @@ export function BookListPage({
               <option value="rating_asc">{t('shelfSortRatingAsc')}</option>
               <option value="status">{t('shelfSortStatus')}</option>
             </NativeSelect>
-          </label>
-        </div>
+            <ChevronDownIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 right-3 size-4 -translate-y-1/2 text-muted-foreground"
+            />
+          </div>
+        </label>
       </div>
       {books.map((book) => (
         <article
-          className="flex flex-col gap-3 rounded border border-stone-300 bg-stone-50/95 p-4 shadow-[0_12px_36px_rgba(23,23,23,0.05)] lg:grid lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center"
+          className="web-library-row grid gap-3 rounded border border-stone-300 bg-stone-50/95 p-4"
           key={book.bookId}
           {...testAttr('saved-book-row')}
         >
-          <div className="grid min-w-0 items-center gap-3 sm:grid-cols-[56px_minmax(0,1fr)]">
+          <div className="web-library-book grid min-w-0 items-center gap-3 sm:grid-cols-[48px_minmax(0,1fr)]">
             {book.coverImageUrl ? (
               <img
                 alt=""
-                className="h-20 w-14 rounded border border-stone-200 bg-white object-cover"
+                className="h-16 w-12 rounded border border-stone-200 bg-white object-cover"
+                data-ui="book-transition-cover"
                 src={book.coverImageUrl}
                 {...testAttr('saved-book-cover')}
               />
             ) : (
               <div
                 aria-hidden="true"
-                className="h-20 w-14 rounded border border-stone-200 bg-stone-100"
+                className="web-book-cover-placeholder h-16 w-12 rounded border border-stone-200 bg-stone-100"
+                data-ui="book-transition-cover"
               />
             )}
-            <div className="flex min-h-20 min-w-0 flex-col justify-center">
-              <Link
-                className="inline rounded-sm text-lg font-semibold text-inherit no-underline outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+            <div className="flex min-h-16 min-w-0 flex-col justify-center">
+              <NavLink
+                className="book-detail-transition-link inline rounded-sm text-lg font-semibold text-inherit no-underline outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                 onClick={() => onSelect(book)}
                 to={bookPath('book-detail', { bookId: book.bookId })}
+                viewTransition
                 {...testAttr('saved-book-detail-link')}
               >
                 {book.title}
-              </Link>
+              </NavLink>
               {book.subtitle && <div className="text-sm text-stone-500">{book.subtitle}</div>}
               <div className="text-sm text-stone-600">{book.author}</div>
               <div className="mt-1 flex flex-wrap gap-x-2 gap-y-1 text-xs text-stone-500">
@@ -121,47 +119,60 @@ export function BookListPage({
                     ★ {book.rating}
                   </span>
                 )}
-                {book.publisher && <span>{book.publisher}</span>}
-                {book.publishedYear && <span>{book.publishedYear}</span>}
-                {book.isbn && <span>ISBN {book.isbn}</span>}
               </div>
             </div>
           </div>
-          <div className="grid gap-3">
-            <div className="grid gap-1">
-              <span className="text-xs text-stone-500">{t('shelfStatusLabel')}</span>
-              <BookStatusSelect
-                disabled={loading}
-                onChange={(status) => onStatusChange(book.bookId, status)}
-                status={normalizeStatus(book.readingStatus)}
-                statusLabel={statusLabel}
-                testId={`saved-book-status-${book.bookId}`}
-              />
+          <div className="web-library-row-thread">
+            {book.loop && <LibraryThreadProgress compact loop={book.loop} />}
+            <div className="web-library-row-revision">
+              <span>{t('libraryLatestRevision')}</span>
+              {book.recentRevisions?.[0] ? (
+                <div>
+                  <strong>V{book.recentRevisions[0].version}</strong>
+                  <time dateTime={book.recentRevisions[0].createdAt}>
+                    {new Date(book.recentRevisions[0].createdAt).toLocaleDateString(locale)}
+                  </time>
+                </div>
+              ) : (
+                <small>{t('libraryRevisionEmpty')}</small>
+              )}
             </div>
-            <div className="grid gap-1">
-              <span className="text-xs text-stone-500">{t('shelfRatingLabel')}</span>
-              <BookRatingInput
-                disabled={loading}
-                onChange={(rating) => onRatingChange(book.bookId, rating)}
-                rating={book.rating}
-                testId={`saved-book-rating-${book.bookId}`}
-              />
-            </div>
-            <div className="flex gap-2">
-              <Button asChild className="rounded border border-stone-300 px-3 py-2 text-sm">
-                <Link
-                  onClick={() => onSelect(book)}
-                  to={bookPath('book-detail', { bookId: book.bookId })}
-                  {...testAttr('saved-book-edit-open')}
-                >
-                  {t('edit')}
-                </Link>
-              </Button>
+          </div>
+          <div className="web-library-controls">
+            <BookStatusSelect
+              disabled={loading}
+              id={`book-status-${book.bookId}-${instanceId}`}
+              name={`readingStatus-${book.bookId}`}
+              onChange={(status) => onStatusChange(book.bookId, status)}
+              status={normalizeStatus(book.readingStatus)}
+              statusLabel={statusLabel}
+              testId={`saved-book-status-${book.bookId}`}
+            />
+            <BookRatingInput
+              disabled={loading}
+              onChange={(rating) => onRatingChange(book.bookId, rating)}
+              rating={book.rating}
+              testId={`saved-book-rating-${book.bookId}`}
+            />
+            <div className="web-library-actions flex gap-2">
+              {book.loop && (
+                <Button asChild size="sm" variant="outline">
+                  <Link
+                    onClick={() => onSelect(book)}
+                    to={book.loop.continueLocator.href}
+                    {...testAttr('saved-book-continue')}
+                  >
+                    {t('libraryThreadContinue')} →
+                  </Link>
+                </Button>
+              )}
               <Button
-                className="rounded border border-red-300 px-3 py-2 text-sm text-red-700"
+                aria-label={`${book.title} ${t('delete')}`}
                 disabled={loading}
                 onClick={() => onDelete(book)}
+                size="sm"
                 type="button"
+                variant="destructive"
                 {...testAttr('saved-book-delete')}
               >
                 {t('delete')}
@@ -170,11 +181,7 @@ export function BookListPage({
           </div>
         </article>
       ))}
-      {!books.length && (
-        <div className="rounded border border-stone-300 bg-stone-50/95 p-8 text-center text-sm text-stone-500">
-          {t('noSavedBooks')}
-        </div>
-      )}
+      {!books.length && <div className="web-library-empty">{t('noSavedBooks')}</div>}
     </section>
   );
 }

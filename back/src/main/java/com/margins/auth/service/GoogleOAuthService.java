@@ -21,6 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 /**
  * Google OAuth 로그인과 계정 연동을 처리하는 서비스다.
@@ -68,22 +69,62 @@ public class GoogleOAuthService {
         return GOOGLE_AUTH_URL + "?" + query;
     }
 
+    public String buildNativeAuthorizationUrl(String state, String nonce, String codeChallenge) {
+        requireEnabled();
+        return GOOGLE_AUTH_URL + "?client_id=" + encode(googleAuthProperties.getClientId())
+            + "&redirect_uri=" + encode(nativeCallbackUrl())
+            + "&response_type=code"
+            + "&scope=" + encode("openid email profile")
+            + "&state=" + encode(state)
+            + "&nonce=" + encode(nonce)
+            + "&code_challenge=" + encode(codeChallenge)
+            + "&code_challenge_method=S256"
+            + "&access_type=online&prompt=select_account&include_granted_scopes=true";
+    }
+
     public GoogleUserProfile exchangeAuthorizationCode(String code) {
+        return exchangeAuthorizationCode(code, callbackUrl(), null, null);
+    }
+
+    public GoogleUserProfile exchangeNativeAuthorizationCode(
+        String code,
+        String codeVerifier,
+        String expectedNonce
+    ) {
+        return exchangeAuthorizationCode(code, nativeCallbackUrl(), codeVerifier, expectedNonce);
+    }
+
+    private GoogleUserProfile exchangeAuthorizationCode(
+        String code,
+        String redirectUri,
+        String codeVerifier,
+        String expectedNonce
+    ) {
         requireEnabled();
         MultiValueMap<String, String> body = new LinkedMultiValueMap<>();
         body.add("code", code);
         body.add("client_id", googleAuthProperties.getClientId());
         body.add("client_secret", googleAuthProperties.getClientSecret());
-        body.add("redirect_uri", callbackUrl());
+        body.add("redirect_uri", redirectUri);
         body.add("grant_type", "authorization_code");
+        if (codeVerifier != null) body.add("code_verifier", codeVerifier);
 
-        String responseBody = restClientBuilder.build()
-            .post()
-            .uri(GOOGLE_TOKEN_URL)
-            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(body)
-            .retrieve()
-            .body(String.class);
+        String responseBody;
+        try {
+            responseBody = restClientBuilder.build()
+                .post()
+                .uri(GOOGLE_TOKEN_URL)
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(body)
+                .retrieve()
+                .body(String.class);
+        } catch (RestClientException exception) {
+            throw new ApiException(
+                ApiErrorCode.AUTH_GOOGLE_TOKEN_EXCHANGE_FAILED,
+                "google token endpoint request failed",
+                exception
+            );
+        }
 
         try {
             JsonNode root = objectMapper.readTree(responseBody);
@@ -91,7 +132,8 @@ public class GoogleOAuthService {
             if (idToken == null || idToken.isBlank()) {
                 throw new ApiException(ApiErrorCode.AUTH_GOOGLE_TOKEN_EXCHANGE_FAILED);
             }
-            return parseIdToken(idToken);
+            GoogleUserProfile profile = parseIdToken(idToken, expectedNonce);
+            return profile;
         } catch (ApiException exception) {
             throw exception;
         } catch (Exception exception) {
@@ -104,8 +146,15 @@ public class GoogleOAuthService {
     }
 
     public GoogleUserProfile parseIdToken(String idToken) {
+        return parseIdToken(idToken, null);
+    }
+
+    private GoogleUserProfile parseIdToken(String idToken, String expectedNonce) {
         try {
             Jwt jwt = decoder().decode(idToken);
+            if (expectedNonce != null && !expectedNonce.equals(jwt.getClaimAsString("nonce"))) {
+                throw new ApiException(ApiErrorCode.AUTH_GOOGLE_ID_TOKEN_INVALID);
+            }
             return new GoogleUserProfile(
                 jwt.getSubject(),
                 jwt.getClaimAsString("email"),
@@ -155,6 +204,11 @@ public class GoogleOAuthService {
     public String callbackUrl() {
         return trimTrailingSlash(System.getenv().getOrDefault("MARGINS_PUBLIC_BASE_URL", "http://localhost:8080"))
             + "/api/auth/oauth/google/callback";
+    }
+
+    public String nativeCallbackUrl() {
+        return trimTrailingSlash(System.getenv().getOrDefault("MARGINS_PUBLIC_BASE_URL", "http://localhost:8080"))
+            + "/api/mobile/auth/oauth/google/callback";
     }
 
     private String optionalText(JsonNode payload, String field) {

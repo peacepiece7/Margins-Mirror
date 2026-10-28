@@ -148,6 +148,7 @@ describe('DebatePanel persisted persona orchestration', () => {
 
     expect(screen.getByTestId('selected-persona-ids')).toHaveTextContent('20');
     fireEvent.click(screen.getByRole('button', { name: 'first reply' }));
+    act(() => mocks.debate.mock.calls[0][1].onSuccess({ messages: [] }));
     fireEvent.click(screen.getByRole('button', { name: 'all replies' }));
 
     expect(mocks.debate).toHaveBeenCalledWith(
@@ -262,9 +263,43 @@ describe('DebatePanel optimistic message lifecycle', () => {
     const { rerender } = render(<DebatePanel bookId={1} windowId={13} />);
     fireEvent.click(screen.getByRole('button', { name: 'reply' }));
 
+    act(() => mocks.debate.mock.calls[0][1].onError(new Error('request failed')));
     mocks.debateError = true;
     rerender(<DebatePanel bookId={1} windowId={13} />);
 
     expect(screen.queryByText('같은 주제')).not.toBeInTheDocument();
   });
+});
+
+describe('DebatePanel shared single/all outcomes', () => {
+  beforeEach(() => {
+    mocks.personas = personas;
+    mocks.recommendations = { data: { personas: [] } };
+    setTimeline(11, [20]);
+  });
+
+  it('blocks rapid single/all clicks before the pending render and allows retry after failure', () => {
+    render(<DebatePanel bookId={7} windowId={11} />);
+    fireEvent.click(screen.getByRole('button', { name: 'all replies' }));
+    fireEvent.click(screen.getByRole('button', { name: 'first reply' }));
+    fireEvent.click(screen.getByRole('button', { name: 'all replies' }));
+    expect(mocks.debateAll).toHaveBeenCalledOnce();
+    expect(mocks.debate).not.toHaveBeenCalled();
+    act(() => mocks.debateAll.mock.calls[0][1].onError(new Error('all reply failed')));
+    expect(screen.queryByText('persisted selection')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'first reply' }));
+    expect(mocks.debate).toHaveBeenCalledOnce();
+  });
+
+  it.each(['REDIRECT', 'REJECT'])(
+    'removes the all-replies optimistic message on %s',
+    (decision) => {
+      render(<DebatePanel bookId={7} windowId={11} />);
+      fireEvent.click(screen.getByRole('button', { name: 'all replies' }));
+      act(() =>
+        mocks.debateAll.mock.calls[0][1].onSuccess({ moderation: { decision }, messages: [] }),
+      );
+      expect(screen.queryByText('persisted selection')).not.toBeInTheDocument();
+    },
+  );
 });

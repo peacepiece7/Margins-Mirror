@@ -19,6 +19,7 @@ import com.margins.session.dto.UpdateSessionInsightRequest;
 import com.margins.session.dto.UpdateReadingSessionTitleRequest;
 import com.margins.session.dto.UpdateReviewCommentRequest;
 import com.margins.question.dto.SaveQuestionAnswerRequest;
+import com.margins.session.model.ReadingSessionRecord;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -59,10 +60,26 @@ public class ReadingSessionService {
         return readingSessionBusiness.findTimeline(sessionId);
     }
 
-    /** 책별 최신 독서 세션의 식별자와 표시 제목만 읽는다. */
+    /** 책별 현재 독서 세션의 식별자와 표시 제목만 읽는다. */
     @Transactional(readOnly = true)
     public BookReadingSessionResponse findForBook(Long bookId) {
         return readingSessionBusiness.findForBook(bookId);
+    }
+
+    /** 책 행 잠금 아래 기존 세션을 재사용하거나 session locator 하나만 만든다. */
+    @Transactional
+    public BookReadingSessionResponse ensureForBook(Long bookId) {
+        return readingSessionBusiness.ensureForBook(bookId);
+    }
+
+    /** 비동기 책 저장 이벤트가 명시적 소유자에 대해 같은 멱등 경로를 사용한다. */
+    @Transactional
+    public BookReadingSessionResponse ensureForBook(Long bookId, Long userId) {
+        ReadingSessionRecord session = readingSessionBusiness.ensureForBook(bookId, userId);
+        return BookReadingSessionResponse.builder()
+            .sessionId(session.getId())
+            .title(session.getTitle())
+            .build();
     }
 
     /** 읽기 전용 매퍼 경로로 세션 기억을 검색한다. */

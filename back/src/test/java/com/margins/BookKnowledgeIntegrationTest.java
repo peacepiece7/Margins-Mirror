@@ -149,6 +149,9 @@ class BookKnowledgeIntegrationTest extends AbstractMySqlIntegrationTest {
         mapper.insert(record);
         assertThat(mapper.claimGeneration(record.getId(), "claim-ko", "en", 120)).isZero();
         assertThat(mapper.claimGeneration(record.getId(), "claim-ko", "ko", 120)).isEqualTo(1);
+        assertThat(mapper.renewGenerationClaim(record.getId(), "other-claim", "ko")).isZero();
+        assertThat(mapper.renewGenerationClaim(record.getId(), "claim-ko", "en")).isZero();
+        assertThat(mapper.renewGenerationClaim(record.getId(), "claim-ko", "ko")).isEqualTo(1);
 
         BookKnowledgeRecord completed = record("book-knowledge-v1", BookKnowledgeStatus.READY);
         completed.setId(record.getId());

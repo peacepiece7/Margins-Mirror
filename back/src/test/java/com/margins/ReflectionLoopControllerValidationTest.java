@@ -73,6 +73,14 @@ class ReflectionLoopControllerValidationTest {
     }
 
     @Test
+    void interviewCompletionDelegatesWithoutARequestBody() throws Exception {
+        mockMvc.perform(post("/api/reflection-interviews/2/complete"))
+            .andExpect(status().isOk());
+
+        verify(reflectionLoopService).completeInterview(2L);
+    }
+
+    @Test
     void guideRejectsMissingOrUnsupportedBrief() throws Exception {
         mockMvc.perform(post("/api/reflection-interviews/2/guides")
                 .contentType(MediaType.APPLICATION_JSON)

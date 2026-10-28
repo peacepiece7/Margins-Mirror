@@ -1,5 +1,5 @@
 import { Badge } from '@/components/ui/badge';
-import { translationCatalog } from '@/lib/i18n';
+import { useI18n } from '@/lib/i18n';
 
 export function SourceFreshnessBadges({
   fallback,
@@ -10,9 +10,7 @@ export function SourceFreshnessBadges({
   stale?: boolean;
   version?: string | null;
 }) {
-  const locale =
-    typeof document !== 'undefined' && document.documentElement.lang === 'en' ? 'en' : 'ko';
-  const t = (key: keyof typeof translationCatalog.en) => translationCatalog[locale][key];
+  const { t } = useI18n();
   if (!version && !stale && !fallback) return null;
 
   return (

@@ -1,5 +1,15 @@
-import type { FormEvent } from 'react';
+import type { FormEvent, ReactNode } from 'react';
 import type { Question, SessionInsight } from '@/types/api/session';
+import type { Persona } from '@/types/api/persona';
+import type { InterviewAnswer } from '@/types/api/reflection-loop';
+
+export type InterviewAnswerDraft = Pick<InterviewAnswer, 'questionId' | 'content'>;
+
+export interface GuidedDiscussionPanelProps {
+  bookId: number;
+  runId: number;
+  personas: Persona[];
+}
 
 export type ReviewFilter = 'all' | 'reflection' | 'question_answer';
 
@@ -24,6 +34,7 @@ export interface ReviewEditorPageProps {
   loading: boolean;
   reviewedOn: string;
   visibility: 'PRIVATE' | 'PUBLIC';
+  developerDraftControl?: ReactNode;
   onAuthorNameChange: (value: string) => void;
   onCancel: () => void;
   onContentChange: (value: string) => void;
@@ -38,6 +49,7 @@ export interface QuestionAnswerEditorPageProps {
   hasExistingAnswer: boolean;
   loading: boolean;
   questionText: string;
+  developerDraftControl?: ReactNode;
   onAnswerChange: (answer: string) => void;
   onCancel: () => void;
   onSubmit: (event: FormEvent) => void;

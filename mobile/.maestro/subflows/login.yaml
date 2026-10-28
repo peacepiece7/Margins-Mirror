@@ -1,0 +1,22 @@
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- scrollUntilVisible:
+    element:
+      text: "I already have an account"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn: "I already have an account"
+- assertVisible:
+    id: login-screen
+- tapOn: "Username"
+- inputText: ${TEST_USERNAME}
+- tapOn: "Password"
+- inputText: ${TEST_PASSWORD}
+- tapOn: "Log in"
+- assertVisible:
+    id: library-screen

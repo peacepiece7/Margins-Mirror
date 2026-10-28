@@ -68,6 +68,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                .requestMatchers(HttpMethod.GET, "/api/catalog/covers/**").permitAll()
                 .requestMatchers(HttpMethod.POST, "/api/contact-inquiries").permitAll()
                 .requestMatchers(
                     "/api/auth/login",
@@ -76,8 +77,16 @@ public class SecurityConfig {
                     "/api/auth/email-verifications",
                     "/api/auth/email-verifications/confirm",
                     "/api/auth/email-availability",
+                    "/api/auth/mobile/email-verification-bridge/**",
                     "/api/auth/refresh",
                     "/api/auth/oauth/**",
+                    "/api/mobile/auth/registration-intents",
+                    "/api/mobile/auth/email-availability",
+                    "/api/mobile/auth/register",
+                    "/api/mobile/auth/login",
+                    "/api/mobile/auth/refresh",
+                    "/api/mobile/auth/logout",
+                    "/api/mobile/auth/oauth/**",
                     "/api/privacy/requirements",
                     "/api/account/recovery/challenges",
                     "/api/account/recovery/challenges/*/verify",

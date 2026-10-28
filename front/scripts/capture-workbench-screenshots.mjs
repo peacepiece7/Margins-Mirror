@@ -7,7 +7,7 @@ const baseUrl =
   `http://localhost:${process.env.MARGINS_FRONTEND_PORT || '5173'}`;
 const backUrl =
   process.env.MARGINS_BACKEND_URL || process.env.MARGINS_BACK_URL || 'http://localhost:8080';
-const outputDir = resolve(process.cwd(), '..', 'harness', 'artifacts', 'screenshots');
+const outputDir = resolve(process.cwd(), '..', '.artifacts', 'screenshots');
 
 async function selectComposerMode(page, label) {
   const modeTabs = page.getByTestId('composer-mode-tabs');

@@ -33,7 +33,7 @@ export function LoginForm() {
           <Input
             aria-describedby={errors.username ? 'login-username-error' : undefined}
             aria-invalid={Boolean(errors.username)}
-            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 md:text-sm"
+            className="w-full"
             id="login-username"
             placeholder={t('username')}
             aria-label={t('username')}
@@ -50,7 +50,7 @@ export function LoginForm() {
           <Input
             aria-describedby={errors.password ? 'login-password-error' : undefined}
             aria-invalid={Boolean(errors.password)}
-            className="w-full rounded border border-stone-300 bg-white px-3 py-2 text-base outline-none focus:border-stone-700 md:text-sm"
+            className="w-full"
             id="login-password"
             placeholder={t('password')}
             aria-label={t('password')}
@@ -63,15 +63,18 @@ export function LoginForm() {
         </AuthFormField>
       </div>
       <Button
-        className="rounded bg-stone-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-50"
         disabled={isSubmitting || !username.trim() || !password.trim()}
         type="submit"
+        variant="default"
         {...testAttr('login-submit')}
       >
         {t('login')}
       </Button>
       <a className="text-center text-xs text-stone-600 underline" href="/privacy">
         {t('privacyPolicyTitle')}
+      </a>
+      <a className="text-center text-xs text-stone-600 underline" href="/terms">
+        {t('termsTitle')}
       </a>
       <a className="text-center text-xs text-stone-600 underline" href="/contact">
         {t('contactLink')}

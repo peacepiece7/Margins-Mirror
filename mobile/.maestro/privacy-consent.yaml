@@ -1,0 +1,52 @@
+appId: cloud.margins.mobile
+env:
+  TEST_PASSWORD: ${MARGINS_MAESTRO_CONSENT_PASSWORD}
+  TEST_USERNAME: ${MARGINS_MAESTRO_CONSENT_USERNAME}
+---
+- launchApp:
+    clearState: true
+- assertVisible:
+    id: welcome-screen
+- scrollUntilVisible:
+    element:
+      text: "Privacy"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn: "Privacy"
+- assertVisible:
+    id: privacy-screen
+- tapOn: "Policy history"
+- assertVisible:
+    id: privacy-history-screen
+- launchApp:
+    clearState: true
+- scrollUntilVisible:
+    element:
+      text: "I already have an account"
+    direction: DOWN
+    timeout: 20000
+    speed: 60
+    visibilityPercentage: 50
+    centerElement: true
+- tapOn: "I already have an account"
+- assertVisible:
+    id: login-screen
+- tapOn: "Username"
+- inputText: ${TEST_USERNAME}
+- tapOn: "Password"
+- inputText: ${TEST_PASSWORD}
+- tapOn: "Log in"
+- assertVisible:
+    id: consent-screen
+- tapOn: "I accept the privacy policy."
+- tapOn: "I consent to the documented AI data transfer."
+- tapOn: "I confirm I meet the minimum age requirement. (14+)"
+- tapOn: "Continue"
+- assertVisible:
+    id: library-screen
+- openLink: "margins://consent-account"
+- assertVisible:
+    id: account-screen

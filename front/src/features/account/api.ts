@@ -1,9 +1,13 @@
 import { authJson, getJson, patchJson, postJson } from '@/lib/api-client';
 import type { Account, AccountChallenge, ActionToken, ProfileResult } from '@/types/api/account';
+import type { PrivacyConsentStatusResponse } from '@/types/api/privacy';
 
 export const accountApi = {
   get(): Promise<Account> {
     return getJson<Account>('/api/account');
+  },
+  consentStatus(): Promise<PrivacyConsentStatusResponse> {
+    return getJson<PrivacyConsentStatusResponse>('/api/privacy/consents');
   },
   updateProfile(data: {
     displayName: string;

@@ -8,6 +8,7 @@ import { accountApi } from './api';
 export const accountKeys = {
   all: protectedQueryRoots.account,
   detail: () => [...accountKeys.all, 'detail'] as const,
+  consentStatus: () => [...accountKeys.all, 'consent-status'] as const,
 };
 
 export const accountQueryOptions = queryOptions({
@@ -17,6 +18,13 @@ export const accountQueryOptions = queryOptions({
 
 export function useAccountQuery() {
   return useQuery(accountQueryOptions);
+}
+
+export function useAccountConsentStatusQuery() {
+  return useQuery({
+    queryKey: accountKeys.consentStatus(),
+    queryFn: accountApi.consentStatus,
+  });
 }
 
 export function useUpdateProfileMutation() {

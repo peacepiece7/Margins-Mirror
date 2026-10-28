@@ -8,6 +8,8 @@ import type {
   DiscussionGuideVersionsResponse,
   DiscussionNavigation,
   DiscussionRunResponse,
+  DeveloperReflectionDraftInput,
+  DeveloperReflectionDraftResponse,
   EditDiscussionGuideInput,
   GuideBriefInput,
   GuidedDiscussionTurnResponse,
@@ -40,6 +42,10 @@ export interface SessionInsightInput {
 }
 
 export const reflectionsApi = {
+  developerDraft(input: DeveloperReflectionDraftInput): Promise<DeveloperReflectionDraftResponse> {
+    return postJson('/api/developer/reflection-drafts', input);
+  },
+
   books(): Promise<BookListResponse> {
     return getJson('/api/books');
   },
@@ -47,7 +53,11 @@ export const reflectionsApi = {
     return getJson(`/api/books/${bookId}/reading-session`);
   },
 
-  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse | null> {
+  ensureReadingSession(bookId: number): Promise<BookReadingSessionResponse> {
+    return putJson(`/api/books/${bookId}/reading-session`, {});
+  },
+
+  timeline(sessionId: number): Promise<ReadingSessionTimelineResponse> {
     return getJson(`/api/reading-sessions/${sessionId}`);
   },
 

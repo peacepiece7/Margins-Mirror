@@ -1,0 +1,43 @@
+# Shared development DB from a developer workstation only. Select the dev profile.
+# Credentials and signing secrets stay in ignored back/config/application-dev-local.yml.
+spring:
+  config:
+    import:
+      - optional:file:./config/application-dev-local.yml
+      - optional:file:./back/config/application-dev-local.yml
+
+server:
+  address: 127.0.0.1
+  port: 5813
+
+margins:
+  maintenance:
+    enabled: false
+  test-support:
+    catalog-fixture-enabled: false
+  catalog:
+    worker-enabled: false
+    test-data: false
+  contact:
+    enabled: false
+  auth:
+    cookie:
+      secure: false
+      domain: ""
+    jwt:
+      issuer: margins-local-shared-dev
+    google:
+      enabled: false
+      mobile-enabled: false
+    native-turnstile-bridge:
+      enabled: false
+  cors:
+    allowed-origin: http://localhost:9613
+  mail:
+    verification:
+      enabled: false
+      expose-code: false
+  ai:
+    provider: placeholder
+    langfuse:
+      enabled: false

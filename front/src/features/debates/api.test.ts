@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { deleteJson, getJson, patchJson, postJson } from '@/lib/api-client';
+import { deleteJson, getJson, patchJson, postJson, putJson } from '@/lib/api-client';
 import { postStream } from '@/lib/sse-client';
 
 import { debatesApi } from './api';
@@ -10,6 +10,7 @@ vi.mock('@/lib/api-client', () => ({
   getJson: vi.fn(),
   patchJson: vi.fn(),
   postJson: vi.fn(),
+  putJson: vi.fn(),
 }));
 
 vi.mock('@/lib/sse-client', () => ({
@@ -19,12 +20,27 @@ vi.mock('@/lib/sse-client', () => ({
 describe('debatesApi', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('generates a transient reader draft through the guarded existing endpoint only', async () => {
+    vi.mocked(postJson).mockResolvedValue({ content: 'Draft', model: 'placeholder', personas: [] });
+    const input = {
+      bookId: 7,
+      target: 'DISCUSSION_TURN' as const,
+      subject: 'Power',
+      context: 'user: My point',
+    };
+    await debatesApi.developerDraft(input);
+    expect(postJson).toHaveBeenCalledExactlyOnceWith('/api/developer/reflection-drafts', input);
+  });
+
   it('loads the book-scoped reading-session locator', async () => {
     vi.mocked(getJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
+    vi.mocked(putJson).mockResolvedValue({ sessionId: 3, title: 'Dune reflection' });
 
     await debatesApi.readingSession(7);
+    await debatesApi.ensureReadingSession(7);
 
     expect(getJson).toHaveBeenCalledWith('/api/books/7/reading-session');
+    expect(putJson).toHaveBeenCalledWith('/api/books/7/reading-session', {});
   });
 
   it('loads encoded persona recommendations', async () => {

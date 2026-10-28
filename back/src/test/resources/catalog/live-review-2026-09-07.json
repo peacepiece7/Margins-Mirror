@@ -1,0 +1,2170 @@
+{
+  "provenance": "Public bibliographic projection from 2026-09-07 live review, not new HTTP calls or a coverage benchmark.",
+  "books": [
+    {
+      "id": 1,
+      "externalId": "/books/OL23965279M",
+      "sourceUrl": "https://openlibrary.org/books/OL23965279M",
+      "title": "채식주의자",
+      "subtitle": "Han Kang yŏnjak sosol.",
+      "authors": [
+        "Han Kang"
+      ],
+      "isbn13": "9788936433598",
+      "publisher": "Ch'angbi",
+      "publishedDate": "2007",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 2,
+      "externalId": "/books/OL39794566M",
+      "sourceUrl": "https://openlibrary.org/books/OL39794566M",
+      "title": "해리포터 : 불사조 기사단",
+      "subtitle": "5",
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9788983925459",
+      "publisher": "Moonhak Soochup Publishing Co.",
+      "publishedDate": "2017",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 3,
+      "externalId": "/books/OL58889759M",
+      "sourceUrl": "https://openlibrary.org/books/OL58889759M",
+      "title": "해리포터 마법사의 돌",
+      "subtitle": "2",
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": null,
+      "publisher": "문학 수첩",
+      "publishedDate": "2020",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 4,
+      "externalId": "/books/OL37424965M",
+      "sourceUrl": "https://openlibrary.org/books/OL37424965M",
+      "title": "해리포터 마법사의 돌",
+      "subtitle": "1",
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9788983927620",
+      "publisher": null,
+      "publishedDate": "2020",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 5,
+      "externalId": "/books/OL39794510M",
+      "sourceUrl": "https://openlibrary.org/books/OL39794510M",
+      "title": "해리포터 불의 잔",
+      "subtitle": "4",
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9788983925404",
+      "publisher": "Munhak Such'ŏp",
+      "publishedDate": "2017",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 6,
+      "externalId": "/books/OL43156337M",
+      "sourceUrl": "https://openlibrary.org/books/OL43156337M",
+      "title": "해리포터 불의 잔",
+      "subtitle": "1",
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9788983925374",
+      "publisher": "Moonhak Soochup Publishing Co.",
+      "publishedDate": "2017",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 8,
+      "externalId": "/books/OL43157757M",
+      "sourceUrl": "https://openlibrary.org/books/OL43157757M",
+      "title": "해리포터 불의 잔",
+      "subtitle": "2",
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9788983925381",
+      "publisher": "Moonhak Soochup Publishing Co.",
+      "publishedDate": "2017",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 9,
+      "externalId": "/books/OL30621390M",
+      "sourceUrl": "https://openlibrary.org/books/OL30621390M",
+      "title": "Harry Potter and the Sorcerer's Stone",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9780545582889",
+      "publisher": "Scholastic",
+      "publishedDate": "2013-09",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 10,
+      "externalId": "/books/OL27506465M",
+      "sourceUrl": "https://openlibrary.org/books/OL27506465M",
+      "title": "Harry Potter & the Chamber of Secrets",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9781408865408",
+      "publisher": "Bloomsbury",
+      "publishedDate": "2018",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 11,
+      "externalId": "/books/OL39432403M",
+      "sourceUrl": "https://openlibrary.org/books/OL39432403M",
+      "title": "Harry Potter and the Prisoner of Azkaban (Harry Potter, Book 3)",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9781338878943",
+      "publisher": "Scholastic, Incorporated",
+      "publishedDate": "2023",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 12,
+      "externalId": "/books/OL27932982M",
+      "sourceUrl": "https://openlibrary.org/books/OL27932982M",
+      "title": "Harry Potter and the Deathly Hallows (Harry Potter #7)",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9780747595823",
+      "publisher": "Bloomsbury",
+      "publishedDate": "2008",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 13,
+      "externalId": "/books/OL61089427M",
+      "sourceUrl": "https://openlibrary.org/books/OL61089427M",
+      "title": "Harry Potter & chiếc cốc lửa",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": null,
+      "publisher": "Nhà xuất bản Trẻ",
+      "publishedDate": "2009",
+      "language": "vie",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 14,
+      "externalId": "/books/OL39455121M",
+      "sourceUrl": "https://openlibrary.org/books/OL39455121M",
+      "title": "Harry Potter and the Order of the Phoenix (Harry Potter, Book 5)",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9781338878967",
+      "publisher": "Scholastic, Incorporated",
+      "publishedDate": "2023",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 15,
+      "externalId": "/books/OL26424055M",
+      "sourceUrl": "https://openlibrary.org/books/OL26424055M",
+      "title": "Harry Potter & the Half-Blood Prince",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9781408865446",
+      "publisher": "Bloomsbury",
+      "publishedDate": "2015",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 16,
+      "externalId": "/books/OL9893727M",
+      "sourceUrl": "https://openlibrary.org/books/OL9893727M",
+      "title": "Harry Potter Boxset Books 1-7",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9780545044257",
+      "publisher": "Arthur A. Levine Books",
+      "publishedDate": "2007-10-16",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 17,
+      "externalId": "/books/OL53339374M",
+      "sourceUrl": "https://openlibrary.org/books/OL53339374M",
+      "title": "Harry Potter and the Cursed Child",
+      "subtitle": null,
+      "authors": [
+        "Jack Thorne",
+        "John Tiffany",
+        "J. K. Rowling"
+      ],
+      "isbn13": "9798855115567",
+      "publisher": "Bound to Stay Bound Books",
+      "publishedDate": "2017",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 18,
+      "externalId": "/books/OL28267487M",
+      "sourceUrl": "https://openlibrary.org/books/OL28267487M",
+      "title": "Harry Potter",
+      "subtitle": "poster annual 2008",
+      "authors": [
+        "Warner Bros. Entertainment Inc"
+      ],
+      "isbn13": "9781405233101",
+      "publisher": "Egmont UK Ltd.",
+      "publishedDate": "2007",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 19,
+      "externalId": "/books/OL28967061M",
+      "sourceUrl": "https://openlibrary.org/books/OL28967061M",
+      "title": "Harry Potter Box Set: Books 1-5",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9780747575443",
+      "publisher": "Bloomsbury Publishing Plc",
+      "publishedDate": "2004",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 20,
+      "externalId": "/books/OL8993485M",
+      "sourceUrl": "https://openlibrary.org/books/OL8993485M",
+      "title": "The Harry Potter Quartet Collection (Harry Potter)",
+      "subtitle": null,
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9781855496545",
+      "publisher": "BBC Audiobooks",
+      "publishedDate": "2002-10-07",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 21,
+      "externalId": "/books/OL24209112M",
+      "sourceUrl": "https://openlibrary.org/books/OL24209112M",
+      "title": "Harry Potter and the sorcerer's stone",
+      "subtitle": "Poster book",
+      "authors": [
+        "Drew Struzan"
+      ],
+      "isbn13": "9780439286237",
+      "publisher": "Scholastic",
+      "publishedDate": "2001",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 22,
+      "externalId": "/books/OL7514147M",
+      "sourceUrl": "https://openlibrary.org/books/OL7514147M",
+      "title": "Harry Potter",
+      "subtitle": "Deluxe Coloring Book",
+      "authors": [
+        "Joan Moloney"
+      ],
+      "isbn13": "9780439587600",
+      "publisher": "Scholastic",
+      "publishedDate": null,
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 23,
+      "externalId": "/books/OL9809861M",
+      "sourceUrl": "https://openlibrary.org/books/OL9809861M",
+      "title": "Harry Potter Poster Book",
+      "subtitle": null,
+      "authors": [
+        "Rick DeMonico"
+      ],
+      "isbn13": "9780613938457",
+      "publisher": "Tandem Library",
+      "publishedDate": "2001-08",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 24,
+      "externalId": "/books/OL25929351M",
+      "sourceUrl": "https://openlibrary.org/books/OL25929351M",
+      "title": "Harry Potter and the Methods of Rationality",
+      "subtitle": null,
+      "authors": [
+        "Eliezer Yudkowsky"
+      ],
+      "isbn13": null,
+      "publisher": "Fanfiction.net",
+      "publishedDate": null,
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 25,
+      "externalId": "/books/OL28302550M",
+      "sourceUrl": "https://openlibrary.org/books/OL28302550M",
+      "title": "Harry Potter",
+      "subtitle": "The Complete Collection",
+      "authors": [
+        "J. K. Rowling"
+      ],
+      "isbn13": "9781408850756",
+      "publisher": "Educa Books",
+      "publishedDate": null,
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 26,
+      "externalId": "/books/OL38058737M",
+      "sourceUrl": "https://openlibrary.org/books/OL38058737M",
+      "title": "Harry Potter",
+      "subtitle": "Paper Crafts",
+      "authors": [
+        "Kevin Wilson",
+        "Matthew Reinhart"
+      ],
+      "isbn13": "9781647227654",
+      "publisher": "Insight Editions",
+      "publishedDate": "2022",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 27,
+      "externalId": "/books/OL41975189M",
+      "sourceUrl": "https://openlibrary.org/books/OL41975189M",
+      "title": "Harry Potter",
+      "subtitle": "Harry Potter Coloring Book",
+      "authors": [
+        "Adele Books"
+      ],
+      "isbn13": "9781650034881",
+      "publisher": "Independently Published",
+      "publishedDate": "2019",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 28,
+      "externalId": "/books/OL31402157M",
+      "sourceUrl": "https://openlibrary.org/books/OL31402157M",
+      "title": "Harry Potter",
+      "subtitle": "Harry Potter Cinematic Guide",
+      "authors": [
+        "Felicity Baker"
+      ],
+      "isbn13": "9781338158311",
+      "publisher": "Scholastic Inc.",
+      "publishedDate": "2016",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 29,
+      "externalId": "/books/OL24644542M",
+      "sourceUrl": "https://openlibrary.org/books/OL24644542M",
+      "title": "Twilight",
+      "subtitle": null,
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": "9780316160179",
+      "publisher": "Megan Tingley Books/Little Brown and Company",
+      "publishedDate": "2006",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 30,
+      "externalId": "/books/OL40270244M",
+      "sourceUrl": "https://openlibrary.org/books/OL40270244M",
+      "title": "Midnight Sun - Saga Twilight (French Edition) (Twilight, 5)",
+      "subtitle": null,
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": "9782016286098",
+      "publisher": "HACHETTE ROMANS",
+      "publishedDate": "2020-08-05",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 31,
+      "externalId": "/books/OL26107063M",
+      "sourceUrl": "https://openlibrary.org/books/OL26107063M",
+      "title": "Eclipse Twilight Saga Spanish",
+      "subtitle": null,
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": "9781616050931",
+      "publisher": "Punto de Lectura",
+      "publishedDate": "2010",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 32,
+      "externalId": "/books/OL24764077M",
+      "sourceUrl": "https://openlibrary.org/books/OL24764077M",
+      "title": "Crossroads of twilight",
+      "subtitle": null,
+      "authors": [
+        "Robert Jordan"
+      ],
+      "isbn13": "9780312864590",
+      "publisher": "Tor",
+      "publishedDate": "2003",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 33,
+      "externalId": "/books/OL29058447M",
+      "sourceUrl": "https://openlibrary.org/books/OL29058447M",
+      "title": "Twilight",
+      "subtitle": null,
+      "authors": [
+        "Erin Hunter"
+      ],
+      "isbn13": "9780007419265",
+      "publisher": "HarperCollins Publishers Limited",
+      "publishedDate": "2011",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 34,
+      "externalId": "/books/OL27723223M",
+      "sourceUrl": "https://openlibrary.org/books/OL27723223M",
+      "title": "新月",
+      "subtitle": null,
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": "9787544804196",
+      "publisher": null,
+      "publishedDate": "2010",
+      "language": "chi",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 35,
+      "externalId": "/books/OL22919231M",
+      "sourceUrl": "https://openlibrary.org/books/OL22919231M",
+      "title": "Dragons of Autumn Twilight",
+      "subtitle": null,
+      "authors": [
+        "Margaret Weis",
+        "Tracy Hickman"
+      ],
+      "isbn13": "9780880381734",
+      "publisher": "TSR",
+      "publishedDate": "1984",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 36,
+      "externalId": "/books/OL7647469M",
+      "sourceUrl": "https://openlibrary.org/books/OL7647469M",
+      "title": "Twilight",
+      "subtitle": null,
+      "authors": [
+        "Dean Koontz"
+      ],
+      "isbn13": "9780671432676",
+      "publisher": "Pocket Books",
+      "publishedDate": "1984-11-01",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 37,
+      "externalId": "/books/OL28000775M",
+      "sourceUrl": "https://openlibrary.org/books/OL28000775M",
+      "title": "Breaking dawn",
+      "subtitle": null,
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": null,
+      "publisher": "I am not sure.",
+      "publishedDate": "2008",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 38,
+      "externalId": "/books/OL19569664M",
+      "sourceUrl": "https://openlibrary.org/books/OL19569664M",
+      "title": "Twilight's Child",
+      "subtitle": null,
+      "authors": [
+        "V.C. Andrews"
+      ],
+      "isbn13": "9781849833059",
+      "publisher": "Pocket Books",
+      "publishedDate": "2002",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 39,
+      "externalId": "/books/OL33558294M",
+      "sourceUrl": "https://openlibrary.org/books/OL33558294M",
+      "title": "Life and Death",
+      "subtitle": "Twilight Reimagined",
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": "9780349002941",
+      "publisher": "Little, Brown Book Group Limited",
+      "publishedDate": "2016",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 40,
+      "externalId": "/books/OL24506898M",
+      "sourceUrl": "https://openlibrary.org/books/OL24506898M",
+      "title": "Shades of twilight",
+      "subtitle": null,
+      "authors": [
+        "Linda Howard"
+      ],
+      "isbn13": "9780671019716",
+      "publisher": "Pocket Books",
+      "publishedDate": "1996",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 41,
+      "externalId": "/books/OL40296740M",
+      "sourceUrl": "https://openlibrary.org/books/OL40296740M",
+      "title": "Twilight eyes",
+      "subtitle": null,
+      "authors": [
+        "Dean Koontz"
+      ],
+      "isbn13": "9780739400975",
+      "publisher": "Berkley Books",
+      "publishedDate": "1987",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 42,
+      "externalId": "/books/OL23110872M",
+      "sourceUrl": "https://openlibrary.org/books/OL23110872M",
+      "title": "The Twilight Saga",
+      "subtitle": "The Official Guide",
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": "9780316043120",
+      "publisher": "Little Brown & Co",
+      "publishedDate": null,
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 43,
+      "externalId": "/books/OL2741414M",
+      "sourceUrl": "https://openlibrary.org/books/OL2741414M",
+      "title": "Stories from the Twilight zone",
+      "subtitle": null,
+      "authors": [
+        "Rod Serling"
+      ],
+      "isbn13": "9780553343298",
+      "publisher": "Bantam Books",
+      "publishedDate": "1986",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 44,
+      "externalId": "/books/OL28687310M",
+      "sourceUrl": "https://openlibrary.org/books/OL28687310M",
+      "title": "Tempt me at twilight",
+      "subtitle": null,
+      "authors": [
+        "Lisa Kleypas"
+      ],
+      "isbn13": "9781444803136",
+      "publisher": "Charnwood",
+      "publishedDate": "2010",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 45,
+      "externalId": "/books/OL10426047M",
+      "sourceUrl": "https://openlibrary.org/books/OL10426047M",
+      "title": "The Twilight Collection (Twilight)",
+      "subtitle": null,
+      "authors": [
+        "Stephenie Meyer"
+      ],
+      "isbn13": "9780316003728",
+      "publisher": "Little Brown and Company",
+      "publishedDate": "2007-11-21",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 46,
+      "externalId": "/books/OL3384280M",
+      "sourceUrl": "https://openlibrary.org/books/OL3384280M",
+      "title": "The twilight before Christmas",
+      "subtitle": null,
+      "authors": [
+        "Christine Feehan",
+        "Teri Clark Linden"
+      ],
+      "isbn13": "9780743476287",
+      "publisher": "Pocket Star Books",
+      "publishedDate": "2003",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 47,
+      "externalId": "/books/OL32990640M",
+      "sourceUrl": "https://openlibrary.org/books/OL32990640M",
+      "title": "Elvis",
+      "subtitle": "in the twilight of memory",
+      "authors": [
+        "June Juanico"
+      ],
+      "isbn13": "9780708989791",
+      "publisher": "Charnwood",
+      "publishedDate": "1998",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 48,
+      "externalId": "/books/OL24276447M",
+      "sourceUrl": "https://openlibrary.org/books/OL24276447M",
+      "title": "Twilight",
+      "subtitle": null,
+      "authors": [
+        "Meg Cabot"
+      ],
+      "isbn13": "9780060817442",
+      "publisher": "HarperCollins",
+      "publishedDate": "2004",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 49,
+      "externalId": "/books/OL2847987M",
+      "sourceUrl": "https://openlibrary.org/books/OL2847987M",
+      "title": "Momo",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9780385190930",
+      "publisher": "Doubleday",
+      "publishedDate": "1985",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 50,
+      "externalId": "/books/OL28533504M",
+      "sourceUrl": "https://openlibrary.org/books/OL28533504M",
+      "title": "Neverending Story",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9780141354972",
+      "publisher": "Penguin Books, Limited",
+      "publishedDate": "2014",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 51,
+      "externalId": "/books/OL1707593M",
+      "sourceUrl": "https://openlibrary.org/books/OL1707593M",
+      "title": "The night of wishes",
+      "subtitle": "or, The satanarchaeolidealcohellish notion potion",
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9780374195946",
+      "publisher": "Farrar, Straus and Giroux",
+      "publishedDate": "1992",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 52,
+      "externalId": "/books/OL2227305M",
+      "sourceUrl": "https://openlibrary.org/books/OL2227305M",
+      "title": "Jim Button and Luke the engine driver",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9780879513917",
+      "publisher": "Overlook Press",
+      "publishedDate": "1990",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 53,
+      "externalId": "/books/OL21589825M",
+      "sourceUrl": "https://openlibrary.org/books/OL21589825M",
+      "title": "Mirror in the mirror",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9780670806829",
+      "publisher": "Viking",
+      "publishedDate": "1986",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 54,
+      "externalId": "/books/OL43259771M",
+      "sourceUrl": "https://openlibrary.org/books/OL43259771M",
+      "title": "The Neverending Story",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9780140076196",
+      "publisher": "Penguin (Non-Classics)",
+      "publishedDate": "1983-01-01",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 55,
+      "externalId": "/books/OL30195525M",
+      "sourceUrl": "https://openlibrary.org/books/OL30195525M",
+      "title": "La historia interminable",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9788420471549",
+      "publisher": "Alfaguara",
+      "publishedDate": "2008",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 56,
+      "externalId": "/books/OL2981869M",
+      "sourceUrl": "https://openlibrary.org/books/OL2981869M",
+      "title": "Das Traumfresserchen",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9783522415002",
+      "publisher": "Thienemann",
+      "publishedDate": "1978",
+      "language": "ger",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 57,
+      "externalId": "/books/OL48103985M",
+      "sourceUrl": "https://openlibrary.org/books/OL48103985M",
+      "title": "Momo",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9788420464985",
+      "publisher": "Espanol Santillana Universidad de Salamanca",
+      "publishedDate": "2011-11-11",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 58,
+      "externalId": "/books/OL2185312M",
+      "sourceUrl": "https://openlibrary.org/books/OL2185312M",
+      "title": "Ophelia's shadow theater",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9780879513719",
+      "publisher": "Overlook Press",
+      "publishedDate": "1989",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 59,
+      "externalId": "/books/OL9246615M",
+      "sourceUrl": "https://openlibrary.org/books/OL9246615M",
+      "title": "The End",
+      "subtitle": null,
+      "authors": [
+        "Lemony Snicket",
+        "Brett Helquist",
+        "Michael Kupperman"
+      ],
+      "isbn13": "9780064410168",
+      "publisher": "HarperCollins",
+      "publishedDate": "2006-10-13",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 60,
+      "externalId": "/books/OL26735903M",
+      "sourceUrl": "https://openlibrary.org/books/OL26735903M",
+      "title": "Jim Knopf und die Wilde 13",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9783522176514",
+      "publisher": "Thienemann Verlag GmbH",
+      "publishedDate": null,
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 61,
+      "externalId": "/books/OL32244269M",
+      "sourceUrl": "https://openlibrary.org/books/OL32244269M",
+      "title": "La storia infinita",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9788850248605",
+      "publisher": "TEA",
+      "publishedDate": null,
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 62,
+      "externalId": "/books/OL7428206M",
+      "sourceUrl": "https://openlibrary.org/books/OL7428206M",
+      "title": "The Monster at the End of This Book",
+      "subtitle": null,
+      "authors": [
+        "Jon Stone",
+        "Michael Smollin"
+      ],
+      "isbn13": "9780375804014",
+      "publisher": "Random House Books for Young Readers",
+      "publishedDate": "1999-07-27",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 63,
+      "externalId": "/books/OL36421890M",
+      "sourceUrl": "https://openlibrary.org/books/OL36421890M",
+      "title": "They Both Die At The End",
+      "subtitle": null,
+      "authors": [
+        "Adam Silvera"
+      ],
+      "isbn13": "9781398514751",
+      "publisher": "Simon & Schuster",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 64,
+      "externalId": "/books/OL58679278M",
+      "sourceUrl": "https://openlibrary.org/books/OL58679278M",
+      "title": "Howards End",
+      "subtitle": null,
+      "authors": [
+        "E. M. Forster"
+      ],
+      "isbn13": null,
+      "publisher": "Alfred A. Knoff",
+      "publishedDate": "1921",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 65,
+      "externalId": "/books/OL13239338M",
+      "sourceUrl": "https://openlibrary.org/books/OL13239338M",
+      "title": "El secreto de Lena",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9788434886728",
+      "publisher": "Ediciones SM",
+      "publishedDate": "2005-01-30",
+      "language": "spa",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 66,
+      "externalId": "/books/OL47489750M",
+      "sourceUrl": "https://openlibrary.org/books/OL47489750M",
+      "title": "Momo",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9783126741040",
+      "publisher": "Ernst Klett Sprachen GmbH",
+      "publishedDate": null,
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 67,
+      "externalId": "/books/OL9118639M",
+      "sourceUrl": "https://openlibrary.org/books/OL9118639M",
+      "title": "Los Mejores Cuentos De Michael Ende/Michael Ende's Best Stories",
+      "subtitle": null,
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9788424159818",
+      "publisher": "Everest Pub",
+      "publishedDate": "1998-04",
+      "language": "spa",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 68,
+      "externalId": "/books/OL33007420M",
+      "sourceUrl": "https://openlibrary.org/books/OL33007420M",
+      "title": "Jojo",
+      "subtitle": "historia de un saltimbanqui",
+      "authors": [
+        "Michael Ende"
+      ],
+      "isbn13": "9788474447514",
+      "publisher": "Debate",
+      "publishedDate": "1994",
+      "language": "spa",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 69,
+      "externalId": "/books/OL25426702M",
+      "sourceUrl": "https://openlibrary.org/books/OL25426702M",
+      "title": "반지의 제왕",
+      "subtitle": null,
+      "authors": [],
+      "isbn13": null,
+      "publisher": "한기찬",
+      "publishedDate": null,
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 70,
+      "externalId": "/books/OL51711484M",
+      "sourceUrl": "https://openlibrary.org/books/OL51711484M",
+      "title": "The Lord of the Rings",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien"
+      ],
+      "isbn13": "9780618343997",
+      "publisher": "Houghton Mifflin Company",
+      "publishedDate": "2003",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 71,
+      "externalId": "/books/OL51711614M",
+      "sourceUrl": "https://openlibrary.org/books/OL51711614M",
+      "title": "The Fellowship of the Ring",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien",
+        "Editorial Editorial World",
+        "Robert Robert Thompson"
+      ],
+      "isbn13": null,
+      "publisher": "Guild Publishing",
+      "publishedDate": "1988",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 72,
+      "externalId": "/books/OL51711624M",
+      "sourceUrl": "https://openlibrary.org/books/OL51711624M",
+      "title": "The Two Towers",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien"
+      ],
+      "isbn13": null,
+      "publisher": "Guild Publishing",
+      "publishedDate": "1988",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 73,
+      "externalId": "/books/OL26432335M",
+      "sourceUrl": "https://openlibrary.org/books/OL26432335M",
+      "title": "The Return of the King",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien"
+      ],
+      "isbn13": "9780007488353",
+      "publisher": "HarperCollins",
+      "publishedDate": "2012",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 74,
+      "externalId": "/books/OL10236416M",
+      "sourceUrl": "https://openlibrary.org/books/OL10236416M",
+      "title": "The Hobbit & The Lord of the Rings",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien"
+      ],
+      "isbn13": "9780261103566",
+      "publisher": "HarperCollins Publishers Ltd",
+      "publishedDate": null,
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 75,
+      "externalId": "/books/OL7878688M",
+      "sourceUrl": "https://openlibrary.org/books/OL7878688M",
+      "title": "Bored of the Rings",
+      "subtitle": null,
+      "authors": [
+        "Henry Beard",
+        "Harvard Lampoon",
+        "Douglas C. Kenney",
+        "Jean Little",
+        "Jim Meskimen"
+      ],
+      "isbn13": "9780575073623",
+      "publisher": "Gollancz",
+      "publishedDate": "2001-09-06",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 76,
+      "externalId": "/books/OL22855921M",
+      "sourceUrl": "https://openlibrary.org/books/OL22855921M",
+      "title": "The return of the shadow",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien",
+        "Christopher Tolkien"
+      ],
+      "isbn13": "9780044406693",
+      "publisher": "Unwin Paperbacks",
+      "publishedDate": "1990",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 77,
+      "externalId": "/books/OL7603614M",
+      "sourceUrl": "https://openlibrary.org/books/OL7603614M",
+      "title": "The War of the Ring",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien",
+        "Christopher Tolkien"
+      ],
+      "isbn13": "9780618083596",
+      "publisher": "Houghton Mifflin Company",
+      "publishedDate": "2000",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 78,
+      "externalId": "/books/OL2199294M",
+      "sourceUrl": "https://openlibrary.org/books/OL2199294M",
+      "title": "The treason of Isengard",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien",
+        "Christopher Tolkien"
+      ],
+      "isbn13": "9780395515624",
+      "publisher": "Houghton Mifflin Co.",
+      "publishedDate": "1989",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 79,
+      "externalId": "/books/OL3953584M",
+      "sourceUrl": "https://openlibrary.org/books/OL3953584M",
+      "title": "The lord of the rings.",
+      "subtitle": "insider's guide",
+      "authors": [
+        "Brian Sibley"
+      ],
+      "isbn13": "9780618195596",
+      "publisher": "Houghton Mifflin",
+      "publishedDate": "2001",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 80,
+      "externalId": "/books/OL24946057M",
+      "sourceUrl": "https://openlibrary.org/books/OL24946057M",
+      "title": "The hobbit",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien"
+      ],
+      "isbn13": "9780345339683",
+      "publisher": "Ballantine Books",
+      "publishedDate": null,
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 81,
+      "externalId": "/books/OL3949131M",
+      "sourceUrl": "https://openlibrary.org/books/OL3949131M",
+      "title": "The lord of the rings",
+      "subtitle": "the fellowship of the ring : visual companion",
+      "authors": [
+        "Jude Fisher"
+      ],
+      "isbn13": "9780618154012",
+      "publisher": "Houghton Mifflin",
+      "publishedDate": "2001",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 82,
+      "externalId": "/books/OL44095980M",
+      "sourceUrl": "https://openlibrary.org/books/OL44095980M",
+      "title": "Lord of the Rings : Appendices",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien"
+      ],
+      "isbn13": "9780007635566",
+      "publisher": "HarperCollins Publishers Limited",
+      "publishedDate": "2001",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 83,
+      "externalId": "/books/OL24222113M",
+      "sourceUrl": "https://openlibrary.org/books/OL24222113M",
+      "title": "Tolkien: a look behind 'The lord of the rings'.",
+      "subtitle": null,
+      "authors": [
+        "Lin Carter",
+        "Lyn Carter"
+      ],
+      "isbn13": null,
+      "publisher": "Ballantine Books",
+      "publishedDate": "1972",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 84,
+      "externalId": "/books/OL8184572M",
+      "sourceUrl": "https://openlibrary.org/books/OL8184572M",
+      "title": "The Lord of the Ring",
+      "subtitle": null,
+      "authors": [
+        "Phil Anderson",
+        "Philip A. Anderson"
+      ],
+      "isbn13": "9780830743278",
+      "publisher": "Regal Books",
+      "publishedDate": "2007-04-05",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 85,
+      "externalId": "/books/OL3410671M",
+      "sourceUrl": "https://openlibrary.org/books/OL3410671M",
+      "title": "The lord of the rings",
+      "subtitle": "a reader's companion",
+      "authors": [
+        "Wayne G. Hammond",
+        "Christina Scull"
+      ],
+      "isbn13": "9780618642670",
+      "publisher": "Houghton Mifflin Co.",
+      "publishedDate": "2005",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 86,
+      "externalId": "/books/OL17345578M",
+      "sourceUrl": "https://openlibrary.org/books/OL17345578M",
+      "title": "The lost road and other writings",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien",
+        "Christopher Tolkien"
+      ],
+      "isbn13": "9780044403982",
+      "publisher": "Unwin Paperbacks",
+      "publishedDate": "1989",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 87,
+      "externalId": "/books/OL1712510M",
+      "sourceUrl": "https://openlibrary.org/books/OL1712510M",
+      "title": "Sauron Defeated",
+      "subtitle": null,
+      "authors": [
+        "J.R.R. Tolkien",
+        "Christopher Tolkien"
+      ],
+      "isbn13": "9780395606490",
+      "publisher": "Houghton Mifflin Company",
+      "publishedDate": "1992",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 88,
+      "externalId": "/books/OL1700996M",
+      "sourceUrl": "https://openlibrary.org/books/OL1700996M",
+      "title": "The Lord of the Rings",
+      "subtitle": "The Mythology of Power",
+      "authors": [
+        "Jane Chance",
+        "Jane Chance"
+      ],
+      "isbn13": "9780805794410",
+      "publisher": "Twayne Publishers",
+      "publishedDate": "1992",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 89,
+      "externalId": "/books/OL3972109M",
+      "sourceUrl": "https://openlibrary.org/books/OL3972109M",
+      "title": "Tolkien and The Lord of the Rings",
+      "subtitle": "a guide to Middle-earth",
+      "authors": [
+        "Colin Duriez"
+      ],
+      "isbn13": "9781587680175",
+      "publisher": "HiddenSpring",
+      "publishedDate": "2001",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 90,
+      "externalId": "/books/OL25113902M",
+      "sourceUrl": "https://openlibrary.org/books/OL25113902M",
+      "title": "눈물을 마시는 새 1",
+      "subtitle": "심장을 적출하는 나가",
+      "authors": [
+        "이영도"
+      ],
+      "isbn13": "9788982735745",
+      "publisher": "황금가지",
+      "publishedDate": "2003",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 91,
+      "externalId": "/books/OL25113903M",
+      "sourceUrl": "https://openlibrary.org/books/OL25113903M",
+      "title": "그림자 자국",
+      "subtitle": null,
+      "authors": [
+        "이영도"
+      ],
+      "isbn13": "9788960172661",
+      "publisher": "황금가지",
+      "publishedDate": "2008",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 92,
+      "externalId": "/books/OL59273548M",
+      "sourceUrl": "https://openlibrary.org/books/OL59273548M",
+      "title": "言約",
+      "subtitle": "Yi Yŏng-do sijojip",
+      "authors": [
+        "이영도"
+      ],
+      "isbn13": null,
+      "publisher": "Chungang Chʻulpʻan Kongsa",
+      "publishedDate": "1976",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 93,
+      "externalId": "/books/OL61172983M",
+      "sourceUrl": "https://openlibrary.org/books/OL61172983M",
+      "title": "비들기내리는뜨락",
+      "subtitle": "Yi Yŏng-do supʻilchip",
+      "authors": [
+        "이영도"
+      ],
+      "isbn13": null,
+      "publisher": "Minjosa",
+      "publishedDate": "1966",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 94,
+      "externalId": "/books/OL60790400M",
+      "sourceUrl": "https://openlibrary.org/books/OL60790400M",
+      "title": "사랑했으므로幸福하였네라",
+      "subtitle": null,
+      "authors": [
+        "Chi-hwan Yu",
+        "이영도",
+        "崔啓洛"
+      ],
+      "isbn13": null,
+      "publisher": "Chungang Chʻulpʻan Kongsa",
+      "publishedDate": "1967",
+      "language": "ko",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 95,
+      "externalId": "/books/OL32815550M",
+      "sourceUrl": "https://openlibrary.org/books/OL32815550M",
+      "title": "The Martian",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9780804139021",
+      "publisher": "Crown Publishers",
+      "publishedDate": "2014",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 96,
+      "externalId": "/books/OL29597011M",
+      "sourceUrl": "https://openlibrary.org/books/OL29597011M",
+      "title": "Project Hail Mary",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9780593395561",
+      "publisher": "Random House Large Print",
+      "publishedDate": "2021-05-04",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 97,
+      "externalId": "/books/OL26940537M",
+      "sourceUrl": "https://openlibrary.org/books/OL26940537M",
+      "title": "Artemis",
+      "subtitle": "a novel",
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9780525532101",
+      "publisher": null,
+      "publishedDate": "2017",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 98,
+      "externalId": "/books/OL25943850M",
+      "sourceUrl": "https://openlibrary.org/books/OL25943850M",
+      "title": "The Egg",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": null,
+      "publisher": "Galactanet",
+      "publishedDate": "2009",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 99,
+      "externalId": "/books/OL28713299M",
+      "sourceUrl": "https://openlibrary.org/books/OL28713299M",
+      "title": "Cheshire Crossing",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9780399582073",
+      "publisher": "Ten Speed Graphic",
+      "publishedDate": "2019",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 100,
+      "externalId": "/books/OL45393576M",
+      "sourceUrl": "https://openlibrary.org/books/OL45393576M",
+      "title": "Randomize",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9781542044257",
+      "publisher": "Amazon Original Stories",
+      "publishedDate": "2019",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 101,
+      "externalId": "/books/OL49615465M",
+      "sourceUrl": "https://openlibrary.org/books/OL49615465M",
+      "title": "Andy Weir's 3-Book Collection Set (Project Hail Mary, Artemis, the Martian)",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9781637990520",
+      "publisher": "Ballantine Books",
+      "publishedDate": "2022",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 102,
+      "externalId": "/books/OL26869898M",
+      "sourceUrl": "https://openlibrary.org/books/OL26869898M",
+      "title": "James Moriarty, Consulting Criminal",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9781543642735",
+      "publisher": "Brilliance Audio",
+      "publishedDate": "2017-08-29",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 103,
+      "externalId": "/books/OL37780260M",
+      "sourceUrl": "https://openlibrary.org/books/OL37780260M",
+      "title": "The Egg and Other Stories",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9781543642728",
+      "publisher": "Brilliance Audio",
+      "publishedDate": "2017-08-29",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 104,
+      "externalId": "/books/OL35207035M",
+      "sourceUrl": "https://openlibrary.org/books/OL35207035M",
+      "title": "Summary of Andy Weir's Project Hail Mary",
+      "subtitle": null,
+      "authors": [
+        "Irb Media"
+      ],
+      "isbn13": "9781638156147",
+      "publisher": "IRB Media",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 105,
+      "externalId": "/books/OL38106832M",
+      "sourceUrl": "https://openlibrary.org/books/OL38106832M",
+      "title": "Summary of Project Hail Mary by Andy Weir",
+      "subtitle": "A Chapter-By-Chapter Summary",
+      "authors": [
+        "Antoine McCallan"
+      ],
+      "isbn13": "9798761898912",
+      "publisher": "Independently Published",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 106,
+      "externalId": "/books/OL55215012M",
+      "sourceUrl": "https://openlibrary.org/books/OL55215012M",
+      "title": "Summary of the Martian by Andy Weir - Conversation Starters",
+      "subtitle": null,
+      "authors": [
+        "BookHabits"
+      ],
+      "isbn13": "9781975796082",
+      "publisher": "CreateSpace Independent Publishing Platform",
+      "publishedDate": "2017",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 107,
+      "externalId": "/books/OL48782638M",
+      "sourceUrl": "https://openlibrary.org/books/OL48782638M",
+      "title": "Biography of Andy Weir",
+      "subtitle": "Mr Sci-Fi",
+      "authors": [
+        "Hyms Clever"
+      ],
+      "isbn13": "9798513242758",
+      "publisher": "Independently Published",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 108,
+      "externalId": "/books/OL56266891M",
+      "sourceUrl": "https://openlibrary.org/books/OL56266891M",
+      "title": "Martian by Andy Weir",
+      "subtitle": null,
+      "authors": [
+        "Trivia-on-Books Staff"
+      ],
+      "isbn13": "9781516867516",
+      "publisher": "CreateSpace Independent Publishing Platform",
+      "publishedDate": "2015",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 109,
+      "externalId": "/books/OL55400188M",
+      "sourceUrl": "https://openlibrary.org/books/OL55400188M",
+      "title": "Summary Andy Weir's the Martian",
+      "subtitle": "A Novel",
+      "authors": [
+        "Ant Hive Media"
+      ],
+      "isbn13": "9781540669957",
+      "publisher": "CreateSpace Independent Publishing Platform",
+      "publishedDate": "2016",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 110,
+      "externalId": "/books/OL37753151M",
+      "sourceUrl": "https://openlibrary.org/books/OL37753151M",
+      "title": "The Martian",
+      "subtitle": null,
+      "authors": [
+        "Allison Clare Theveny",
+        "WeLoveNovels"
+      ],
+      "isbn13": "9781515063889",
+      "publisher": "CreateSpace Independent Publishing Platform",
+      "publishedDate": null,
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 111,
+      "externalId": "/books/OL52003154M",
+      "sourceUrl": "https://openlibrary.org/books/OL52003154M",
+      "title": "Summary of Artemis by Andy Weir",
+      "subtitle": "Conversation Starters",
+      "authors": [
+        "Bookhabits"
+      ],
+      "isbn13": "9781389208362",
+      "publisher": "Blurb",
+      "publishedDate": "2017",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 112,
+      "externalId": "/books/OL35039072M",
+      "sourceUrl": "https://openlibrary.org/books/OL35039072M",
+      "title": "SUMMARY and REVIEW : PROJECT HAIL MARY",
+      "subtitle": "a Novel by Andy Weir",
+      "authors": [
+        "Unique Summary"
+      ],
+      "isbn13": "9798538766871",
+      "publisher": "Independently Published",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 113,
+      "externalId": "/books/OL61709010M",
+      "sourceUrl": "https://openlibrary.org/books/OL61709010M",
+      "title": "아르테미스",
+      "subtitle": null,
+      "authors": [
+        "Andy Weir"
+      ],
+      "isbn13": "9788925588711",
+      "publisher": "RHK",
+      "publishedDate": "2021-05-04",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 114,
+      "externalId": "/books/OL27447547M",
+      "sourceUrl": "https://openlibrary.org/books/OL27447547M",
+      "title": "Summary of The Martian",
+      "subtitle": null,
+      "authors": [
+        "Instaread Summaries"
+      ],
+      "isbn13": "9781945272387",
+      "publisher": "Instaread",
+      "publishedDate": null,
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 115,
+      "externalId": "/books/OL62403511M",
+      "sourceUrl": "https://openlibrary.org/books/OL62403511M",
+      "title": "Project Hail Mary: A Novel",
+      "subtitle": null,
+      "authors": [],
+      "isbn13": null,
+      "publisher": "Random House Publishing Group",
+      "publishedDate": "2021",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 116,
+      "externalId": "/books/OL37005797M",
+      "sourceUrl": "https://openlibrary.org/books/OL37005797M",
+      "title": "Summary and Analysis of Project Hail Mary by Andy Weir",
+      "subtitle": null,
+      "authors": [
+        "Good Reads Publishing"
+      ],
+      "isbn13": "9798749854572",
+      "publisher": "Independently Published",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 117,
+      "externalId": "/books/OL48891160M",
+      "sourceUrl": "https://openlibrary.org/books/OL48891160M",
+      "title": "WorkBook For",
+      "subtitle": null,
+      "authors": [
+        "Anis Idire"
+      ],
+      "isbn13": "9798512183618",
+      "publisher": "Independently Published",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 118,
+      "externalId": "/books/OL38414412M",
+      "sourceUrl": "https://openlibrary.org/books/OL38414412M",
+      "title": "Study Guide",
+      "subtitle": null,
+      "authors": [
+        "SuperSummary"
+      ],
+      "isbn13": "9798537013495",
+      "publisher": "Independently Published",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 119,
+      "externalId": "/books/OL60937506M",
+      "sourceUrl": "https://openlibrary.org/books/OL60937506M",
+      "title": "Study Guide",
+      "subtitle": null,
+      "authors": [
+        "SuperSummary"
+      ],
+      "isbn13": "9798900343747",
+      "publisher": "SuperSummary",
+      "publishedDate": "2021",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 120,
+      "externalId": "/books/OL7166017M",
+      "sourceUrl": "https://openlibrary.org/books/OL7166017M",
+      "title": "Blake Estate oral history project",
+      "subtitle": null,
+      "authors": [],
+      "isbn13": null,
+      "publisher": "University of California",
+      "publishedDate": "1988",
+      "language": null,
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 121,
+      "externalId": "/books/OL50533954M",
+      "sourceUrl": "https://openlibrary.org/books/OL50533954M",
+      "title": "Kamelianainen",
+      "subtitle": null,
+      "authors": [
+        "Alexandre Dumas fils"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": "2017",
+      "language": "fin",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 122,
+      "externalId": "/books/OL26501332M",
+      "sourceUrl": "https://openlibrary.org/books/OL26501332M",
+      "title": "Shakespeare's Tragedy of Romeo and Juliet",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": null,
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 123,
+      "externalId": "/books/OL26604638M",
+      "sourceUrl": "https://openlibrary.org/books/OL26604638M",
+      "title": "Much Ado About Nothing",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": null,
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 124,
+      "externalId": "/books/OL32234910M",
+      "sourceUrl": "https://openlibrary.org/books/OL32234910M",
+      "title": "Othello",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": "2000-07-01",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 125,
+      "externalId": "/books/OL32238406M",
+      "sourceUrl": "https://openlibrary.org/books/OL32238406M",
+      "title": "As You Like It",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": "1999-06-01",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 126,
+      "externalId": "/books/OL32234933M",
+      "sourceUrl": "https://openlibrary.org/books/OL32234933M",
+      "title": "Twelfth Night; Or, What You Will",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": "1998-11-01",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 127,
+      "externalId": "/books/OL32238571M",
+      "sourceUrl": "https://openlibrary.org/books/OL32238571M",
+      "title": "Julius Caesar",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": "1999-06-01",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 128,
+      "externalId": "/books/OL32239123M",
+      "sourceUrl": "https://openlibrary.org/books/OL32239123M",
+      "title": "The Merchant of Venice",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": "2000-07-01",
+      "language": "en",
+      "format": "UNKNOWN"
+    },
+    {
+      "id": 129,
+      "externalId": "/books/OL32238408M",
+      "sourceUrl": "https://openlibrary.org/books/OL32238408M",
+      "title": "Macbeth",
+      "subtitle": null,
+      "authors": [
+        "William Shakespeare"
+      ],
+      "isbn13": null,
+      "publisher": "Project Gutenberg",
+      "publishedDate": "1999-06-01",
+      "language": "en",
+      "format": "UNKNOWN"
+    }
+  ],
+  "queries": [
+    {
+      "keyword": "베스트셀러",
+      "ids": []
+    },
+    {
+      "keyword": "한강",
+      "ids": []
+    },
+    {
+      "keyword": "채식주의자",
+      "ids": [
+        1
+      ]
+    },
+    {
+      "keyword": "해리포터",
+      "ids": [
+        2,
+        3,
+        4,
+        5,
+        6,
+        8
+      ]
+    },
+    {
+      "keyword": "Harry Potter",
+      "ids": [
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20,
+        21,
+        22,
+        23,
+        24,
+        25,
+        26,
+        27,
+        28
+      ]
+    },
+    {
+      "keyword": "트와일나잇",
+      "ids": []
+    },
+    {
+      "keyword": "트와일라잇",
+      "ids": []
+    },
+    {
+      "keyword": "Twilight",
+      "ids": [
+        29,
+        30,
+        31,
+        32,
+        33,
+        34,
+        35,
+        36,
+        37,
+        38,
+        39,
+        40,
+        41,
+        42,
+        43,
+        44,
+        45,
+        46,
+        47,
+        48
+      ]
+    },
+    {
+      "keyword": "미하엘엔데",
+      "ids": []
+    },
+    {
+      "keyword": "미하엘 엔데",
+      "ids": []
+    },
+    {
+      "keyword": "Michael Ende",
+      "ids": [
+        49,
+        50,
+        51,
+        52,
+        53,
+        54,
+        55,
+        56,
+        57,
+        58,
+        59,
+        60,
+        61,
+        62,
+        63,
+        64,
+        65,
+        66,
+        67,
+        68
+      ]
+    },
+    {
+      "keyword": "모모",
+      "ids": []
+    },
+    {
+      "keyword": "반지의 제왕",
+      "ids": [
+        69
+      ]
+    },
+    {
+      "keyword": "The Lord of the Rings",
+      "ids": [
+        70,
+        71,
+        72,
+        73,
+        74,
+        75,
+        76,
+        77,
+        78,
+        79,
+        80,
+        81,
+        82,
+        83,
+        84,
+        85,
+        86,
+        87,
+        88,
+        89
+      ]
+    },
+    {
+      "keyword": "이영도",
+      "ids": [
+        90,
+        91,
+        92,
+        93,
+        94
+      ]
+    },
+    {
+      "keyword": "드래곤 라자",
+      "ids": []
+    },
+    {
+      "keyword": "엔디웨어",
+      "ids": []
+    },
+    {
+      "keyword": "앤디 위어",
+      "ids": []
+    },
+    {
+      "keyword": "Andy Weir",
+      "ids": [
+        95,
+        96,
+        97,
+        98,
+        99,
+        100,
+        101,
+        102,
+        103,
+        104,
+        105,
+        106,
+        107,
+        108,
+        109,
+        110,
+        111,
+        112,
+        113,
+        114
+      ]
+    },
+    {
+      "keyword": "Project Hail Mary",
+      "ids": [
+        96,
+        101,
+        112,
+        104,
+        105,
+        115,
+        116,
+        117,
+        118,
+        119,
+        120,
+        121,
+        122,
+        123,
+        124,
+        125,
+        126,
+        127,
+        128,
+        129
+      ]
+    }
+  ]
+}

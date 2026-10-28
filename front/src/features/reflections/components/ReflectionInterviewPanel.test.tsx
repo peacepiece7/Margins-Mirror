@@ -11,10 +11,13 @@ import { ReflectionInterviewPanel } from './ReflectionInterviewPanel';
 const createGuideMutate = vi.fn();
 const createGuideReset = vi.fn();
 const updateAnswerMutate = vi.fn();
+const respondMutate = vi.fn();
 let currentQuestion: Record<string, unknown> | null = null;
 let currentAnswers: Array<Record<string, unknown>> = [];
 let createGuideError: unknown = null;
 let createGuidePending = false;
+let activeInterviewId = 12;
+let responseError: unknown = null;
 
 vi.mock('../queries', () => ({
   useReflectionTimelineForBook: () => ({
@@ -36,7 +39,7 @@ vi.mock('../queries', () => ({
 
 vi.mock('../reflection-loop-queries', () => ({
   useReflectionLoopQuery: () => ({
-    data: { activeInterviewId: 12, reflectionId: 11 },
+    data: { activeInterviewId, reflectionId: 11 },
     error: null,
     isError: false,
     isSuccess: true,
@@ -58,7 +61,7 @@ vi.mock('../reflection-loop-queries', () => ({
       answers: currentAnswers,
       generatedCount: 3,
       guideId: null,
-      interviewId: 12,
+      interviewId: activeInterviewId,
       maxReached: false,
       maximumQuestions: 7,
       minimumAnswers: 3,
@@ -74,9 +77,9 @@ vi.mock('../reflection-loop-queries', () => ({
     refetch: vi.fn(),
   }),
   useInterviewResponseMutation: () => ({
-    error: null,
+    error: responseError,
     isPending: false,
-    mutate: vi.fn(),
+    mutate: respondMutate,
   }),
   useUpdateInterviewAnswerMutation: () => ({
     error: null,
@@ -96,6 +99,20 @@ vi.mock('../reflection-loop-queries', () => ({
   }),
 }));
 
+vi.mock('./DeveloperDraftControl', () => ({
+  DeveloperDraftControl: ({
+    onGenerated,
+    target,
+  }: {
+    onGenerated: (value: string) => void;
+    target: string;
+  }) => (
+    <button onClick={() => onGenerated(`draft-${target}`)} type="button">
+      debug-{target}
+    </button>
+  ),
+}));
+
 describe('ReflectionInterviewPanel Guide brief', () => {
   afterEach(() => {
     cleanup();
@@ -107,10 +124,35 @@ describe('ReflectionInterviewPanel Guide brief', () => {
     createGuideMutate.mockClear();
     createGuideReset.mockClear();
     updateAnswerMutate.mockClear();
+    respondMutate.mockClear();
     currentQuestion = null;
     currentAnswers = [];
     createGuideError = null;
     createGuidePending = false;
+    activeInterviewId = 12;
+    responseError = null;
+  });
+
+  it('puts an Interview draft in the current answer without responding', () => {
+    currentQuestion = {
+      coverageArea: 'FIRST_IMPRESSION',
+      question: '무엇이 가장 먼저 보였나요?',
+      questionId: 21,
+      sensitivity: 'LOW',
+      sourceExcerpt: '현재 Reflection',
+      sourceType: 'REFLECTION',
+      status: 'active',
+    };
+    render(
+      <MemoryRouter>
+        <ReflectionInterviewPanel bookId={1} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'debug-INTERVIEW_ANSWER' }));
+
+    expect(screen.getByLabelText('인터뷰 답변')).toHaveValue('draft-INTERVIEW_ANSWER');
+    expect(respondMutate).not.toHaveBeenCalled();
   });
 
   function render(ui: ReactNode) {
@@ -169,7 +211,7 @@ describe('ReflectionInterviewPanel Guide brief', () => {
     expect(screen.getByText('업데이트 필요')).toBeVisible();
     expect(screen.getByText('임시 분석')).toBeVisible();
     expect(screen.getByText(/근거: 책 배경 요약/)).toBeVisible();
-    expect(screen.getByRole('link', { name: '원문 revision 보기' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: '원문 수정본 보기' })).toHaveAttribute(
       'href',
       '/book/1/reflection#reflection-revision-1',
     );
@@ -272,5 +314,73 @@ describe('ReflectionInterviewPanel Guide brief', () => {
     expect(createButton).toBeDisabled();
     fireEvent.click(createButton);
     expect(createGuideMutate).not.toHaveBeenCalled();
+  });
+  it('preserves the current answer on refetch and resets it when the question or interview changes', () => {
+    currentQuestion = {
+      coverageArea: 'FIRST_IMPRESSION',
+      question: '첫 질문',
+      questionId: 21,
+      sensitivity: 'LOW',
+      sourceExcerpt: 'Reflection',
+      sourceType: 'REFLECTION',
+      status: 'active',
+    };
+    const ui = () => (
+      <MemoryRouter>
+        <ReflectionInterviewPanel bookId={1} />
+      </MemoryRouter>
+    );
+    const view = render(ui());
+    fireEvent.change(screen.getByLabelText('인터뷰 답변'), { target: { value: '작성 중' } });
+    currentQuestion = { ...currentQuestion };
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.getByLabelText('인터뷰 답변')).toHaveValue('작성 중');
+    currentQuestion = { ...currentQuestion, questionId: 22 };
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.getByLabelText('인터뷰 답변')).toHaveValue('');
+    fireEvent.change(screen.getByLabelText('인터뷰 답변'), { target: { value: '두번째 draft' } });
+    activeInterviewId = 13;
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.getByLabelText('인터뷰 답변')).toHaveValue('');
+  });
+
+  it('renders safe operation copy without leaking private provider error details', () => {
+    responseError = new Error('private provider and request detail');
+    render(
+      <MemoryRouter>
+        <ReflectionInterviewPanel bookId={1} />
+      </MemoryRouter>,
+    );
+    expect(screen.getByRole('alert')).toBeVisible();
+    expect(screen.queryByText(/private provider/)).not.toBeInTheDocument();
+  });
+  it('keeps a history edit during refetch and closes it when the interview changes', () => {
+    currentAnswers = [
+      {
+        answerRevisionId: 41,
+        content: '저장된 답변',
+        question: '첫 질문',
+        questionId: 31,
+        responseMode: 'ANSWER',
+        version: 2,
+      },
+    ];
+    const ui = () => (
+      <MemoryRouter>
+        <ReflectionInterviewPanel bookId={1} />
+      </MemoryRouter>
+    );
+    const view = render(ui());
+    fireEvent.click(screen.getByRole('button', { name: '첫 질문 답변 수정' }));
+    fireEvent.change(screen.getByLabelText('첫 질문 답변 수정'), {
+      target: { value: '작성 중 수정' },
+    });
+    currentAnswers = [...currentAnswers];
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.getByLabelText('첫 질문 답변 수정')).toHaveValue('작성 중 수정');
+    activeInterviewId = 13;
+    view.rerender(<I18nProvider>{ui()}</I18nProvider>);
+    expect(screen.queryByRole('textbox', { name: '첫 질문 답변 수정' })).not.toBeInTheDocument();
+    expect(screen.getByText('저장된 답변')).toBeVisible();
   });
 });

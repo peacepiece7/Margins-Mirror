@@ -65,6 +65,28 @@ import org.springframework.web.server.ResponseStatusException;
 class SessionWindowBusinessPersistenceTest {
 
     @Test
+    void nullPrincipalIdCannotMatchNullOwnerOrReachLocaleProviderAndPersistence() {
+        TestSecurityContextSupport.loginAs(null, "incomplete-principal");
+        SessionWindowMapper windows = mock(SessionWindowMapper.class);
+        SessionWindowContext context = new SessionWindowContext();
+        context.setSessionId(3L);
+        context.setUserId(null);
+        when(windows.findContextById(10L)).thenReturn(context);
+        AiProvider provider = mock(AiProvider.class);
+        MessageMapper messages = mock(MessageMapper.class);
+        QuestionMapper questions = mock(QuestionMapper.class);
+        PersonaMapper personas = mock(PersonaMapper.class);
+        GenerationLocaleResolver resolver = mock(GenerationLocaleResolver.class);
+        SessionWindowBusiness business = new SessionWindowBusiness(provider, windows, messages, questions, personas);
+        business.configureGenerationLocale(resolver, new AiOutputLanguageValidator());
+
+        assertThatThrownBy(() -> business.sendMessage(10L, SendMessageRequest.builder().content("Reader input").build()))
+            .isInstanceOf(RuntimeException.class);
+
+        verifyNoInteractions(resolver, provider, messages, questions, personas);
+    }
+
+    @Test
     void createPersistsAndReturnsGeneratedId() {
         FakeSessionWindowMapper windowMapper = new FakeSessionWindowMapper();
         SessionWindowBusiness business = new SessionWindowBusiness(
@@ -159,12 +181,17 @@ class SessionWindowBusinessPersistenceTest {
         );
         business.configureSessionWindowPersonaMapper(personaMapper);
 
-        Method toWindowDto = ReadingSessionBusiness.class.getDeclaredMethod("toWindowDto", SessionWindowRecord.class);
+        Method toWindowDto = ReadingSessionBusiness.class.getDeclaredMethod(
+            "toWindowDto",
+            SessionWindowRecord.class,
+            List.class
+        );
         toWindowDto.setAccessible(true);
         SessionWindowTimelineDto timeline = (SessionWindowTimelineDto) toWindowDto.invoke(
             business,
             SessionWindowRecord.builder().id(300L).sessionId(3L).windowType("debate").title("Debate")
-                .position(5).status("open").build()
+                .position(5).status("open").build(),
+            personaMapper.findPersonaIds(300L)
         );
 
         assertThat(timeline.getPersonaIds()).containsExactly(5L, 4L);
@@ -403,6 +430,120 @@ class SessionWindowBusinessPersistenceTest {
         assertThat(messageMapper.inserted.get(1).getGenerationLocale()).isEqualTo("ko");
         assertThat(messageMapper.inserted.get(1).getLanguageValidationOutcome()).isNull();
         assertThat(messageMapper.orderWindowIds).containsExactly(10L, 10L);
+    }
+
+    @Test
+    void inaccessibleWindowsRejectMessagesBeforeProviderOrPersistence() {
+        for (SessionWindowContext context : java.util.Arrays.asList(
+            null,
+            new SessionWindowContext(10L, 30L, 2L),
+            new SessionWindowContext(10L, 30L, null)
+        )) {
+            SessionWindowMapper windows = mock(SessionWindowMapper.class);
+            when(windows.findContextById(10L)).thenReturn(context);
+            AiProvider provider = mock(AiProvider.class);
+            MessageMapper messages = mock(MessageMapper.class);
+            SessionWindowBusiness business = new SessionWindowBusiness(
+                provider, windows, messages, new FakeQuestionMapper(), new FakePersonaMapper()
+            );
+            SendMessageRequest request = SendMessageRequest.builder()
+                .userId(999L).content("Reader message").build();
+
+            assertNotFound("Session window not found", () -> business.sendMessage(10L, request));
+            assertNotFound("Session window not found", () -> business.streamMessage(10L, request, delta -> { }));
+            verifyNoInteractions(provider, messages);
+        }
+    }
+
+    @Test
+    void syncAndStreamingRepliesPreserveMetadataAndReplaceOnlyPersistenceId() {
+        AiMessageResponse reply = AiMessageResponse.builder()
+            .messageId(999L).windowId(10L).personaId(5L).role("assistant")
+            .content("이 장면의 선택을 근거와 함께 살펴보겠습니다").streamingReady(true)
+            .aiModel("test-model").contextSnapshot("{\"context\":true}")
+            .tokenUsage("{\"totalTokens\":7}").build();
+        for (boolean streaming : List.of(false, true)) {
+            FakeMessageMapper messages = new FakeMessageMapper();
+            FakeQuestionMapper questions = new FakeQuestionMapper();
+            questions.inserted.add(QuestionRecord.builder()
+                .id(9L).sessionId(30L).windowId(10L).userId(1L).build());
+            AiProvider provider = mock(AiProvider.class);
+            if (streaming) {
+                when(provider.streamWindowMessageWithMetadata(any(), any(), any(), any()))
+                    .thenAnswer(call -> AiGenerationResult.completed(
+                        reply, call.getArgument(3), "test", "test-model",
+                        AiTokenUsage.NONE, 1, "SUCCESS", false
+                    ));
+            } else {
+                when(provider.answerWindowMessageWithMetadata(any(), any(), any()))
+                    .thenAnswer(call -> AiGenerationResult.completed(
+                        reply, call.getArgument(2), "test", "test-model",
+                        AiTokenUsage.NONE, 1, "SUCCESS", false
+                    ));
+            }
+            SessionWindowBusiness business = new SessionWindowBusiness(
+                provider, new FakeSessionWindowMapper(), messages, questions, new FakePersonaMapper()
+            );
+            configureLocale(business);
+            SendMessageRequest request = SendMessageRequest.builder()
+                .userId(999L).questionId(9L).content("Reader message").build();
+
+            AiMessageResponse saved = streaming
+                ? business.streamMessage(10L, request, delta -> { })
+                : business.sendMessage(10L, request);
+
+            assertThat(saved.getMessageId()).isEqualTo(101L);
+            assertThat(saved).usingRecursiveComparison().ignoringFields("messageId").isEqualTo(reply);
+            assertThat(reply.getMessageId()).isEqualTo(999L);
+            assertThat(messages.inserted).extracting(MessageRecord::getUserId).containsOnly(1L);
+            MessageRecord row = messages.inserted.get(1);
+            assertThat(row.getQuestionId()).isEqualTo(9L);
+            assertThat(row.getPersonaId()).isNull();
+            assertThat(row.getParentMessageId()).isEqualTo(100L);
+            assertThat(row.getGenerationLocale()).isEqualTo("ko");
+            assertThat(row.getLanguageValidationOutcome()).isEqualTo("MATCH");
+            assertThat(row.getContextSnapshot()).isEqualTo(reply.getContextSnapshot());
+            assertThat(row.getTokenUsage()).isEqualTo(reply.getTokenUsage());
+        }
+    }
+
+    @Test
+    void guidedRepliesKeepRequestedIdentityDefaultRoleAndProviderMetadata() {
+        FakeMessageMapper messages = new FakeMessageMapper();
+        SessionWindowBusiness business = new SessionWindowBusiness(
+            new StubAiProvider(), new FakeSessionWindowMapper(), messages,
+            new FakeQuestionMapper(), new FakePersonaMapper()
+        );
+        AiMessageResponse reply = AiMessageResponse.builder()
+            .messageId(999L).windowId(999L).personaId(999L)
+            .content("Provider reply").streamingReady(true).aiModel("test-model")
+            .contextSnapshot("{\"context\":true}").tokenUsage("{\"totalTokens\":7}").build();
+        GeneratedAiMessage generated = new GeneratedAiMessage(
+            reply, GenerationLocale.EN, AiLanguageValidationOutcome.UNKNOWN
+        );
+
+        AiMessageResponse linked = business.persistGuidedPersonaResponse(
+            10L, 9L, 4L, MessageRecord.builder().id(77L).userId(1L).build(), generated
+        ).getMessages().get(0);
+        AiMessageResponse standalone = business.persistStandaloneGuidedPersonaResponse(
+            10L, 9L, 4L, generated
+        ).getMessages().get(0);
+
+        assertThat(linked.getMessageId()).isEqualTo(100L);
+        assertThat(standalone.getMessageId()).isEqualTo(101L);
+        for (AiMessageResponse response : List.of(linked, standalone)) {
+            assertThat(response.getWindowId()).isEqualTo(10L);
+            assertThat(response.getPersonaId()).isEqualTo(4L);
+            assertThat(response.getRole()).isEqualTo("assistant");
+            assertThat(response.getContextSnapshot()).isEqualTo(reply.getContextSnapshot());
+            assertThat(response.getTokenUsage()).isEqualTo(reply.getTokenUsage());
+        }
+        assertThat(messages.inserted.get(0).getParentMessageId()).isEqualTo(77L);
+        assertThat(messages.inserted.get(1).getParentMessageId()).isNull();
+        assertThat(messages.inserted).extracting(MessageRecord::getQuestionId).containsOnly(9L);
+        assertThat(messages.inserted).extracting(MessageRecord::getGenerationLocale).containsOnly("en");
+        assertThat(reply.getMessageId()).isEqualTo(999L);
+        assertThat(reply.getRole()).isNull();
     }
 
     @Test
@@ -1360,6 +1501,25 @@ class SessionWindowBusinessPersistenceTest {
         @Override
         public List<Long> findPersonaIds(Long windowId) {
             return personaIds == null ? List.of() : personaIds;
+        }
+
+        @Override
+        public List<com.margins.session.model.SessionWindowPersonaSelection> findByWindowIds(
+            List<Long> windowIds
+        ) {
+            if (windowId == null || personaIds == null || !windowIds.contains(windowId)) {
+                return List.of();
+            }
+            java.util.ArrayList<com.margins.session.model.SessionWindowPersonaSelection> selections =
+                new java.util.ArrayList<>();
+            for (int index = 0; index < personaIds.size(); index++) {
+                selections.add(com.margins.session.model.SessionWindowPersonaSelection.builder()
+                    .windowId(windowId)
+                    .personaId(personaIds.get(index))
+                    .selectionOrder(index)
+                    .build());
+            }
+            return selections;
         }
     }
 

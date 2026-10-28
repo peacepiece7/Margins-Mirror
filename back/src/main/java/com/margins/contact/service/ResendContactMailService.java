@@ -1,6 +1,7 @@
 package com.margins.contact.service;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.margins.auth.config.MailVerificationProperties;
 import com.margins.auth.config.ResendProperties;
@@ -70,8 +71,13 @@ public class ResendContactMailService {
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 throw new ContactDeliveryException("PROVIDER_REJECTED");
             }
-            JsonNode payload = objectMapper.readTree(response.body());
-            if (!payload.path("id").isTextual()
+            JsonNode payload;
+            try {
+                payload = objectMapper.readTree(response.body());
+            } catch (JsonProcessingException exception) {
+                throw new ContactDeliveryException("INVALID_RESPONSE");
+            }
+            if (payload == null || !payload.path("id").isTextual()
                 || !payload.path("id").asText().matches("[A-Za-z0-9_-]{1,128}")) {
                 throw new ContactDeliveryException("INVALID_RESPONSE");
             }

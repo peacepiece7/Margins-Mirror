@@ -8,6 +8,10 @@ spring:
     password: margins-pass
 
 margins:
+  catalog:
+    worker-enabled: false
+    metadata-sources: []
+    cover-sources: []
   privacy:
     enforcement-enabled: true
   mail:
@@ -28,6 +32,8 @@ margins:
       client-secret: test-google-client-secret
       frontend-callback-url: http://localhost:5173/auth/callback
   ai:
+    langfuse:
+      enabled: false
     openai:
       api-key: ''
   book-search:

@@ -19,7 +19,7 @@ export function AuthFormField({
       <p
         aria-hidden={error ? undefined : true}
         aria-live={error ? 'polite' : undefined}
-        className="mt-1 min-h-5 text-xs leading-5 text-red-700"
+        className="mt-1 min-h-5 text-xs leading-5 text-destructive"
         id={errorTestId}
         {...testAttr(errorTestId)}
       >

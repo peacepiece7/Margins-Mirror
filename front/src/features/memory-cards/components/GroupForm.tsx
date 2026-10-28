@@ -1,4 +1,3 @@
-import { useEffect } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
 
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useI18n } from '@/lib/i18n';
 import { testAttr } from '@/utils/testAttrs';
 
-export type GroupFormValues = { title: string; description: string; sourceLabel: string };
+import type { GroupFormValues } from '../types';
 
 export function GroupForm({
   initialValues,
@@ -23,11 +22,6 @@ export function GroupForm({
   const { t } = useI18n();
   const form = useForm({ defaultValues: initialValues });
   const groupTitle = useWatch({ control: form.control, name: 'title', defaultValue: '' });
-  useEffect(() => {
-    form.reset(initialValues);
-    // Primitive values intentionally define authoritative route-bound defaults.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, initialValues.description, initialValues.sourceLabel, initialValues.title]);
   return (
     <form
       className="grid content-start gap-3 rounded border border-stone-300 bg-white p-4"
@@ -48,7 +42,7 @@ export function GroupForm({
           {...form.register('title', { required: t('requiredField') })}
         />
         {form.formState.errors.title?.message && (
-          <span className="text-xs leading-5 text-red-700" id="memory-card-group-title-error">
+          <span className="text-xs leading-5 text-destructive" id="memory-card-group-title-error">
             {form.formState.errors.title.message}
           </span>
         )}

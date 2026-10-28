@@ -1,0 +1,131 @@
+@media (pointer: coarse) {
+  [data-slot='tabs-list'] {
+    height: auto;
+    min-height: 3.125rem;
+  }
+
+  :is(
+    [data-slot='button'],
+    [data-slot='alert-dialog-action'],
+    [data-slot='alert-dialog-cancel'],
+    [data-slot='toggle'],
+    [data-slot='input'],
+    [data-slot='native-select'],
+    [data-slot='select-trigger'],
+    [data-slot='tabs-trigger'],
+    [data-slot='select-item']
+  ) {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .landing-version-stack[data-slot='button'] {
+    min-height: 21rem;
+  }
+}
+
+::selection {
+  background: rgba(23, 23, 23, 0.12);
+  color: var(--margins-ink);
+}
+
+button,
+input,
+textarea {
+  font: inherit;
+}
+
+/* Keep compact caller typography from triggering mobile Safari focus zoom.
+   Coarse pointers include tablets/landscape; viewport and pinch zoom stay native. */
+@media (max-width: 767px), (pointer: coarse) {
+  :root
+    :is(
+      [data-slot='input'],
+      [data-slot='textarea'],
+      [data-slot='native-select'],
+      [data-slot='select-trigger'],
+      [data-slot='select-item']
+    ) {
+    font-size: max(16px, 1rem);
+  }
+}
+
+button,
+input,
+textarea,
+[contenteditable='true'] {
+  letter-spacing: 0;
+}
+
+button:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+a:focus-visible,
+[contenteditable='true']:focus-visible {
+  outline: 2px solid #1f1f1f;
+  outline-offset: 2px;
+}
+
+input:not([type='checkbox']):not([type='radio']):focus-visible,
+textarea:focus-visible {
+  outline-offset: -2px;
+}
+
+input,
+textarea,
+select {
+  color: var(--margins-ink);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: rgba(102, 100, 95, 0.72);
+}
+
+button {
+  transition:
+    border-color var(--motion-fast) ease,
+    background-color var(--motion-fast) ease,
+    color var(--motion-fast) ease,
+    box-shadow var(--motion-fast) ease,
+    transform var(--motion-fast) ease;
+}
+
+button:not(:disabled):active {
+  transform: translateY(1px);
+}
+
+:is(
+    [data-slot='button'],
+    [data-slot='toggle'],
+    [data-slot='select-trigger'],
+    [data-slot='tabs-trigger'],
+    [data-slot='select-item']
+  ):not(:disabled):active {
+  transform: translateY(1px);
+}
+
+:is(.blueprint-login-page, .blueprint-home-page, .blueprint-auth-gnb, .blueprint-workspace)
+  :is(button, input, textarea, select, a, [contenteditable='true']):focus-visible {
+  outline-color: var(--margins-control-hover);
+}
+
+:is(.blueprint-login-page, .blueprint-home-page, .blueprint-auth-gnb, .blueprint-workspace)
+  :is(input[type='checkbox'], input[type='radio']) {
+  accent-color: var(--margins-control);
+}
+
+:is(.blueprint-login-page, .blueprint-home-page, .blueprint-workspace) a:hover {
+  color: var(--margins-control-hover);
+}
+
+:is(.blueprint-login-page, .blueprint-home-page, .blueprint-workspace) h1 a:hover {
+  color: var(--margins-ink);
+}
+
+.font-display {
+  font-family: var(--font-display);
+}

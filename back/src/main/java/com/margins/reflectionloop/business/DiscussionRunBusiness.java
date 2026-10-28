@@ -145,7 +145,8 @@ public class DiscussionRunBusiness {
         }
         GenerationLocale locale = generationLocaleResolver.resolve(run.getUserId());
         if ((request.getNavigation() == null || "RESPOND".equals(request.getNavigation()))
-            && hasPendingPerspective(run)) {
+            && (run.getPendingPerspectiveItemId() != null
+                || !parsePendingIds(run.getPendingPerspectiveIdsJson()).isEmpty())) {
             throw new ApiException(
                 ApiErrorCode.COMMON_CONFLICT,
                 "Choose or skip the pending perspective before continuing"
@@ -166,8 +167,9 @@ public class DiscussionRunBusiness {
             locale
         );
         if (sessionWindowBusiness.blocksGuidedTurn(moderation)) {
-            List<Long> structureCandidateIds = isDiscussionStructure(moderation)
-                ? activePerspectiveIds()
+            List<Long> structureCandidateIds = moderation != null && "DISCUSSION_STRUCTURE".equals(moderation.getIntent())
+                ? personaMapper.findActiveForUser(currentUserId()).stream()
+                    .map(PersonaRecord::getId).limit(2).toList()
                 : List.of();
             DebateTurnResponse blocked = transactionTemplate.execute(status -> {
                 DebateTurnResponse result = sessionWindowBusiness.persistGuidedTurnAtomically(
@@ -278,9 +280,7 @@ public class DiscussionRunBusiness {
             }
             return result;
         });
-        DiscussionGuideItemRecord updatedCurrent = run.getCurrentItemId() == null
-            ? null
-            : discussionGuideMapper.findOwnedGuideItem(run.getCurrentItemId(), currentUserId());
+        DiscussionGuideItemRecord updatedCurrent = currentItem(run);
         return turnResponse(
             run,
             requireDebate(debate),
@@ -304,9 +304,87 @@ public class DiscussionRunBusiness {
     }
 
     private RefinementPreparation prepareRefinement(Long runId, boolean completeRun) {
-        RefinementPreparation preparation = transactionTemplate.execute(
-            status -> prepareRefinementInTransaction(runId, completeRun)
-        );
+        RefinementPreparation preparation = transactionTemplate.execute(status -> {
+            reflectionBusiness.requireEnabled();
+            DiscussionRunRecord run = requireRunForUpdate(runId);
+            if (!"COMPLETED".equals(run.getStatus()) && completeRun) {
+                run.setStatus("COMPLETED");
+                run.setCurrentItemId(null);
+                run.setLastDirectorAction("FINISH_DISCUSSION");
+                requireChanged(
+                    discussionRunMapper.updateRunProgress(run),
+                    "Discussion run could not be completed"
+                );
+                discussionGuideMapper.updateGuideStatus(run.getGuideId(), currentUserId(), "COMPLETED");
+            }
+            if (!"COMPLETED".equals(run.getStatus())) {
+                throw new ApiException(
+                    ApiErrorCode.COMMON_CONFLICT,
+                    "Discussion must be completed before refinement"
+                );
+            }
+            DiscussionGuideRecord guide = guideBusiness.requireGuide(run.getGuideId());
+            ReflectionRevisionRecord initial = reflectionRevisionMapper.findOwnedRevision(
+                guide.getSourceRevisionId(),
+                currentUserId()
+            );
+            if (initial == null) {
+                throw new ApiException(
+                    ApiErrorCode.COMMON_NOT_FOUND,
+                    "Refinement source revision not found"
+                );
+            }
+            SessionInsightRecord reflection = reflectionBusiness.requireReflection(
+                guide.getReflectionInsightId()
+            );
+            List<MessageRecord> transcript = discussionRunMapper.findOwnedDiscussionTranscript(
+                run.getWindowId(),
+                currentUserId()
+            );
+            String transcriptHash = transcriptHash(transcript);
+            GenerationLocale locale = generationLocaleResolver.resolve(run.getUserId());
+            String promptVersion = properties.getRefinementPromptVersion();
+            String inputHash = sha256(
+                run.getId() + "|" + guide.getSourceRevisionId() + "|" + transcriptHash + "|"
+                    + promptVersion + "|" + locale.value()
+            );
+            String perspectives = discussionRunMapper.findPersonaPerspectiveSummary(
+                run.getWindowId(),
+                currentUserId()
+            );
+            if (perspectives == null || perspectives.isBlank()) {
+                perspectives = "토론에서 새 Persona 관점을 호출하지 않았습니다. 직접 정리하거나 처음 생각을 유지할 수 있습니다.";
+            }
+            DiscussionRunRefinementRecord refinement = discussionRunRefinementMapper.findByIdentity(
+                run.getId(), locale.value(), inputHash
+            );
+            boolean generate = refinement == null;
+            if (generate) {
+                refinement = DiscussionRunRefinementRecord.builder()
+                    .runId(run.getId())
+                    .generationLocale(locale.value())
+                    .inputHash(inputHash)
+                    .transcriptHash(transcriptHash)
+                    .promptVersion(promptVersion)
+                    .testData(guide.isTestData())
+                    .build();
+                requireChanged(
+                    discussionRunRefinementMapper.insertPending(refinement),
+                    "Reflection refinement suggestion could not be claimed"
+                );
+            }
+            return new RefinementPreparation(
+                run,
+                guide,
+                initial.getContent(),
+                reflection.getContent(),
+                perspectives,
+                inputHash,
+                locale,
+                refinement,
+                generate
+            );
+        });
         if (preparation == null) {
             throw new ApiException(
                 ApiErrorCode.COMMON_INTERNAL_ERROR,
@@ -314,91 +392,6 @@ public class DiscussionRunBusiness {
             );
         }
         return preparation;
-    }
-
-    private RefinementPreparation prepareRefinementInTransaction(
-        Long runId,
-        boolean completeRun
-    ) {
-        reflectionBusiness.requireEnabled();
-        DiscussionRunRecord run = requireRunForUpdate(runId);
-        if (!"COMPLETED".equals(run.getStatus()) && completeRun) {
-            run.setStatus("COMPLETED");
-            run.setCurrentItemId(null);
-            run.setLastDirectorAction("FINISH_DISCUSSION");
-            requireChanged(
-                discussionRunMapper.updateRunProgress(run),
-                "Discussion run could not be completed"
-            );
-            discussionGuideMapper.updateGuideStatus(run.getGuideId(), currentUserId(), "COMPLETED");
-        }
-        if (!"COMPLETED".equals(run.getStatus())) {
-            throw new ApiException(
-                ApiErrorCode.COMMON_CONFLICT,
-                "Discussion must be completed before refinement"
-            );
-        }
-        DiscussionGuideRecord guide = guideBusiness.requireGuide(run.getGuideId());
-        ReflectionRevisionRecord initial = reflectionRevisionMapper.findOwnedRevision(
-            guide.getSourceRevisionId(),
-            currentUserId()
-        );
-        if (initial == null) {
-            throw new ApiException(
-                ApiErrorCode.COMMON_NOT_FOUND,
-                "Refinement source revision not found"
-            );
-        }
-        SessionInsightRecord reflection = reflectionBusiness.requireReflection(
-            guide.getReflectionInsightId()
-        );
-        List<MessageRecord> transcript = discussionRunMapper.findOwnedDiscussionTranscript(
-            run.getWindowId(),
-            currentUserId()
-        );
-        String transcriptHash = transcriptHash(transcript);
-        GenerationLocale locale = generationLocaleResolver.resolve(run.getUserId());
-        String promptVersion = properties.getRefinementPromptVersion();
-        String inputHash = sha256(
-            run.getId() + "|" + guide.getSourceRevisionId() + "|" + transcriptHash + "|"
-                + promptVersion + "|" + locale.value()
-        );
-        String perspectives = discussionRunMapper.findPersonaPerspectiveSummary(
-            run.getWindowId(),
-            currentUserId()
-        );
-        if (perspectives == null || perspectives.isBlank()) {
-            perspectives = "토론에서 새 Persona 관점을 호출하지 않았습니다. 직접 정리하거나 처음 생각을 유지할 수 있습니다.";
-        }
-        DiscussionRunRefinementRecord refinement = discussionRunRefinementMapper.findByIdentity(
-            run.getId(), locale.value(), inputHash
-        );
-        boolean generate = refinement == null;
-        if (generate) {
-            refinement = DiscussionRunRefinementRecord.builder()
-                .runId(run.getId())
-                .generationLocale(locale.value())
-                .inputHash(inputHash)
-                .transcriptHash(transcriptHash)
-                .promptVersion(promptVersion)
-                .testData(guide.isTestData())
-                .build();
-            requireChanged(
-                discussionRunRefinementMapper.insertPending(refinement),
-                "Reflection refinement suggestion could not be claimed"
-            );
-        }
-        return new RefinementPreparation(
-            run,
-            guide,
-            initial.getContent(),
-            reflection.getContent(),
-            perspectives,
-            inputHash,
-            locale,
-            refinement,
-            generate
-        );
     }
 
     private ReflectionRefinementResponse resolveRefinement(RefinementPreparation preparation) {
@@ -585,7 +578,7 @@ public class DiscussionRunBusiness {
                 current.getId(),
                 request.getPersonaId(),
                 claimToken,
-                perspectiveClaimTtlSeconds()
+                Math.max(30, properties.getPerspectiveClaimTtlSeconds())
             )
         );
         if (!Integer.valueOf(1).equals(claimResult)) {
@@ -690,9 +683,7 @@ public class DiscussionRunBusiness {
             updateUnclaimedPerspectiveProgress(run, action, target, current.getId());
             return null;
         });
-        DiscussionGuideItemRecord updatedCurrent = run.getCurrentItemId() == null
-            ? null
-            : discussionGuideMapper.findOwnedGuideItem(run.getCurrentItemId(), currentUserId());
+        DiscussionGuideItemRecord updatedCurrent = currentItem(run);
         return turnResponse(
             run,
             DebateTurnResponse.builder().messages(List.of()).build(),
@@ -755,7 +746,7 @@ public class DiscussionRunBusiness {
                 run.getStatus(),
                 run.getLastDirectorAction(),
                 pendingItemId,
-                perspectiveClaimTtlSeconds()
+                Math.max(30, properties.getPerspectiveClaimTtlSeconds())
             ),
             "Perspective selection changed while it was being skipped"
         );
@@ -787,15 +778,6 @@ public class DiscussionRunBusiness {
         }
     }
 
-    private boolean hasPendingPerspective(DiscussionRunRecord run) {
-        return run.getPendingPerspectiveItemId() != null
-            || !parsePendingIds(run.getPendingPerspectiveIdsJson()).isEmpty();
-    }
-
-    private int perspectiveClaimTtlSeconds() {
-        return Math.max(30, properties.getPerspectiveClaimTtlSeconds());
-    }
-
     private void releasePerspectiveClaimSafely(Long runId, Long userId, String claimToken) {
         try {
             transactionTemplate.execute(status -> {
@@ -820,17 +802,6 @@ public class DiscussionRunBusiness {
             .collect(java.util.stream.Collectors.toSet());
         return candidateIds.stream()
             .filter(activeIds::contains)
-            .limit(2)
-            .toList();
-    }
-
-    private boolean isDiscussionStructure(ModerationEventRecord moderation) {
-        return moderation != null && "DISCUSSION_STRUCTURE".equals(moderation.getIntent());
-    }
-
-    private List<Long> activePerspectiveIds() {
-        return personaMapper.findActiveForUser(currentUserId()).stream()
-            .map(PersonaRecord::getId)
             .limit(2)
             .toList();
     }

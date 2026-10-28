@@ -39,13 +39,11 @@ export function QuestionPanel({ bookId }: { bookId: number }) {
     <>
       <div
         className="rounded border border-stone-300 bg-white p-4 sm:p-5"
+        data-ui="book-question-panel"
         {...testAttr('book-question-panel')}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h3 className="font-semibold">{t('questionPanelTitle')}</h3>
-            <p className="text-sm text-stone-600">{t('questionPanelDescription')}</p>
-          </div>
+          <h3 className="font-semibold">{t('questionPanelTitle')}</h3>
           <Button
             disabled={generate.isPending}
             onClick={() => generate.mutate(sessionId)}
@@ -55,7 +53,7 @@ export function QuestionPanel({ bookId }: { bookId: number }) {
             {t('questionGenerate')}
           </Button>
         </div>
-        <div className="mt-4 grid gap-2">
+        <div className="web-book-question-list mt-4 grid gap-2">
           {generate.isPending &&
             [0, 1, 2].map((item) => (
               <div className="grid gap-2 rounded border p-3" key={item}>
@@ -67,14 +65,17 @@ export function QuestionPanel({ bookId }: { bookId: number }) {
             const answered = answeredQuestionIds.has(question.questionId);
             return (
               <div
-                className="grid gap-2 rounded border border-stone-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center"
+                className="grid gap-3 rounded border border-stone-200 bg-white p-3"
                 key={question.questionId}
                 {...testAttr('book-question-row')}
               >
-                <div className="text-sm leading-6" {...testAttr('book-question-text')}>
+                <div
+                  className="web-book-question-text line-clamp-3 text-sm leading-6"
+                  {...testAttr('book-question-text')}
+                >
                   {question.questionText}
                 </div>
-                <div className="flex flex-wrap justify-end gap-2">
+                <div className="flex flex-wrap gap-2" {...testAttr('book-question-actions')}>
                   <Button
                     onClick={() =>
                       navigate(`/book/${bookId}/review/questions/${question.questionId}`)
@@ -85,7 +86,10 @@ export function QuestionPanel({ bookId }: { bookId: number }) {
                     {answered ? t('questionAnswerEdit') : t('questionAnswerStart')}
                   </Button>
                   {answered ? (
-                    <span className="rounded bg-stone-100 px-3 py-2 text-sm text-stone-500">
+                    <span
+                      className="rounded bg-stone-100 px-3 py-2 text-sm text-muted-foreground"
+                      {...testAttr('book-question-answered')}
+                    >
                       {t('questionAnswered')}
                     </span>
                   ) : (
@@ -103,7 +107,7 @@ export function QuestionPanel({ bookId }: { bookId: number }) {
             );
           })}
           {!generate.isPending && !questions.length && (
-            <div className="rounded bg-stone-100 p-4 text-sm text-stone-500">
+            <div className="rounded bg-stone-100 p-4 text-sm text-muted-foreground">
               {t('questionEmpty')}
             </div>
           )}

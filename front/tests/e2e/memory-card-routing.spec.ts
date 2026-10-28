@@ -79,6 +79,25 @@ test('restores memory-card study mode from a direct URL', async ({ page }) => {
   await expect(page.getByText('The meaning is hidden.')).toBeVisible();
   await expect(page.getByTestId('memory-card-study-memorized-toggle')).toBeChecked();
 
+  for (const width of [1440, 1024, 768, 390]) {
+    await page.setViewportSize({ height: 900, width });
+    const metrics = await page.evaluate(() => {
+      const layout = document.querySelector<HTMLElement>(
+        '[data-testid="memory-card-study-layout"]',
+      );
+      return {
+        columns: layout ? getComputedStyle(layout).gridTemplateColumns.split(/\s+/).length : 0,
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+      };
+    });
+
+    expect(metrics.documentWidth).toBeLessThanOrEqual(metrics.viewportWidth);
+    expect(metrics.columns).toBe(width > 1100 ? 3 : width > 768 ? 2 : 1);
+    await expect(page.getByTestId('memory-card-group-index')).toBeVisible();
+    await expect(page.getByTestId('memory-card-study-summary')).toBeVisible();
+  }
+
   await page.getByRole('button', { name: 'Back to group' }).click();
   await expect(page.getByTestId('memory-card-memorized-toggle')).toBeChecked();
 });

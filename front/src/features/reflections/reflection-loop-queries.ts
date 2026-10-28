@@ -1,5 +1,6 @@
 import { queryOptions, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { useAuthenticatedSessionGuard } from '@/lib/authenticated-session-guard';
 import { publicReviewKeys, reflectionLoopKeys, sessionKeys } from '@/lib/query-keys';
 import type {
   DiscussionGuideProjection,
@@ -133,20 +134,39 @@ export function mergeGuidedDiscussionMessages(
   return { ...timeline, messages: [...timeline.messages, ...appended] };
 }
 
-export function useSavePrimaryReflectionMutation(sessionId?: number, reflectionId?: number) {
+export function useSavePrimaryReflectionMutation(
+  bookId: number,
+  sessionId?: number,
+  reflectionId?: number,
+) {
   const queryClient = useQueryClient();
+  const isCurrentSession = useAuthenticatedSessionGuard();
   return useMutation({
-    mutationFn: (input: SaveReflectionInput) => {
-      if (!sessionId) throw new Error('독서 세션을 준비하고 있습니다.');
+    mutationFn: async (input: SaveReflectionInput) => {
+      const activeSessionId =
+        sessionId ?? (await reflectionsApi.ensureReadingSession(bookId)).sessionId;
       return reflectionId
         ? reflectionsApi.updateReflection(reflectionId, input)
-        : reflectionsApi.createReflection(sessionId, input);
+        : reflectionsApi.createReflection(activeSessionId, input);
     },
     onSuccess: async (reflection) => {
+      if (!isCurrentSession()) return;
+      await queryClient.cancelQueries({
+        queryKey: reflectionLoopKeys.sessionReflection(reflection.sessionId),
+        exact: true,
+      });
+      if (!isCurrentSession()) return;
+      queryClient.setQueryData(
+        reflectionLoopKeys.sessionReflection(reflection.sessionId),
+        reflection,
+      );
       queryClient.setQueryData(reflectionLoopKeys.reflection(reflection.reflectionId), reflection);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.reflections() }),
         queryClient.invalidateQueries({ queryKey: sessionKeys.timeline(reflection.sessionId) }),
+        ...(!sessionId
+          ? [queryClient.invalidateQueries({ queryKey: sessionKeys.book(bookId) })]
+          : []),
         queryClient.invalidateQueries({ queryKey: publicReviewKeys.lists() }),
       ]);
     },
@@ -155,9 +175,11 @@ export function useSavePrimaryReflectionMutation(sessionId?: number, reflectionI
 
 export function useStartReflectionInterviewMutation() {
   const queryClient = useQueryClient();
+  const isCurrentSession = useAuthenticatedSessionGuard();
   return useMutation({
     mutationFn: reflectionsApi.startInterview,
     onSuccess: async (interview) => {
+      if (!isCurrentSession()) return;
       queryClient.setQueryData(reflectionLoopKeys.interview(interview.interviewId), interview);
       await queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.reflections() });
       await queryClient.invalidateQueries({
@@ -230,9 +252,11 @@ export function useCreateDiscussionGuideMutation(interviewId: number) {
 
 export function useEditDiscussionGuideMutation(guideId: number, interviewId?: number) {
   const queryClient = useQueryClient();
+  const isCurrentSession = useAuthenticatedSessionGuard();
   return useMutation({
     mutationFn: (input: EditDiscussionGuideInput) => reflectionsApi.editGuide(guideId, input),
     onSuccess: async (guide) => {
+      if (!isCurrentSession()) return;
       queryClient.setQueryData(reflectionLoopKeys.guide(guide.guideId), guide);
       void queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.reflections() });
       await Promise.all([
@@ -253,10 +277,12 @@ export function useEditDiscussionGuideMutation(guideId: number, interviewId?: nu
 
 export function useRegenerateDiscussionGuideMutation(guideId: number, interviewId?: number) {
   const queryClient = useQueryClient();
+  const isCurrentSession = useAuthenticatedSessionGuard();
   return useMutation({
     mutationFn: (input: { expectedVersion: number; brief: GuideBriefInput }) =>
       reflectionsApi.regenerateGuide(guideId, input),
     onSuccess: async (guide) => {
+      if (!isCurrentSession()) return;
       queryClient.setQueryData(reflectionLoopKeys.guide(guide.guideId), guide);
       void queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.reflections() });
       await Promise.all([
@@ -284,9 +310,11 @@ export function useDiscussionGuideMarkdownExportMutation(guideId: number) {
 
 export function useCreateDiscussionRunMutation(guideId: number) {
   const queryClient = useQueryClient();
+  const isCurrentSession = useAuthenticatedSessionGuard();
   return useMutation({
     mutationFn: () => reflectionsApi.createRun(guideId),
     onSuccess: async (run) => {
+      if (!isCurrentSession()) return;
       queryClient.setQueryData(reflectionLoopKeys.run(run.runId), run);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.guide(guideId) }),
@@ -381,6 +409,7 @@ export function useReflectionRefinementQuery(runId: number) {
 
 export function useSaveReflectionRefinementMutation(runId: number) {
   const queryClient = useQueryClient();
+  const isCurrentSession = useAuthenticatedSessionGuard();
   return useMutation({
     mutationFn: ({
       mode,
@@ -392,6 +421,16 @@ export function useSaveReflectionRefinementMutation(runId: number) {
       finalContent?: string;
     }) => reflectionsApi.saveRefinement(runId, mode, outcome, finalContent),
     onSuccess: async (reflection) => {
+      if (!isCurrentSession()) return;
+      await queryClient.cancelQueries({
+        queryKey: reflectionLoopKeys.sessionReflection(reflection.sessionId),
+        exact: true,
+      });
+      if (!isCurrentSession()) return;
+      queryClient.setQueryData(
+        reflectionLoopKeys.sessionReflection(reflection.sessionId),
+        reflection,
+      );
       queryClient.setQueryData(reflectionLoopKeys.reflection(reflection.reflectionId), reflection);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: reflectionLoopKeys.reflections() }),

@@ -16,66 +16,101 @@ import org.apache.ibatis.annotations.Select;
 public interface MetricMapper {
 
     @Select("""
+        WITH target_session AS (
+          SELECT rs.user_id, rs.book_id, rs.id AS session_id
+          FROM reading_sessions rs
+          INNER JOIN books b
+            ON b.id = rs.book_id
+           AND b.user_id = rs.user_id
+           AND b.deleted_at IS NULL
+          WHERE rs.id = #{sessionId}
+            AND rs.user_id = #{userId}
+            AND rs.deleted_at IS NULL
+        ),
+        active_windows AS (
+          SELECT sw.id, sw.session_id
+          FROM session_windows sw
+          INNER JOIN target_session ts ON ts.session_id = sw.session_id
+          WHERE sw.deleted_at IS NULL
+        ),
+        window_counts AS (
+          SELECT session_id, COUNT(*) AS window_count
+          FROM active_windows
+          GROUP BY session_id
+        ),
+        active_questions AS (
+          SELECT q.id, q.session_id
+          FROM questions q
+          INNER JOIN target_session ts ON ts.session_id = q.session_id
+          LEFT JOIN active_windows aw ON aw.id = q.window_id
+          WHERE q.deleted_at IS NULL
+            AND (q.window_id IS NULL OR aw.id IS NOT NULL)
+        ),
+        question_counts AS (
+          SELECT session_id, COUNT(*) AS question_count
+          FROM active_questions
+          GROUP BY session_id
+        ),
+        active_messages AS (
+          SELECT m.session_id, m.question_id, m.persona_id, m.role
+          FROM messages m
+          INNER JOIN active_windows aw ON aw.id = m.window_id
+          WHERE m.deleted_at IS NULL
+        ),
+        message_counts AS (
+          SELECT
+            session_id,
+            COUNT(*) AS message_count,
+            COUNT(DISTINCT persona_id) AS persona_count
+          FROM active_messages
+          GROUP BY session_id
+        ),
+        answered_questions AS (
+          SELECT m.session_id, m.question_id
+          FROM active_messages m
+          INNER JOIN active_questions q
+            ON q.id = m.question_id
+           AND q.session_id = m.session_id
+          WHERE m.role = 'user'
+            AND m.question_id IS NOT NULL
+          UNION
+          SELECT answer.session_id, answer.question_id
+          FROM session_insights answer
+          INNER JOIN active_questions q
+            ON q.id = answer.question_id
+           AND q.session_id = answer.session_id
+          WHERE answer.insight_type = 'question_answer'
+            AND answer.question_id IS NOT NULL
+            AND answer.deleted_at IS NULL
+        ),
+        answer_counts AS (
+          SELECT session_id, COUNT(*) AS answered_question_count
+          FROM answered_questions
+          GROUP BY session_id
+        ),
+        highlight_counts AS (
+          SELECT h.session_id, COUNT(*) AS highlight_count
+          FROM session_highlights h
+          INNER JOIN target_session ts ON ts.session_id = h.session_id
+          WHERE h.deleted_at IS NULL
+          GROUP BY h.session_id
+        )
         SELECT
-          rs.user_id,
-          rs.book_id,
-          rs.id AS session_id,
-
-          COUNT(DISTINCT sw.id) AS window_count,
-          COUNT(DISTINCT q.id) AS question_count,
-          (
-            SELECT COUNT(DISTINCT legacy.question_id)
-            FROM messages legacy
-            WHERE legacy.session_id = rs.id
-              AND legacy.role = 'user'
-              AND legacy.question_id IS NOT NULL
-              AND legacy.deleted_at IS NULL
-          ) + (
-            SELECT COUNT(DISTINCT answer.question_id)
-            FROM session_insights answer
-            WHERE answer.session_id = rs.id
-              AND answer.insight_type = 'question_answer'
-              AND answer.question_id IS NOT NULL
-              AND answer.deleted_at IS NULL
-              AND NOT EXISTS (
-                SELECT 1
-                FROM messages legacy
-                WHERE legacy.session_id = rs.id
-                  AND legacy.question_id = answer.question_id
-                  AND legacy.role = 'user'
-                  AND legacy.deleted_at IS NULL
-              )
-          ) AS answered_question_count,
-          COUNT(DISTINCT h.id) AS highlight_count,
-          COUNT(DISTINCT m.id) AS message_count,
-          COUNT(DISTINCT m.persona_id) AS persona_count
-        FROM reading_sessions rs
-        INNER JOIN books b ON b.id = rs.book_id AND b.deleted_at IS NULL
-        LEFT JOIN session_windows sw ON sw.session_id = rs.id AND sw.deleted_at IS NULL
-        LEFT JOIN questions q ON q.session_id = rs.id
-          AND q.deleted_at IS NULL
-          AND (
-            q.window_id IS NULL
-            OR EXISTS (
-              SELECT 1
-              FROM session_windows qsw
-              WHERE qsw.id = q.window_id
-                AND qsw.deleted_at IS NULL
-            )
-          )
-        LEFT JOIN session_highlights h ON h.session_id = rs.id AND h.deleted_at IS NULL
-        LEFT JOIN messages m ON m.session_id = rs.id
-          AND m.deleted_at IS NULL
-          AND EXISTS (
-            SELECT 1
-            FROM session_windows msw
-            WHERE msw.id = m.window_id
-              AND msw.deleted_at IS NULL
-          )
-        WHERE rs.id = #{sessionId}
-          AND rs.user_id = #{userId}
-          AND rs.deleted_at IS NULL
-        GROUP BY rs.user_id, rs.book_id, rs.id
+          ts.user_id,
+          ts.book_id,
+          ts.session_id,
+          COALESCE(wc.window_count, 0) AS window_count,
+          COALESCE(qc.question_count, 0) AS question_count,
+          COALESCE(ac.answered_question_count, 0) AS answered_question_count,
+          COALESCE(hc.highlight_count, 0) AS highlight_count,
+          COALESCE(mc.message_count, 0) AS message_count,
+          COALESCE(mc.persona_count, 0) AS persona_count
+        FROM target_session ts
+        LEFT JOIN window_counts wc ON wc.session_id = ts.session_id
+        LEFT JOIN question_counts qc ON qc.session_id = ts.session_id
+        LEFT JOIN answer_counts ac ON ac.session_id = ts.session_id
+        LEFT JOIN highlight_counts hc ON hc.session_id = ts.session_id
+        LEFT JOIN message_counts mc ON mc.session_id = ts.session_id
         """)
     SessionMetricSourceRecord findSessionSource(
         @Param("sessionId") Long sessionId,

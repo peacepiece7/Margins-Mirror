@@ -1,0 +1,39 @@
+appId: cloud.margins.mobile
+env:
+  TEST_AUTHOR: ${MARGINS_MAESTRO_MANUAL_BOOK_AUTHOR}
+  TEST_BOOK_QUERY: ${MARGINS_MAESTRO_BOOK_QUERY}
+  TEST_PASSWORD: ${MARGINS_MAESTRO_PASSWORD}
+  TEST_TITLE: ${MARGINS_MAESTRO_MANUAL_BOOK_TITLE}
+  TEST_USERNAME: ${MARGINS_MAESTRO_USERNAME}
+---
+- runFlow: subflows/login.yaml
+- tapOn: "Discover"
+- assertVisible:
+    id: discover-screen
+- assertVisible:
+    id: book-candidate-list
+- tapOn: "Search books"
+- inputText: ${TEST_BOOK_QUERY}
+- tapOn: "Search books"
+- extendedWaitUntil:
+    visible:
+      text: "Add to library"
+      index: 1
+    timeout: 15000
+- tapOn:
+    text: "Add to library"
+    index: 1
+- assertVisible:
+    id: library-screen
+- tapOn: "Discover"
+- assertVisible: "Add a book manually"
+- tapOn: "Book title"
+- inputText: ${TEST_TITLE}
+- tapOn: "Author"
+- inputText: ${TEST_AUTHOR}
+- tapOn:
+    text: "Add to library"
+    index: 0
+- assertVisible:
+    id: library-screen
+- assertVisible: ${TEST_TITLE}
